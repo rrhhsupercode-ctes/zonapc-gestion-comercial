@@ -1,639 +1,788 @@
-/*****************************************************
- * app.js - PARTE 1
- * Login Admin + Navegación + Inicio Cobrar
- *****************************************************/
+// ---------------------------
+// APP.JS - BASE COMPLETA
+// ---------------------------
 
-import { ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+// ---------------------------
+// 1. VARIABLES GLOBALES
+// ---------------------------
+const secciones = {
+  cobro: document.getElementById("cobro"),
+  movimientos: document.getElementById("movimientos"),
+  historial: document.getElementById("historial"),
+  stock: document.getElementById("stock"),
+  sueltos: document.getElementById("sueltos"),
+  cajeros: document.getElementById("cajeros"),
+  config: document.getElementById("config")
+};
 
-/* ---------------------------
-   LOGIN DE ADMINISTRADOR
-   --------------------------- */
-const adminModal = document.createElement("div"); // opcional, si quieres un modal genérico
-let configData = { passAdmin: "1918", masterPass: "1409", shopName: "ZONAPC" };
-
-const loginAdminModal = document.createElement("div");
-loginAdminModal.id = "admin-login-modal";
-loginAdminModal.innerHTML = `
-  <div class="modal-content">
-    <h2>🔒 Contraseña de Administrador 🔒</h2>
-    <input type="password" id="input-admin-pass" placeholder="Contraseña">
-    <button id="btn-admin-login">Ingresar</button>
-    <p id="admin-login-msg" class="msg-error"></p>
-  </div>
-`;
-document.body.appendChild(loginAdminModal);
-
-const inputAdminPass = document.getElementById("input-admin-pass");
-const btnAdminLogin = document.getElementById("btn-admin-login");
-const adminLoginMsg = document.getElementById("admin-login-msg");
-const mainContent = document.querySelector("main");
-
-mainContent.style.filter = "blur(5px)";
-loginAdminModal.style.display = "block";
-
-btnAdminLogin.addEventListener("click", async () => {
-  const val = inputAdminPass.value;
-  const configSnap = await get(ref(window.db, "config"));
-  if (configSnap.exists()) configData = configSnap.val();
-
-  if (val === configData.passAdmin || val === configData.masterPass) {
-    loginAdminModal.style.display = "none";
-    mainContent.style.filter = "none";
-  } else {
-    adminLoginMsg.textContent = "Contraseña incorrecta";
-  }
-});
-
-/* ---------------------------
-   NAVEGACIÓN ENTRE SECCIONES
-   --------------------------- */
 const navBtns = document.querySelectorAll(".nav-btn");
-const sections = document.querySelectorAll("main section");
 
+// Modales
+let modalActivo = null;
+
+// Mensajes
+function mostrarMensaje(elem, texto, tipo="error"){
+  elem.textContent = texto;
+  elem.className = tipo === "error" ? "msg-error" :
+                   tipo === "exito" ? "msg-exito" : "msg-alerta";
+}
+
+// ---------------------------
+// 2. FUNCIONES UTILES
+// ---------------------------
+
+// Mostrar sección y ocultar las demás
+function mostrarSeccion(nombre){
+  Object.values(secciones).forEach(s => s.classList.add("hidden"));
+  if(secciones[nombre]) secciones[nombre].classList.remove("hidden");
+}
+
+// Mostrar modal
+function mostrarModal(modal){
+  modal.classList.remove("hidden");
+  modalActivo = modal;
+  document.body.style.filter = "blur(4px)";
+}
+
+// Cerrar modal
+function cerrarModal(modal){
+  if(modal) modal.classList.add("hidden");
+  modalActivo = null;
+  document.body.style.filter = "none";
+}
+
+// ---------------------------
+// 3. NAVEGACION ENTRE SECCIONES
+// ---------------------------
 navBtns.forEach(btn => {
-  btn.addEventListener("click", () => {
-    const target = btn.dataset.section;
-    sections.forEach(sec => {
-      if (sec.id === target) sec.classList.remove("hidden");
-      else sec.classList.add("hidden");
-    });
+  btn.addEventListener("click", ()=>{
+    const seccion = btn.dataset.section;
+    mostrarSeccion(seccion);
   });
 });
 
-/* ---------------------------
-   COBRAR - SETUP INICIAL
-   --------------------------- */
-const loginUsuario = document.getElementById("login-usuario");
+// Mostrar sección por defecto
+mostrarSeccion("cobro");
+
+// ---------------------------
+// 4. LOGIN ADMINISTRADOR
+// ---------------------------
+const loginModal = document.getElementById("login-modal");
 const loginPass = document.getElementById("login-pass");
 const btnLogin = document.getElementById("btn-login");
 const loginMsg = document.getElementById("login-msg");
-const cobroControles = document.getElementById("cobro-controles");
 
-// Cajero actual
-let cajeroActual = null;
-let cobroItems = [];
+async function validarAdmin(pass){
+  const configSnap = await window.get(window.ref("config"));
+  if(!configSnap.exists()) return false;
 
-// Cargar select de cantidad 1 a 99
-const cobroCantidad = document.getElementById("cobro-cantidad");
-for (let i = 1; i <= 99; i++) {
-  const opt = document.createElement("option");
-  opt.value = i.toString().padStart(2, "0");
-  opt.textContent = i.toString().padStart(2, "0");
-  cobroCantidad.appendChild(opt);
+  const config = configSnap.val();
+  return pass === config.passAdmin || pass === config.masterPass;
 }
 
-// Cargar select de usuarios (cajeros)
-async function cargarCajerosSelect() {
-  const cajerosSnap = await get(ref(window.db, "cajeros"));
-  loginUsuario.innerHTML = "";
-  if (cajerosSnap.exists()) {
-    const cajeros = cajerosSnap.val();
-    Object.keys(cajeros).sort().forEach(num => {
-      const opt = document.createElement("option");
-      opt.value = num;
-      opt.textContent = num;
-      loginUsuario.appendChild(opt);
-    });
-  }
-}
-cargarCajerosSelect();
-
-// Login Cajero
-btnLogin.addEventListener("click", async () => {
-  const nro = loginUsuario.value;
-  const pass = loginPass.value;
-  if (!nro || !pass) return;
-
-  const cajeroSnap = await get(ref(window.db, `cajeros/${nro}`));
-  if (!cajeroSnap.exists()) {
-    loginMsg.textContent = "Cajero no encontrado";
-    return;
-  }
-
-  const cajeroData = cajeroSnap.val();
-  if (pass === cajeroData.pass) {
-    cajeroActual = { nro, ...cajeroData };
-    loginMsg.textContent = "";
-    cobroControles.classList.remove("hidden");
+// Evento login
+btnLogin.addEventListener("click", async ()=>{
+  const pass = loginPass.value.trim();
+  if(await validarAdmin(pass)){
+    cerrarModal(loginModal);
   } else {
-    loginMsg.textContent = "Contraseña incorrecta";
+    mostrarMensaje(loginMsg, "Contraseña incorrecta", "error");
   }
 });
 
-/* ---------------------------
-   COBRAR - STOCK Y SUELTOS
-   --------------------------- */
-const cobroProductos = document.getElementById("cobro-productos");
-const cobroSueltos = document.getElementById("cobro-sueltos");
+// ---------------------------
+// 5. LOGIN CAJERO
+// ---------------------------
+const loginUsuario = document.getElementById("login-usuario");
+const loginCajeroPass = document.getElementById("login-pass");
+const btnCajeroLogin = document.getElementById("btn-login");
+const loginCajeroMsg = document.getElementById("login-msg");
 
-async function cargarItemsSelect() {
-  const stockSnap = await get(ref(window.db, "stock"));
-  const sueltosSnap = await get(ref(window.db, "sueltos"));
+// Cargar select de cajeros
+async function cargarCajerosSelect(){
+  loginUsuario.innerHTML = "";
+  const cajerosSnap = await window.get(window.ref("cajeros"));
+  if(!cajerosSnap.exists()) return;
 
-  // STOCK
-  cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
-  if (stockSnap.exists()) {
-    Object.entries(stockSnap.val()).forEach(([cod, item]) => {
-      const opt = document.createElement("option");
-      opt.value = cod;
-      opt.textContent = item.nombre;
-      cobroProductos.appendChild(opt);
-    });
-  }
-
-  // SUELTOS
-  cobroSueltos.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([cod, item]) => {
-      const opt = document.createElement("option");
-      opt.value = cod;
-      opt.textContent = item.nombre;
-      cobroSueltos.appendChild(opt);
-    });
-  }
+  const cajeros = cajerosSnap.val();
+  Object.keys(cajeros).forEach(nro=>{
+    const option = document.createElement("option");
+    option.value = nro;
+    option.textContent = nro;
+    loginUsuario.appendChild(option);
+  });
 }
-cargarItemsSelect();
-/*****************************************************
- * app.js - PARTE 2
- * Funcionalidad COBRAR completa
- *****************************************************/
 
-/* ---------------------------
-   COBRAR - TABLA Y KG SUELTOS
-   --------------------------- */
+// Inicializar
+cargarCajerosSelect();
+
+// ---------------------------
+// 6. UTILIDADES FIREBASE
+// ---------------------------
+async function registrarMovimiento(mov){
+  const fechaHoy = new Date().toISOString().slice(0,10);
+  const movRef = window.ref(`movimientos/${fechaHoy}`);
+  const movPush = window.push(movRef);
+  await window.set(movPush, mov);
+  return movPush.key;
+}
+
+// ---------------------------
+// 7. CONTROLES DE COBRO
+// ---------------------------
+const cobroControles = document.getElementById("cobro-controles");
+const cobroCantidad = document.getElementById("cobro-cantidad");
+const cobroCodigo = document.getElementById("cobro-codigo");
+const cobroProductos = document.getElementById("cobro-productos");
 const btnAddProduct = document.getElementById("btn-add-product");
-const btnAddSuelto = document.getElementById("btn-add-suelto");
-const tablaCobro = document.querySelector("#tabla-cobro tbody");
-const totalDiv = document.getElementById("total-div");
 
 const inputKgSuelto = document.getElementById("input-kg-suelto");
+const cobroCodigoSuelto = document.getElementById("cobro-codigo-suelto");
+const cobroSueltos = document.getElementById("cobro-sueltos");
+const btnAddSuelto = document.getElementById("btn-add-suelto");
 const btnIncrKg = document.getElementById("btn-incr-kg");
 const btnDecrKg = document.getElementById("btn-decr-kg");
 
-// Incrementar / Decrementar KG
-btnIncrKg.addEventListener("click", () => {
-  let val = parseFloat(inputKgSuelto.value);
-  val += 0.100;
-  if (val > 99.900) val = 99.900;
-  inputKgSuelto.value = val.toFixed(3);
-});
+const tablaCobro = document.querySelector("#tabla-cobro tbody");
+const totalDiv = document.getElementById("total-div");
+const btnCobrar = document.getElementById("btn-cobrar");
 
-btnDecrKg.addEventListener("click", () => {
-  let val = parseFloat(inputKgSuelto.value);
-  val -= 0.100;
-  if (val < 0.100) val = 0.100;
-  inputKgSuelto.value = val.toFixed(3);
-});
+// Variables de sesión de cajero
+let cajeroActivo = null;
+let productosCobro = [];
 
-// Función para recalcular TOTAL
-function recalcularTotal() {
+// ---------------------------
+// 8. FUNCIONES COBRO
+// ---------------------------
+function actualizarTabla(){
+  tablaCobro.innerHTML = "";
   let total = 0;
-  cobroItems.forEach(item => {
-    total += item.total;
+  productosCobro.forEach((p,i)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${p.cantKG}</td>
+      <td>${p.nombre}</td>
+      <td>$${p.precio}</td>
+      <td>$${p.total.toFixed(2)}</td>
+      <td><button class="btn-eliminar" data-index="${i}">Eliminar</button></td>
+    `;
+    tablaCobro.appendChild(tr);
+    total += p.total;
   });
   totalDiv.textContent = `TOTAL: $${total.toFixed(2)}`;
 }
 
-// Función para renderizar tabla
-function renderTabla() {
-  tablaCobro.innerHTML = "";
-  cobroItems.forEach((item, idx) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${item.cant}</td>
-      <td>${item.nombre}</td>
-      <td>$${item.precio.toFixed(2)}</td>
-      <td>$${item.total.toFixed(2)}</td>
-      <td><button class="btn-eliminar" data-idx="${idx}">Eliminar</button></td>
-    `;
-    tablaCobro.appendChild(tr);
-  });
-  recalcularTotal();
-}
+// ---------------------------
+// 9. CONTROL KG SUELTOS
+// ---------------------------
+btnIncrKg.addEventListener("click", ()=>{
+  let val = parseFloat(inputKgSuelto.value);
+  if(val+0.1 <= 99.9) val+=0.1;
+  inputKgSuelto.value = val.toFixed(3);
+});
 
-// Agregar producto STOCK
-btnAddProduct.addEventListener("click", async () => {
-  const cod = document.getElementById("cobro-codigo").value;
+btnDecrKg.addEventListener("click", ()=>{
+  let val = parseFloat(inputKgSuelto.value);
+  if(val-0.1 >= 0.1) val-=0.1;
+  inputKgSuelto.value = val.toFixed(3);
+});
+
+// ---------------------------
+// 10. AGREGAR PRODUCTO STOCK/SUELTOS
+// ---------------------------
+btnAddProduct.addEventListener("click", ()=>{
+  const nombre = cobroProductos.value;
   const cant = parseInt(cobroCantidad.value);
-  if (!cod || !cant) return;
-
-  const itemSnap = await get(ref(window.db, `stock/${cod}`));
-  if (!itemSnap.exists()) return;
-
-  const item = itemSnap.val();
-  const total = cant * parseFloat(item.precio || 0);
-  cobroItems.unshift({ cod, nombre: item.nombre, cant, precio: parseFloat(item.precio || 0), total, tipo: "stock" });
-  renderTabla();
+  const precio = parseFloat(cobroProductos.selectedOptions[0]?.dataset.precio || 0);
+  if(!nombre || cant<=0) return;
+  productosCobro.push({nombre, cantKG:cant, precio, total: cant*precio});
+  actualizarTabla();
 });
 
-// Agregar producto SUELTOS
-btnAddSuelto.addEventListener("click", async () => {
-  const cod = document.getElementById("cobro-codigo-suelto").value;
-  let kg = parseFloat(inputKgSuelto.value);
-  if (!cod || !kg) return;
-
-  const itemSnap = await get(ref(window.db, `sueltos/${cod}`));
-  if (!itemSnap.exists()) return;
-
-  const item = itemSnap.val();
-  // El total se calcula según porcentaje del precio por KG
-  const total = kg * parseFloat(item.precio || 0);
-  cobroItems.unshift({ cod, nombre: item.nombre, cant: kg.toFixed(3), precio: parseFloat(item.precio || 0), total, tipo: "sueltos" });
-  renderTabla();
+btnAddSuelto.addEventListener("click", ()=>{
+  const nombre = cobroSueltos.value;
+  const kg = parseFloat(inputKgSuelto.value);
+  const precio = parseFloat(cobroSueltos.selectedOptions[0]?.dataset.precio || 0);
+  if(!nombre || kg<=0) return;
+  productosCobro.push({nombre, cantKG:kg, precio, total: kg*precio});
+  actualizarTabla();
 });
 
-/* ---------------------------
-   ELIMINAR PRODUCTO (requiere admin)
-   --------------------------- */
-tablaCobro.addEventListener("click", (e) => {
-  if (!e.target.classList.contains("btn-eliminar")) return;
-  const idx = e.target.dataset.idx;
-
-  const adminPass = prompt("Contraseña de administrador:");
-  if (!adminPass) return;
-
-  if (adminPass === configData.passAdmin || adminPass === configData.masterPass) {
-    cobroItems.splice(idx, 1);
-    renderTabla();
-  } else {
-    alert("Contraseña incorrecta");
-  }
+// ---------------------------
+// 11. BOTON COBRAR (AUN SIN MODAL TIPO DE PAGO)
+// ---------------------------
+btnCobrar.addEventListener("click", async ()=>{
+  if(!cajeroActivo) return alert("Debe iniciar sesión como cajero");
+  const fecha = new Date().toISOString();
+  const total = productosCobro.reduce((a,b)=>a+b.total,0);
+  const mov = {
+    cajero: cajeroActivo,
+    fecha,
+    total,
+    productos: productosCobro,
+    tipoPago: null
+  };
+  await registrarMovimiento(mov);
+  productosCobro = [];
+  actualizarTabla();
+  alert("Venta registrada correctamente en Firebase");
 });
 
-/* ---------------------------
-   BOTÓN COBRAR - MODAL TIPO PAGO
-   --------------------------- */
-const btnCobrar = document.getElementById("btn-cobrar");
-btnCobrar.classList.remove("hidden");
+// ---------------------------
+// 12. MODAL TIPO DE PAGO
+// ---------------------------
+function crearModalPago(){
+  // Crear overlay
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
 
-btnCobrar.addEventListener("click", () => {
+  // Crear modal
   const modal = document.createElement("div");
-  modal.classList.add("modal");
+  modal.className = "modal";
   modal.innerHTML = `
-    <div class="modal-content">
-      <h2>¿Cómo Pagará el Cliente?</h2>
+    <h3>¿Cómo Pagará el Cliente?</h3>
+    <div>
       <button data-pago="Efectivo">Efectivo</button>
       <button data-pago="Tarjeta">Tarjeta</button>
       <button data-pago="QR">QR</button>
       <button data-pago="Electrónico">Electrónico</button>
       <button data-pago="Otro">Otro</button>
-      <button id="btn-cancelar-pago" style="background:red;">Cancelar</button>
     </div>
+    <button id="cancelar-pago" style="background:#d63031; color:#fff;">Cancelar</button>
   `;
-  document.body.appendChild(modal);
-  mainContent.style.filter = "blur(5px)";
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
 
-  modal.addEventListener("click", async (e) => {
-    const pago = e.target.dataset.pago;
-    if (pago) {
-      await registrarVenta(pago);
-      document.body.removeChild(modal);
-      mainContent.style.filter = "none";
-      cobroItems = [];
-      renderTabla();
-      alert("Venta realizada");
-    }
-    if (e.target.id === "btn-cancelar-pago") {
-      document.body.removeChild(modal);
-      mainContent.style.filter = "none";
-    }
+  // Evento botones pago
+  modal.querySelectorAll("button[data-pago]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const tipoPago = btn.dataset.pago;
+      await finalizarCobro(tipoPago);
+      cerrarModal(overlay);
+    });
   });
-});
 
-/* ---------------------------
-   FUNCIÓN REGISTRAR VENTA
-   --------------------------- */
-async function registrarVenta(tipoPago) {
-  if (!cajeroActual) return;
+  // Cancelar
+  modal.querySelector("#cancelar-pago").addEventListener("click", ()=>{
+    cerrarModal(overlay);
+  });
+
+  return overlay;
+}
+
+let modalPago = crearModalPago();
+modalPago.classList.add("hidden");
+
+// ---------------------------
+// 13. FINALIZAR COBRO
+// ---------------------------
+async function finalizarCobro(tipoPago){
+  if(!cajeroActivo || productosCobro.length===0) return;
 
   const fecha = new Date();
-  const dia = fecha.toISOString().slice(0,10).replace(/-/g,""); // YYYYMMDD
-  const movimientosRef = ref(window.db, `movimientos/${dia}`);
-  const historialRef = ref(window.db, `historial/${dia}`);
+  const fechaStr = fecha.toISOString();
+  const total = productosCobro.reduce((a,b)=>a+b.total,0);
 
-  // ID Ticket secuencial
-  const movSnap = await get(movimientosRef);
-  let nextID = 1;
-  if (movSnap.exists()) nextID = Object.keys(movSnap.val()).length + 1;
-  const idTicket = "ID_" + nextID.toString().padStart(6, "0");
-
-  const ventaData = {
-    id: idTicket,
-    cajero: cajeroActual.nro,
-    fecha: fecha.toLocaleString(),
-    tipoPago,
-    items: cobroItems,
-    total: cobroItems.reduce((a,b) => a + b.total,0)
+  const movimiento = {
+    id: null, // Se generará ID
+    fecha: fechaStr,
+    cajero: cajeroActivo,
+    productos: productosCobro,
+    total,
+    tipoPago
   };
 
-  // Guardar en movimientos y historial
-  const newMovRef = push(movimientosRef);
-  await set(newMovRef, ventaData);
+  // Registrar movimiento en Firebase
+  const idMov = await registrarMovimiento(movimiento);
+  movimiento.id = idMov;
 
-  const newHistRef = push(historialRef);
-  await set(newHistRef, ventaData);
-
-  // Restar stock / sueltos
-  for (const item of cobroItems) {
-    const path = item.tipo === "stock" ? `stock/${item.cod}` : `sueltos/${item.cod}`;
-    const snap = await get(ref(window.db, path));
-    if (!snap.exists()) continue;
-    const data = snap.val();
-    if (item.tipo === "stock") data.cant -= item.cant;
-    else data.kg = (parseFloat(data.kg) - parseFloat(item.cant)).toFixed(3);
-    await update(ref(window.db, path), data);
+  // Actualizar stock y sueltos
+  for(let p of productosCobro){
+    if(p.tipo==="STOCK"){
+      const stockRef = window.ref(`stock/${p.codigo}`);
+      const snap = await window.get(stockRef);
+      if(snap.exists()){
+        const stockData = snap.val();
+        await window.update(stockRef, {cant: stockData.cant - p.cantKG});
+      }
+    } else if(p.tipo==="SUELTOS"){
+      const sueltosRef = window.ref(`sueltos/${p.codigo}`);
+      const snap = await window.get(sueltosRef);
+      if(snap.exists()){
+        const sueltoData = snap.val();
+        await window.update(sueltosRef, {kg: sueltoData.kg - p.cantKG});
+      }
+    }
   }
 
-  // Imprimir ticket (simulado)
-  console.log("Ticket:", ventaData);
+  productosCobro = [];
+  actualizarTabla();
+  alert(`Venta realizada con éxito. Tipo de pago: ${tipoPago}`);
 }
-/*****************************************************
- * app.js - PARTE 3
- * Movimientos, Historial, Stock, Sueltos, Cajeros, Config
- *****************************************************/
 
-/* ---------------------------
-   MOVIMIENTOS
-   --------------------------- */
-const filtroCajero = document.getElementById("filtroCajero");
-const tablaMovimientos = document.querySelector("#tabla-movimientos tbody");
-const btnTirarZ = document.getElementById("btn-tirar-z");
+// ---------------------------
+// 14. MODAL COBRAR - EVENTO
+// ---------------------------
+btnCobrar.addEventListener("click", ()=>{
+  if(!cajeroActivo || productosCobro.length===0) return;
+  mostrarModal(modalPago);
+});
 
-async function cargarMovimientos() {
-  const dia = new Date().toISOString().slice(0,10).replace(/-/g,"");
-  const movSnap = await get(ref(window.db, `movimientos/${dia}`));
-  tablaMovimientos.innerHTML = "";
-  if (!movSnap.exists()) return;
+// ---------------------------
+// 15. ASIGNAR TIPOS A PRODUCTOS
+// ---------------------------
+btnAddProduct.addEventListener("click", ()=>{
+  const nombre = cobroProductos.value;
+  const cant = parseInt(cobroCantidad.value);
+  const precio = parseFloat(cobroProductos.selectedOptions[0]?.dataset.precio || 0);
+  if(!nombre || cant<=0) return;
 
-  const movimientos = Object.entries(movSnap.val()).sort((a,b)=>b[0]-a[0]); // más recientes arriba
-  movimientos.forEach(([key, mov]) => {
-    if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
+  productosCobro.push({
+    nombre,
+    cantKG: cant,
+    precio,
+    total: cant*precio,
+    tipo: "STOCK",
+    codigo: cobroProductos.selectedOptions[0]?.value
+  });
+
+  actualizarTabla();
+});
+
+btnAddSuelto.addEventListener("click", ()=>{
+  const nombre = cobroSueltos.value;
+  const kg = parseFloat(inputKgSuelto.value);
+  const precio = parseFloat(cobroSueltos.selectedOptions[0]?.dataset.precio || 0);
+  if(!nombre || kg<=0) return;
+
+  productosCobro.push({
+    nombre,
+    cantKG: kg,
+    precio,
+    total: kg*precio,
+    tipo: "SUELTOS",
+    codigo: cobroSueltos.selectedOptions[0]?.value
+  });
+
+  actualizarTabla();
+});
+
+// ---------------------------
+// 16. IMPRESIÓN DE TICKETS
+// ---------------------------
+function imprimirTicket(movimiento){
+  const printArea = document.createElement("div");
+  printArea.className = "print-area";
+  let html = `<div id="texto-ticket">`;
+  html += `ID_${movimiento.id}<br>`;
+  html += `${formatoFecha(movimiento.fecha)}<br>`;
+  html += `Cajero: ${movimiento.cajero}<br>`;
+  html += `==========<br>`;
+  movimiento.productos.forEach(p=>{
+    html += `${p.nombre} $${p.precio.toFixed(2)} (${p.cantKG}${p.tipo==="STOCK"?"x"+p.cantKG:""}) = $${p.total.toFixed(2)}<br>`;
+    html += `==========<br>`;
+  });
+  html += `TOTAL: $${movimiento.total.toFixed(2)}<br>`;
+  html += `Pago: ${movimiento.tipoPago}<br>`;
+  html += `</div><hr id="hr-ticket">`;
+  printArea.innerHTML = html;
+  document.body.appendChild(printArea);
+  window.print();
+  document.body.removeChild(printArea);
+}
+
+function formatoFecha(fechaISO){
+  const d = new Date(fechaISO);
+  const dia = String(d.getDate()).padStart(2,'0');
+  const mes = String(d.getMonth()+1).padStart(2,'0');
+  const anio = d.getFullYear();
+  const hora = String(d.getHours()).padStart(2,'0');
+  const min = String(d.getMinutes()).padStart(2,'0');
+  return `${dia}/${mes}/${anio} (${hora}:${min})`;
+}
+
+// ---------------------------
+// 17. REGISTRAR MOVIMIENTO EN FIREBASE
+// ---------------------------
+async function registrarMovimiento(mov){
+  const refMov = window.ref("movimientos");
+  const snap = await window.get(refMov);
+  let idNuevo = 1;
+  if(snap.exists()){
+    const keys = Object.keys(snap.val());
+    if(keys.length>0){
+      const idsNum = keys.map(k=>parseInt(k.split("_")[1],10));
+      idNuevo = Math.max(...idsNum)+1;
+    }
+  }
+  const idStr = String(idNuevo).padStart(6,'0');
+  await window.set(window.ref(`movimientos/ID_${idStr}`), mov);
+  return idStr;
+}
+
+// ---------------------------
+// 18. CARGAR MOVIMIENTOS EN TABLA
+// ---------------------------
+async function cargarMovimientos(){
+  const tabla = document.querySelector("#tabla-movimientos tbody");
+  tabla.innerHTML = "";
+  const snap = await window.get(window.ref("movimientos"));
+  if(!snap.exists()) return;
+
+  const movs = Object.entries(snap.val())
+    .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
+
+  for(const [id, mov] of movs){
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${mov.id}</td>
+      <td>${id}</td>
       <td>$${mov.total.toFixed(2)}</td>
       <td>${mov.tipoPago}</td>
       <td>
-        <button class="reimprimir" data-key="${key}">Reimprimir</button>
-        <button class="eliminar" data-key="${key}">Eliminar</button>
+        <button class="btn-ver">Reimprimir</button>
+        <button class="btn-eliminar">Eliminar</button>
       </td>
     `;
-    tablaMovimientos.appendChild(tr);
+    // Reimprimir
+    tr.querySelector(".btn-ver").addEventListener("click", ()=>imprimirTicket(mov));
+    // Eliminar
+    tr.querySelector(".btn-eliminar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          await window.remove(window.ref(`movimientos/${id}`));
+          // Restaurar stock/sueltos
+          for(let p of mov.productos){
+            if(p.tipo==="STOCK"){
+              const sRef = window.ref(`stock/${p.codigo}`);
+              const snap = await window.get(sRef);
+              if(snap.exists()){
+                await window.update(sRef, {cant: snap.val().cant + p.cantKG});
+              }
+            } else if(p.tipo==="SUELTOS"){
+              const sRef = window.ref(`sueltos/${p.codigo}`);
+              const snap = await window.get(sRef);
+              if(snap.exists()){
+                await window.update(sRef, {kg: snap.val().kg + p.cantKG});
+              }
+            }
+          }
+          cargarMovimientos();
+        }
+      });
+    });
+
+    tabla.appendChild(tr);
+  }
+}
+
+// ---------------------------
+// 19. MODAL CONTRASEÑA ADMIN
+// ---------------------------
+function modalPassword(callback){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <h3>Contraseña Administrador</h3>
+    <input type="password" id="pass-admin-modal" placeholder="Contraseña">
+    <div>
+      <button id="aceptar-pass">Aceptar</button>
+      <button id="cancelar-pass">Cancelar</button>
+    </div>
+    <p id="pass-msg" class="msg-error"></p>
+  `;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  modal.querySelector("#aceptar-pass").addEventListener("click", async ()=>{
+    const val = modal.querySelector("#pass-admin-modal").value;
+    const snap = await window.get(window.ref("config/passAdmin"));
+    if(val===snap.val()){
+      cerrarModal(overlay);
+      callback(true);
+    } else {
+      modal.querySelector("#pass-msg").innerText="Contraseña incorrecta";
+      callback(false);
+    }
+  });
+  modal.querySelector("#cancelar-pass").addEventListener("click", ()=>{
+    cerrarModal(overlay);
+    callback(false);
   });
 }
-filtroCajero.addEventListener("change", cargarMovimientos);
-btnTirarZ.addEventListener("click", async () => {
-  if (confirm("⚠️Tirar Z no puede revertirse. Continuar?⚠️")) {
-    const dia = new Date().toISOString().slice(0,10).replace(/-/g,"");
-    await remove(ref(window.db, `movimientos/${dia}`));
-    cargarMovimientos();
-  }
-});
 
-tablaMovimientos.addEventListener("click", async (e) => {
-  const key = e.target.dataset.key;
-  if (!key) return;
+// ---------------------------
+// 20. CARGAR HISTORIAL (POR DÍAS)
+// ---------------------------
+async function cargarHistorial(dia = new Date()){
+  const tabla = document.querySelector("#tabla-historial tbody");
+  tabla.innerHTML = "";
+  const snap = await window.get(window.ref("historial"));
+  if(!snap.exists()) return;
 
-  if (e.target.classList.contains("reimprimir")) {
-    const dia = new Date().toISOString().slice(0,10).replace(/-/g,"");
-    const movSnap = await get(ref(window.db, `movimientos/${dia}/${key}`));
-    if (!movSnap.exists()) return;
-    alert("Ticket a reimprimir: " + JSON.stringify(movSnap.val()));
-  }
+  const movs = Object.entries(snap.val())
+    .filter(([id, mov])=>{
+      const fechaMov = new Date(mov.fecha);
+      return fechaMov.toDateString()===dia.toDateString();
+    })
+    .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
 
-  if (e.target.classList.contains("eliminar")) {
-    const pass = prompt("Contraseña de administrador:");
-    if (pass !== configData.passAdmin && pass !== configData.masterPass) return alert("Contraseña incorrecta");
-    const dia = new Date().toISOString().slice(0,10).replace(/-/g,"");
-    const movSnap = await get(ref(window.db, `movimientos/${dia}/${key}`));
-    if (!movSnap.exists()) return;
-    // restaurar stock/sueltos
-    const items = movSnap.val().items;
-    for (const item of items) {
-      const path = item.tipo === "stock" ? `stock/${item.cod}` : `sueltos/${item.cod}`;
-      const snap = await get(ref(window.db, path));
-      if (!snap.exists()) continue;
-      const data = snap.val();
-      if (item.tipo === "stock") data.cant += item.cant;
-      else data.kg = (parseFloat(data.kg) + parseFloat(item.cant)).toFixed(3);
-      await update(ref(window.db, path), data);
-    }
-    await remove(ref(window.db, `movimientos/${dia}/${key}`));
-    cargarMovimientos();
-  }
-});
-
-/* ---------------------------
-   HISTORIAL
-   --------------------------- */
-const tablaHistorial = document.querySelector("#tabla-historial tbody");
-
-async function cargarHistorial(fechaISO = null) {
-  const fecha = fechaISO || new Date();
-  const dia = fecha.toISOString().slice(0,10).replace(/-/g,"");
-  const histSnap = await get(ref(window.db, `historial/${dia}`));
-  tablaHistorial.innerHTML = "";
-  if (!histSnap.exists()) return;
-
-  const historial = Object.values(histSnap.val()).sort((a,b)=>b.id.localeCompare(a.id));
-  historial.forEach(mov => {
+  for(const [id, mov] of movs){
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${mov.id}</td>
+      <td>${id}</td>
       <td>$${mov.total.toFixed(2)}</td>
       <td>${mov.tipoPago}</td>
       <td>${mov.cajero}</td>
-      <td>${mov.fecha}</td>
-      <td><button class="reimprimir-hist">Reimprimir</button></td>
+      <td>${formatoFecha(mov.fecha)}</td>
+      <td>
+        <button class="btn-ver">Reimprimir</button>
+      </td>
     `;
-    tablaHistorial.appendChild(tr);
-  });
+    tr.querySelector(".btn-ver").addEventListener("click", ()=>imprimirTicket(mov));
+    tabla.appendChild(tr);
+  }
 }
 
-tablaHistorial.addEventListener("click", async (e)=>{
-  if(!e.target.classList.contains("reimprimir-hist")) return;
-  const tr = e.target.closest("tr");
-  alert("Ticket historial: " + JSON.stringify(tr.cells[0].textContent));
+// ---------------------------
+// 21. INICIALIZACIÓN MOV/HIST
+// ---------------------------
+document.addEventListener("DOMContentLoaded", ()=>{
+  cargarMovimientos();
+  cargarHistorial();
 });
 
-/* ---------------------------
-   STOCK
-   --------------------------- */
-const tablaStock = document.querySelector("#tabla-stock tbody");
-const stockCodigo = document.getElementById("stock-codigo");
-const stockCantidad = document.getElementById("stock-cantidad");
-const btnAgregarStock = document.getElementById("agregar-stock");
-const btnBuscarStock = document.getElementById("buscar-stock");
+// ---------------------------
+// 22. CARGAR STOCK
+// ---------------------------
+async function cargarStock(){
+  const tabla = document.querySelector("#tabla-stock tbody");
+  tabla.innerHTML = "";
+  const snap = await window.get(window.ref("stock"));
+  if(!snap.exists()) return;
 
-async function cargarStock() {
-  const snap = await get(ref(window.db, "stock"));
-  tablaStock.innerHTML = "";
-  if (!snap.exists()) return;
-  Object.entries(snap.val()).sort((a,b)=>b[0]-a[0]).forEach(([cod, item])=>{
+  const items = Object.entries(snap.val())
+    .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
+
+  for(const [codigo, item] of items){
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${cod}</td>
+      <td>${codigo}</td>
       <td>${item.nombre}</td>
       <td>${item.cant}</td>
-      <td>${item.fecha}</td>
-      <td>$${parseFloat(item.precio||0).toFixed(2)}</td>
+      <td>${formatoFecha(item.fecha)}</td>
+      <td>$${item.precio.toFixed(2)}</td>
       <td>
-        <button class="editar-stock" data-cod="${cod}">Editar</button>
-        <button class="eliminar-stock" data-cod="${cod}">Eliminar</button>
+        <button class="btn-guardar">Editar</button>
+        <button class="btn-eliminar">Eliminar</button>
       </td>
     `;
-    tablaStock.appendChild(tr);
-  });
+    // Editar
+    tr.querySelector(".btn-guardar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          const nuevoNombre = prompt("Nombre:", item.nombre) || item.nombre;
+          const nuevaCant = parseFloat(prompt("Cantidad:", item.cant)) || item.cant;
+          const nuevoPrecio = parseFloat(prompt("Precio:", item.precio)) || item.precio;
+          await window.update(window.ref(`stock/${codigo}`), {nombre:nuevoNombre, cant:nuevaCant, precio:nuevoPrecio});
+          cargarStock();
+        }
+      });
+    });
+    // Eliminar
+    tr.querySelector(".btn-eliminar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          await window.remove(window.ref(`stock/${codigo}`));
+          cargarStock();
+        }
+      });
+    });
+
+    tabla.appendChild(tr);
+  }
 }
 
-btnAgregarStock.addEventListener("click", async ()=>{
-  const cod = stockCodigo.value;
-  const cant = parseInt(stockCantidad.value);
-  if(!cod || !cant) return;
-  const snap = await get(ref(window.db, `stock/${cod}`));
-  const fecha = new Date().toLocaleString();
-  if(snap.exists()){
-    const data = snap.val();
-    data.cant += cant;
-    await update(ref(window.db, `stock/${cod}`), data);
-  } else {
-    await set(ref(window.db, `stock/${cod}`), {nombre:"PRODUCTO NUEVO", cant, precio:0, fecha});
-  }
-  cargarStock();
-});
-
-btnBuscarStock.addEventListener("click", async ()=>{
-  const term = stockCodigo.value.toLowerCase();
-  const snap = await get(ref(window.db, "stock"));
-  tablaStock.innerHTML = "";
-  if (!snap.exists()) return;
-  Object.entries(snap.val()).forEach(([cod, item])=>{
-    if(cod.toLowerCase().includes(term) || item.nombre.toLowerCase().includes(term)){
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${cod}</td><td>${item.nombre}</td><td>${item.cant}</td>
-        <td>${item.fecha}</td><td>$${parseFloat(item.precio||0).toFixed(2)}</td>
-        <td>
-          <button class="editar-stock" data-cod="${cod}">Editar</button>
-          <button class="eliminar-stock" data-cod="${cod}">Eliminar</button>
-        </td>
-      `;
-      tablaStock.appendChild(tr);
+// ---------------------------
+// 23. AGREGAR STOCK
+// ---------------------------
+document.querySelector("#agregar-stock").addEventListener("click", async ()=>{
+  modalPassword(async (ok)=>{
+    if(!ok) return;
+    const codigo = document.querySelector("#stock-codigo").value.padStart(3,'0');
+    const cantidad = parseInt(document.querySelector("#stock-cantidad").value) || 1;
+    const refItem = window.ref(`stock/${codigo}`);
+    const snap = await window.get(refItem);
+    if(snap.exists()){
+      await window.update(refItem, {cant: snap.val().cant + cantidad});
+    } else {
+      await window.set(refItem, {nombre:"PRODUCTO NUEVO", cant:cantidad, precio:0, fecha:new Date().toISOString()});
     }
+    cargarStock();
   });
 });
 
-/* ---------------------------
-   SUELTOS
-   --------------------------- */
-const tablaSueltos = document.querySelector("#tabla-sueltos tbody");
-const sueltosCodigo = document.getElementById("sueltos-codigo");
-const sueltosKg = document.getElementById("sueltos-kg");
-const btnAgregarSuelto = document.getElementById("btn-agregar-suelto");
-const btnBuscarSuelto = document.getElementById("btn-buscar-suelto");
-const btnIncrSuelto = document.getElementById("sueltos-btn-incr");
-const btnDecrSuelto = document.getElementById("sueltos-btn-decr");
-
-btnIncrSuelto.addEventListener("click", ()=>{
-  let val = parseFloat(sueltosKg.value);
-  val += 0.100; if(val>99.000) val=99.000;
-  sueltosKg.value = val.toFixed(3);
-});
-btnDecrSuelto.addEventListener("click", ()=>{
-  let val = parseFloat(sueltosKg.value);
-  val -= 0.100; if(val<0.000) val=0.000;
-  sueltosKg.value = val.toFixed(3);
-});
-
-async function cargarSueltos() {
-  const snap = await get(ref(window.db, "sueltos"));
-  tablaSueltos.innerHTML = "";
+// ---------------------------
+// 24. SUELTOS
+// ---------------------------
+async function cargarSueltos(){
+  const tabla = document.querySelector("#tabla-sueltos tbody");
+  tabla.innerHTML = "";
+  const snap = await window.get(window.ref("sueltos"));
   if(!snap.exists()) return;
-  Object.entries(snap.val()).sort((a,b)=>b[0]-a[0]).forEach(([cod,item])=>{
+
+  const items = Object.entries(snap.val())
+    .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
+
+  for(const [codigo, item] of items){
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${cod}</td><td>${item.nombre}</td><td>${parseFloat(item.kg).toFixed(3)}</td>
-      <td>${item.fecha}</td><td>$${parseFloat(item.precio||0).toFixed(2)}</td>
+      <td>${codigo}</td>
+      <td>${item.nombre}</td>
+      <td>${item.kg.toFixed(3)}</td>
+      <td>${formatoFecha(item.fecha)}</td>
+      <td>$${item.precio.toFixed(2)}</td>
       <td>
-        <button class="editar-suelto" data-cod="${cod}">Editar</button>
-        <button class="eliminar-suelto" data-cod="${cod}">Eliminar</button>
+        <button class="btn-guardar">Editar</button>
+        <button class="btn-eliminar">Eliminar</button>
       </td>
     `;
-    tablaSueltos.appendChild(tr);
-  });
+    tr.querySelector(".btn-guardar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          const nuevoNombre = prompt("Nombre:", item.nombre) || item.nombre;
+          const nuevaKG = parseFloat(prompt("KG:", item.kg)) || item.kg;
+          const nuevoPrecio = parseFloat(prompt("Precio:", item.precio)) || item.precio;
+          await window.update(window.ref(`sueltos/${codigo}`), {nombre:nuevoNombre, kg:nuevaKG, precio:nuevoPrecio});
+          cargarSueltos();
+        }
+      });
+    });
+    tr.querySelector(".btn-eliminar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          await window.remove(window.ref(`sueltos/${codigo}`));
+          cargarSueltos();
+        }
+      });
+    });
+
+    tabla.appendChild(tr);
+  }
 }
 
-/* ---------------------------
-   CAJEROS
-   --------------------------- */
-const tablaCajeros = document.querySelector("#tabla-cajeros tbody");
-const cajeroNro = document.getElementById("cajero-nro");
-const cajeroNombre = document.getElementById("cajero-nombre");
-const cajeroDni = document.getElementById("cajero-dni");
-const cajeroPass = document.getElementById("cajero-pass");
-const btnAgregarCajero = document.getElementById("agregar-cajero");
+// ---------------------------
+// 25. AGREGAR SUELTO
+// ---------------------------
+document.querySelector("#btn-agregar-suelto").addEventListener("click", async ()=>{
+  modalPassword(async (ok)=>{
+    if(!ok) return;
+    const codigo = document.querySelector("#sueltos-codigo").value.padStart(3,'0');
+    const kg = parseFloat(document.querySelector("#sueltos-kg").value) || 0.1;
+    const refItem = window.ref(`sueltos/${codigo}`);
+    const snap = await window.get(refItem);
+    if(snap.exists()){
+      await window.update(refItem, {kg: snap.val().kg + kg});
+    } else {
+      await window.set(refItem, {nombre:"PRODUCTO NUEVO", kg, precio:0, fecha:new Date().toISOString()});
+    }
+    cargarSueltos();
+  });
+});
 
-async function cargarCajeros() {
-  const snap = await get(ref(window.db, "cajeros"));
-  tablaCajeros.innerHTML = "";
+// ---------------------------
+// 26. CAJEROS
+// ---------------------------
+async function cargarCajeros(){
+  const tabla = document.querySelector("#tabla-cajeros tbody");
+  tabla.innerHTML = "";
+  const snap = await window.get(window.ref("cajeros"));
   if(!snap.exists()) return;
-  Object.entries(snap.val()).sort((a,b)=>a[0]-b[0]).forEach(([nro,cajero])=>{
+
+  const items = Object.entries(snap.val()).sort((a,b)=>a[0]-b[0]);
+  for(const [nro, c] of items){
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${nro}</td>
-      <td>${cajero.nombre}</td>
-      <td>${cajero.dni}</td>
+      <td>${c.nombre}</td>
+      <td>${c.dni}</td>
       <td>
-        <button class="editar-cajero" data-nro="${nro}">Editar</button>
-        <button class="eliminar-cajero" data-nro="${nro}">Eliminar</button>
+        <button class="btn-guardar">Editar</button>
+        <button class="btn-eliminar">Eliminar</button>
       </td>
     `;
-    tablaCajeros.appendChild(tr);
-  });
+    tr.querySelector(".btn-guardar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          const nombre = prompt("Nombre:", c.nombre) || c.nombre;
+          const dni = prompt("DNI:", c.dni) || c.dni;
+          const pass = prompt("Contraseña:", c.pass) || c.pass;
+          await window.update(window.ref(`cajeros/${nro}`), {nombre, dni, pass});
+          cargarCajeros();
+        }
+      });
+    });
+    tr.querySelector(".btn-eliminar").addEventListener("click", ()=>{
+      modalPassword(async (ok)=>{
+        if(ok){
+          await window.remove(window.ref(`cajeros/${nro}`));
+          cargarCajeros();
+        }
+      });
+    });
+
+    tabla.appendChild(tr);
+  }
 }
 
-btnAgregarCajero.addEventListener("click", async ()=>{
-  const nro = cajeroNro.value;
-  const nombre = cajeroNombre.value;
-  const dni = cajeroDni.value;
-  const pass = cajeroPass.value;
-  const passAdmin = prompt("Contraseña administrador:");
-  if(passAdmin!==configData.passAdmin && passAdmin!==configData.masterPass) return alert("Contraseña incorrecta");
-  await set(ref(window.db, `cajeros/${nro}`), {nombre,dni,pass});
+// ---------------------------
+// 27. AGREGAR CAJERO
+// ---------------------------
+document.querySelector("#agregar-cajero").addEventListener("click", ()=>{
+  modalPassword(async (ok)=>{
+    if(!ok) return;
+    const nro = document.querySelector("#cajero-nro").value.padStart(2,'0');
+    const nombre = document.querySelector("#cajero-nombre").value;
+    const dni = document.querySelector("#cajero-dni").value;
+    const pass = document.querySelector("#cajero-pass").value;
+    await window.set(window.ref(`cajeros/${nro}`), {nombre,dni,pass});
+    cargarCajeros();
+  });
+});
+
+// ---------------------------
+// 28. CONFIGURACIÓN
+// ---------------------------
+document.querySelector("#guardar-config").addEventListener("click", async ()=>{
+  const passActual = document.querySelector("#config-pass-actual").value;
+  const passNueva = document.querySelector("#config-pass-nueva").value;
+  const snap = await window.get(window.ref("config/passAdmin"));
+  if(passActual !== snap.val()){
+    document.querySelector("#config-msg").innerText="Contraseña actual incorrecta";
+    return;
+  }
+  await window.update(window.ref("config"), {passAdmin: passNueva});
+  document.querySelector("#config-msg").innerText="Contraseña actualizada";
+});
+
+document.querySelector("#btn-restaurar").addEventListener("click", async ()=>{
+  const master = document.querySelector("#master-pass").value;
+  const snap = await window.get(window.ref("config/masterPass"));
+  if(master !== snap.val()){
+    document.querySelector("#config-msg").innerText="Contraseña maestra incorrecta";
+    return;
+  }
+  await window.update(window.ref("config"), {passAdmin: snap.val()});
+  document.querySelector("#config-msg").innerText="Contraseña restaurada a valor por defecto";
+});
+
+// ---------------------------
+// 29. INICIALIZACIÓN STOCK, SUELTOS, CAJEROS
+// ---------------------------
+document.addEventListener("DOMContentLoaded", ()=>{
+  cargarStock();
+  cargarSueltos();
   cargarCajeros();
 });
-
-/* ---------------------------
-   CONFIG
-   --------------------------- */
-const configNombre = document.getElementById("config-nombre");
-const configPassActual = document.getElementById("config-pass-actual");
-const configPassNueva = document.getElementById("config-pass-nueva");
-const btnGuardarConfig = document.getElementById("guardar-config");
-const masterPassInput = document.getElementById("master-pass");
-const btnRestaurar = document.getElementById("btn-restaurar");
-
-btnGuardarConfig.addEventListener("click", async ()=>{
-  const passActual = configPassActual.value;
-  if(passActual !== configData.passAdmin) return alert("Contraseña incorrecta");
-  const updates = { shopName: configNombre.value, passAdmin: configPassNueva.value };
-  await update(ref(window.db, "config"), updates);
-  configData = {...configData,...updates};
-  alert("Configuración guardada");
-});
-
-btnRestaurar.addEventListener("click", async ()=>{
-  if(masterPassInput.value !== configData.masterPass) return alert("Contraseña maestra incorrecta");
-  await update(ref(window.db, "config"), {passAdmin: configData.masterPass});
-  configData.passAdmin = configData.masterPass;
-  alert("Contraseña de administrador restaurada a la maestra");
-});
-
-/* ---------------------------
-   Inicializar todas las secciones
-   --------------------------- */
-cargarMovimientos();
-cargarHistorial();
-cargarStock();
-cargarSueltos();
-cargarCajeros();
