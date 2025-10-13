@@ -897,3 +897,204 @@ async function eliminarSuelto(codigo){
 // ------------------------
 actualizarTablaStock();
 actualizarTablaSueltos();
+
+// =======================
+// PARTE 4 - app.js (CAJEROS y CONFIG)
+// =======================
+
+// ------------------------
+// FUNCIONES AUXILIARES ADMIN
+// ------------------------
+async function validarAdmin(pass) {
+  const snap = await get(ref(window.db,"admin"));
+  if(!snap.exists()) return false;
+  return snap.val().password === pass;
+}
+
+// ------------------------
+// CAJEROS
+// ------------------------
+const tablaCajerosBody = document.querySelector("#tabla-cajeros tbody");
+const cajeroUsuarioInput = document.getElementById("cajero-usuario");
+const cajeroNombreInput = document.getElementById("cajero-nombre");
+const cajeroPassInput = document.getElementById("cajero-pass");
+const btnAgregarCajero = document.getElementById("btn-agregar-cajero");
+
+async function actualizarTablaCajeros() {
+  const snap = await get(ref(window.db,"cajeros"));
+  tablaCajerosBody.innerHTML = "";
+  if(!snap.exists()) return;
+  Object.entries(snap.val()).forEach(([uid, caj])=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${uid}</td>
+      <td>${caj.nombre}</td>
+      <td>${caj.usuario}</td>
+      <td></td>
+    `;
+    const tdAccion = tr.querySelector("td:last-child");
+
+    const btnEditar = document.createElement("button");
+    btnEditar.textContent = "Editar";
+    btnEditar.classList.add("btn-ver");
+    btnEditar.addEventListener("click", ()=> editarCajero(uid));
+
+    const btnEliminar = document.createElement("button");
+    btnEliminar.textContent = "Eliminar";
+    btnEliminar.classList.add("btn-eliminar");
+    btnEliminar.addEventListener("click", ()=> eliminarCajero(uid));
+
+    tdAccion.appendChild(btnEditar);
+    tdAccion.appendChild(btnEliminar);
+
+    tablaCajerosBody.appendChild(tr);
+  });
+}
+
+// AGREGAR CAJERO
+btnAgregarCajero.addEventListener("click", async ()=>{
+  const usuario = cajeroUsuarioInput.value.trim();
+  const nombre = cajeroNombreInput.value.trim();
+  const pass = cajeroPassInput.value.trim();
+  if(!usuario || !nombre || !pass) return;
+
+  const snap = await get(ref(window.db,"cajeros"));
+  const existe = snap.exists() && Object.values(snap.val()).some(c=>c.usuario === usuario);
+  if(existe) return alert("Usuario ya existe");
+
+  const uid = Date.now().toString();
+  await set(ref(window.db,`cajeros/${uid}`), { usuario, nombre, pass });
+  cajeroUsuarioInput.value = "";
+  cajeroNombreInput.value = "";
+  cajeroPassInput.value = "";
+  actualizarTablaCajeros();
+});
+
+// EDITAR / ELIMINAR CAJERO
+async function editarCajero(uid){
+  const snap = await get(ref(window.db,`cajeros/${uid}`));
+  if(!snap.exists()) return;
+  const data = snap.val();
+
+  const overlay = document.createElement("div");
+  overlay.classList.add("modal-overlay");
+  const modal = document.createElement("div");
+  modal.classList.add("modal");
+  modal.innerHTML = `<h3>Editar Cajero - ${uid}</h3>`;
+
+  const inputNombre = document.createElement("input");
+  inputNombre.value = data.nombre;
+  modal.appendChild(inputNombre);
+
+  const inputUsuario = document.createElement("input");
+  inputUsuario.value = data.usuario;
+  modal.appendChild(inputUsuario);
+
+  const inputPass = document.createElement("input");
+  inputPass.type = "password";
+  inputPass.placeholder = "Contraseña Admin";
+  modal.appendChild(inputPass);
+
+  const btnGuardar = document.createElement("button");
+  btnGuardar.textContent = "Guardar";
+  btnGuardar.addEventListener("click", async ()=>{
+    if(await validarAdmin(inputPass.value)){
+      await update(ref(window.db,`cajeros/${uid}`), { nombre: inputNombre.value, usuario: inputUsuario.value });
+      document.body.removeChild(overlay);
+      actualizarTablaCajeros();
+    } else alert("Contraseña incorrecta");
+  });
+  modal.appendChild(btnGuardar);
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", ()=> document.body.removeChild(overlay));
+  modal.appendChild(btnCancelar);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+async function eliminarCajero(uid){
+  const overlay = document.createElement("div");
+  overlay.classList.add("modal-overlay");
+  const modal = document.createElement("div");
+  modal.classList.add("modal");
+  modal.innerHTML = `<h3>Eliminar Cajero - ${uid}</h3>`;
+
+  const inputPass = document.createElement("input");
+  inputPass.type = "password";
+  inputPass.placeholder = "Contraseña Admin";
+  modal.appendChild(inputPass);
+
+  const btnAceptar = document.createElement("button");
+  btnAceptar.textContent = "Aceptar";
+  btnAceptar.addEventListener("click", async ()=>{
+    if(await validarAdmin(inputPass.value)){
+      await remove(ref(window.db,`cajeros/${uid}`));
+      document.body.removeChild(overlay);
+      actualizarTablaCajeros();
+    } else alert("Contraseña incorrecta");
+  });
+  modal.appendChild(btnAceptar);
+
+  const btnCancelar = document.createElement("button");
+  btnCancelar.textContent = "Cancelar";
+  btnCancelar.addEventListener("click", ()=> document.body.removeChild(overlay));
+  modal.appendChild(btnCancelar);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+// ------------------------
+// CONFIGURACIÓN
+// ------------------------
+const configTiendaSelect = document.getElementById("config-tienda");
+const btnGuardarConfig = document.getElementById("btn-guardar-config");
+
+async function cargarTiendas(){
+  const snap = await get(ref(window.db,"tiendas"));
+  if(!snap.exists()) return;
+  configTiendaSelect.innerHTML = "";
+  Object.entries(snap.val()).forEach(([id, tienda])=>{
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = tienda.nombre;
+    configTiendaSelect.appendChild(opt);
+  });
+}
+
+btnGuardarConfig.addEventListener("click", async ()=>{
+  const tiendaId = configTiendaSelect.value;
+  const snap = await get(ref(window.db,"config"));
+  const adminPass = prompt("Contraseña admin:");
+  if(await validarAdmin(adminPass)){
+    await set(ref(window.db,"config/tiendaActual"), tiendaId);
+    alert("Tienda guardada correctamente");
+  } else alert("Contraseña incorrecta");
+});
+
+// ------------------------
+// CAMBIO DE CONTRASEÑA ADMIN
+// ------------------------
+const inputOldPass = document.getElementById("admin-old-pass");
+const inputNewPass = document.getElementById("admin-new-pass");
+const btnCambiarPass = document.getElementById("btn-cambiar-pass");
+
+btnCambiarPass.addEventListener("click", async ()=>{
+  const oldPass = inputOldPass.value;
+  const newPass = inputNewPass.value;
+  if(await validarAdmin(oldPass)){
+    await update(ref(window.db,"admin"), { password: newPass });
+    inputOldPass.value = "";
+    inputNewPass.value = "";
+    alert("Contraseña cambiada con éxito");
+  } else alert("Contraseña actual incorrecta");
+});
+
+// ------------------------
+// INICIALIZAR
+// ------------------------
+actualizarTablaCajeros();
+cargarTiendas();
