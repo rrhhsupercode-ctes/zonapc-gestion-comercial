@@ -1,107 +1,24 @@
-// app.js - PARTE 1/4
+// app.js - PARTE 1/4 CORREGIDA
 import { db, ref, get, set, update, push, remove, onValue } from './init.js'; // wrapper global ya definido
 
 /* ---------------------------
    VARIABLES GLOBALES
 --------------------------- */
-const SECCIONES = {
-  COBRAR: document.getElementById('cobro'),
-  MOVIMIENTOS: document.getElementById('movimientos'),
-  HISTORIAL: document.getElementById('historial'),
-  STOCK: document.getElementById('stock'),
-  SUELTOS: document.getElementById('sueltos'),
-  CAJEROS: document.getElementById('cajeros'),
-  CONFIG: document.getElementById('config')
-};
-const NAV_BTNS = document.querySelectorAll('.nav-btn');
-const APP_TITLE = document.getElementById('app-title');
-
 let CONFIG = { shopName: '', passAdmin: '', masterPass: '' };
 let CAJEROS = {};
 let STOCK = {};
 let SUELTOS = {};
 let MOVIMIENTOS = {};
 let HISTORIAL = {};
-
 let currentCajero = null;
+
+let carrito = [];
 
 /* ---------------------------
    MODAL ADMIN LOGIN (AL ACCEDER)
 --------------------------- */
-const loginModal = document.getElementById('login-modal');
-const cobroControles = document.getElementById('cobro-controles');
-const loginUsuario = document.getElementById('login-usuario');
-const loginPass = document.getElementById('login-pass');
-const btnLogin = document.getElementById('btn-login');
-const loginMsg = document.getElementById('login-msg');
-
-async function initApp() {
-  try {
-    const configSnap = await get(ref(db, 'config'));
-    CONFIG = configSnap.val();
-    APP_TITLE.textContent = CONFIG.shopName + ' - Gestión Comercial V2.12.2';
-
-    const cajerosSnap = await get(ref(db, 'cajeros'));
-    CAJEROS = cajerosSnap.exists() ? cajerosSnap.val() : {};
-    cargarSelectCajeros();
-
-    loginModal.style.display = 'flex';
-    cobroControles.classList.add('hidden');
-
-    // Escucha cambios en stock y sueltos en tiempo real
-    onValue(ref(db, 'stock'), snap => STOCK = snap.val() || {});
-    onValue(ref(db, 'sueltos'), snap => SUELTOS = snap.val() || {});
-    onValue(ref(db, 'movimientos'), snap => MOVIMIENTOS = snap.val() || {});
-    onValue(ref(db, 'historial'), snap => HISTORIAL = snap.val() || {});
-  } catch (err) {
-    console.error('Error inicializando app:', err);
-  }
-}
-
-function cargarSelectCajeros() {
-  loginUsuario.innerHTML = '';
-  Object.keys(CAJEROS).sort().forEach(nro => {
-    const opt = document.createElement('option');
-    opt.value = nro;
-    opt.textContent = nro.padStart(2, '0');
-    loginUsuario.appendChild(opt);
-  });
-}
-
-/* ---------------------------
-   LOGIN CAJERO / ADMIN
---------------------------- */
-btnLogin.addEventListener('click', () => {
-  const nro = loginUsuario.value;
-  const pass = loginPass.value.trim();
-
-  if (!nro) return;
-
-  if (pass === CONFIG.passAdmin || pass === CONFIG.masterPass) {
-    loginMsg.textContent = '';
-    loginModal.style.display = 'none';
-    cobroControles.classList.remove('hidden');
-    currentCajero = { nro, nombre: CAJEROS[nro]?.nombre || 'ADMIN' };
-  } else if (CAJEROS[nro] && CAJEROS[nro].pass === pass) {
-    loginMsg.textContent = '';
-    loginModal.style.display = 'none';
-    cobroControles.classList.remove('hidden');
-    currentCajero = { nro, nombre: CAJEROS[nro].nombre };
-  } else {
-    loginMsg.textContent = 'Contraseña incorrecta';
-  }
-});
-
-/* ---------------------------
-   NAVEGACIÓN ENTRE SECCIONES
---------------------------- */
-NAV_BTNS.forEach(btn => {
-  btn.addEventListener('click', () => {
-    const target = btn.dataset.section.toUpperCase();
-    Object.values(SECCIONES).forEach(sec => sec.classList.add('hidden'));
-    SECCIONES[target].classList.remove('hidden');
-  });
-});
+let loginModal, cobroControles, loginUsuario, loginPass, btnLogin, loginMsg;
+let APP_TITLE;
 
 /* ---------------------------
    FUNCIONES UTILES
@@ -143,8 +60,98 @@ function actualizarTotalTabla(tabla) {
 /* ---------------------------
    CARGA INICIAL
 --------------------------- */
+async function initApp() {
+  try {
+    const configSnap = await get(ref(db, 'config'));
+    CONFIG = configSnap.val();
+    APP_TITLE.textContent = CONFIG.shopName + ' - Gestión Comercial V2.12.2';
+
+    const cajerosSnap = await get(ref(db, 'cajeros'));
+    CAJEROS = cajerosSnap.exists() ? cajerosSnap.val() : {};
+    cargarSelectCajeros();
+
+    loginModal.style.display = 'flex';
+    cobroControles.classList.add('hidden');
+
+    // Escucha cambios en stock, sueltos, movimientos y historial
+    onValue(ref(db, 'stock'), snap => STOCK = snap.val() || {});
+    onValue(ref(db, 'sueltos'), snap => SUELTOS = snap.val() || {});
+    onValue(ref(db, 'movimientos'), snap => MOVIMIENTOS = snap.val() || {});
+    onValue(ref(db, 'historial'), snap => HISTORIAL = snap.val() || {});
+  } catch (err) {
+    console.error('Error inicializando app:', err);
+  }
+}
+
+function cargarSelectCajeros() {
+  loginUsuario.innerHTML = '';
+  Object.keys(CAJEROS).sort().forEach(nro => {
+    const opt = document.createElement('option');
+    opt.value = nro;
+    opt.textContent = nro.padStart(2, '0');
+    loginUsuario.appendChild(opt);
+  });
+}
+
+/* ---------------------------
+   INICIALIZACIÓN DEL DOM
+--------------------------- */
 window.addEventListener('DOMContentLoaded', async () => {
+  // Referencias del DOM
+  APP_TITLE = document.getElementById('app-title');
+  loginModal = document.getElementById('login-modal');
+  cobroControles = document.getElementById('cobro-controles');
+  loginUsuario = document.getElementById('login-usuario');
+  loginPass = document.getElementById('login-pass');
+  btnLogin = document.getElementById('btn-login');
+  loginMsg = document.getElementById('login-msg');
+
+  // Inicializar app
   await initApp();
+
+  // NAVEGACIÓN ENTRE SECCIONES
+  const SECCIONES = {
+    COBRAR: document.getElementById('cobro'),
+    MOVIMIENTOS: document.getElementById('movimientos'),
+    HISTORIAL: document.getElementById('historial'),
+    STOCK: document.getElementById('stock'),
+    SUELTOS: document.getElementById('sueltos'),
+    CAJEROS: document.getElementById('cajeros'),
+    CONFIG: document.getElementById('config')
+  };
+  const NAV_BTNS = document.querySelectorAll('.nav-btn');
+
+  NAV_BTNS.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.section.toUpperCase();
+      Object.values(SECCIONES).forEach(sec => sec.classList.add('hidden'));
+      SECCIONES[target].classList.remove('hidden');
+    });
+  });
+
+  /* ---------------------------
+     LOGIN CAJERO / ADMIN
+  --------------------------- */
+  btnLogin.addEventListener('click', () => {
+    const nro = loginUsuario.value;
+    const pass = loginPass.value.trim();
+
+    if (!nro) return;
+
+    if (pass === CONFIG.passAdmin || pass === CONFIG.masterPass) {
+      loginMsg.textContent = '';
+      loginModal.style.display = 'none';
+      cobroControles.classList.remove('hidden');
+      currentCajero = { nro, nombre: CAJEROS[nro]?.nombre || 'ADMIN' };
+    } else if (CAJEROS[nro] && CAJEROS[nro].pass === pass) {
+      loginMsg.textContent = '';
+      loginModal.style.display = 'none';
+      cobroControles.classList.remove('hidden');
+      currentCajero = { nro, nombre: CAJEROS[nro].nombre };
+    } else {
+      loginMsg.textContent = 'Contraseña incorrecta';
+    }
+  });
 });
 
 // app.js - PARTE 2/4 (COBRAR)
