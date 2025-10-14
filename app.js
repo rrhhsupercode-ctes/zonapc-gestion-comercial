@@ -405,8 +405,10 @@ async function loadMovimientos() {
       </td>
     `;
 
+    // Reimprimir ticket individual
     tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
 
+    // Eliminar ticket individual con contraseña y restauración de stock
     tr.querySelector(".eliminar").addEventListener("click", async () => {
       const pass = prompt("Contraseña de administrador para eliminar ticket:");
       const confSnap = await window.get(window.ref("/config"));
@@ -445,22 +447,31 @@ btnTirarZ.addEventListener("click", async () => {
   const passAdmin = confVal.passAdmin || "1918";
   if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
-  // Obtener movimientos
+  // Obtener movimientos filtrados por cajero
   const snap = await window.get(window.ref("/movimientos"));
   if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
   const todosMov = Object.entries(snap.val())
     .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
-    // Filtrar por cajero si no es TODOS
     .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
 
   if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
 
-  // Crear registro único en HISTORIAL
   const fechaZ = new Date();
   const zID = `TIRAR_Z_${fechaZ.getTime()}`;
 
-  // Calcular subtotales por tipo de pago
+  // Restaurar stock antes de borrar
+  for (const [, mov] of todosMov) {
+    for (const item of mov.items) {
+      const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
+      if (!snapItem.exists()) continue;
+      const data = snapItem.val();
+      if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
+      else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
+    }
+  }
+
+  // Calcular totales
   const totalPorTipoPago = {};
   let totalGeneral = 0;
   for (const [, mov] of todosMov) {
@@ -469,6 +480,7 @@ btnTirarZ.addEventListener("click", async () => {
     totalGeneral += mov.total;
   }
 
+  // Crear registro en historial
   const registroZ = {
     tipo: "TIRAR Z",
     fecha: fechaZ.toISOString(),
@@ -480,7 +492,7 @@ btnTirarZ.addEventListener("click", async () => {
 
   await window.set(window.ref(`/historial/${zID}`), registroZ);
 
-  // Borrar movimientos de la base de datos
+  // Borrar movimientos
   for (const [id] of todosMov) {
     await window.remove(window.ref(`/movimientos/${id}`));
   }
@@ -494,12 +506,11 @@ btnTirarZ.addEventListener("click", async () => {
   for (const cajero of registroZ.cajeros) {
     ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
     const movCajero = registroZ.items.filter(m => m.cajero === cajero);
-
     const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+
     for (const tipo of tiposPago) {
       const ventasTipo = movCajero.filter(m => m.tipo === tipo);
       const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-
       ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
       ventasTipo.forEach(m => {
         ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
@@ -510,7 +521,6 @@ btnTirarZ.addEventListener("click", async () => {
   ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
   ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
 
-  // Reemplazar con la función real de impresión
   imprimirTicketZ(ticketTexto);
 });
 
@@ -518,7 +528,7 @@ btnTirarZ.addEventListener("click", async () => {
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
-// Crear controles de día dinámicos
+// Crear controles de día
 const controlesHistorial = document.createElement("div");
 controlesHistorial.style.cssText = `
   display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
@@ -532,7 +542,6 @@ controlesHistorial.innerHTML = `
   </span>
   <button id="historial-dia-next">▶</button>
 `;
-
 historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
 
 const historialDia = document.getElementById("historial-dia");
@@ -542,7 +551,6 @@ const btnDiaNext = document.getElementById("historial-dia-next");
 let historialRegistros = [];
 let fechaMin, fechaMax;
 
-// Cargar historial desde Firebase
 async function loadHistorial() {
   const snap = await window.get(window.ref("/historial"));
   tablaHistorial.innerHTML = "";
@@ -550,15 +558,12 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
-  // Obtener todos los registros
   Object.entries(snap.val()).forEach(([id, mov]) => {
     historialRegistros.push({ id, ...mov, fechaObj: new Date(mov.fecha) });
   });
 
-  // Ordenar por fecha descendente
   historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
 
-  // Determinar límites de fechas según regla del día 15
   const hoy = new Date();
   const diaHoy = hoy.getDate();
 
@@ -566,7 +571,6 @@ async function loadHistorial() {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
   } else {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    // Eliminar registros anteriores al mes actual
     for (const mov of historialRegistros) {
       if (mov.fechaObj < fechaMin) {
         await window.remove(window.ref(`/historial/${mov.id}`));
@@ -576,8 +580,6 @@ async function loadHistorial() {
   }
 
   fechaMax = hoy;
-
-  // Por defecto, mostrar último día con registros o hoy
   let ultimoDia = historialRegistros.length
     ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate()))
     : hoy.getDate();
@@ -585,7 +587,6 @@ async function loadHistorial() {
   mostrarHistorialPorDia(ultimoDia);
 }
 
-// Función para mostrar solo los registros de un día específico
 function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
@@ -593,7 +594,6 @@ function mostrarHistorialPorDia(dia) {
     .filter(mov => mov.fechaObj.getDate() === dia)
     .forEach(mov => {
       const fechaStr = `${mov.fechaObj.getDate().toString().padStart(2,'0')}/${(mov.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${mov.fechaObj.getFullYear()} (${mov.fechaObj.getHours().toString().padStart(2,'0')}:${mov.fechaObj.getMinutes().toString().padStart(2,'0')})`;
-
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${mov.id}</td>
@@ -603,24 +603,16 @@ function mostrarHistorialPorDia(dia) {
         <td>${fechaStr}</td>
         <td><button class="reimprimir" data-id="${mov.id}">🖨</button></td>
       `;
-
-      tr.querySelector(".reimprimir").addEventListener("click", () => {
-        mostrarModalTicket(mov);
-      });
-
+      tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
       tablaHistorial.appendChild(tr);
     });
 
-  // Mostrar fecha completa en el span
   historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
-
-  // Activar/desactivar botones según límites
   btnDiaPrev.disabled = dia <= fechaMin.getDate();
   btnDiaNext.disabled = dia >= fechaMax.getDate();
 }
 
-// Botones para cambiar día
 btnDiaPrev.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (dia > fechaMin.getDate()) mostrarHistorialPorDia(dia - 1);
