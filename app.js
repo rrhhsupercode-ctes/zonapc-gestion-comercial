@@ -623,7 +623,9 @@ async function loadHistorial() {
   }
 
   fechaMax = hoy;
+
   let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
+
   mostrarHistorialPorDia(ultimoDia);
 }
 
@@ -638,25 +640,29 @@ function mostrarHistorialPorDia(dia) {
         : "";
 
       const tr = document.createElement("tr");
-      tr.style.backgroundColor = mov.eliminado ? "#ccc" : "";
-      const esTirarZ = mov.tipo === "TIRAR Z";
       const hoy = new Date();
-      const mismoDia = mov.fechaObj &&
-        hoy.toDateString() === mov.fechaObj.toDateString() &&
-        !mov.eliminado;
+      const esMismoDia = mov.fechaObj &&
+        mov.fechaObj.getFullYear() === hoy.getFullYear() &&
+        mov.fechaObj.getMonth() === hoy.getMonth() &&
+        mov.fechaObj.getDate() === hoy.getDate();
+
+      const puedeEliminar = mov.tipo === "TIRAR Z" && esMismoDia && !mov.eliminado;
 
       tr.innerHTML = `
         <td>${mov.id}</td>
-        <td>${(mov.totalGeneral ?? mov.total ?? 0).toFixed(2)}</td>
+        <td>${(typeof mov.totalGeneral === "number") ? mov.totalGeneral.toFixed(2) : (mov.total || "")}</td>
         <td>${mov.tipo}</td>
-        <td>${mov.cajeros ? mov.cajeros.join(", ") : (mov.cajero || "")}</td>
+        <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
         <td>${fechaStr}</td>
         <td>
           <button class="reimprimir" data-id="${mov.id}">🖨</button>
-          ${esTirarZ ? `<button class="eliminarZ" data-id="${mov.id}" ${!mismoDia ? "disabled" : ""}>❌</button>` : ""}
+          ${mov.tipo === "TIRAR Z" ? `<button class="eliminar-z" ${puedeEliminar ? "" : "disabled"}>❌</button>` : ""}
         </td>
       `;
 
+      if (mov.eliminado) tr.style.backgroundColor = "#ccc";
+
+      // --- REIMPRIMIR ---
       tr.querySelector(".reimprimir").addEventListener("click", () => {
         if (mov.tipo === "TIRAR Z") {
           const registro = mov;
@@ -675,28 +681,27 @@ function mostrarHistorialPorDia(dia) {
           }
           ticketTexto += `\n========== TOTAL GENERAL: $${(registro.totalGeneral||0).toFixed(2)} ==========\n`;
           ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
-          imprimirTicketZ(ticketTexto);
+          if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
         } else {
           mostrarModalTicket(mov);
         }
       });
 
-      if (esTirarZ && mismoDia) {
-        tr.querySelector(".eliminarZ").addEventListener("click", async () => {
-          const pass = prompt("Contraseña de administrador para eliminar TIRAR Z:");
-          const confSnap = await window.get(window.ref("/config"));
-          const confVal = confSnap.exists() ? confSnap.val() : {};
-          const passAdmin = confVal.passAdmin || "1918";
-          if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
-
-          // Restaurar movimientos originales
-          for (const movItem of mov.items || []) {
-            await window.set(window.ref(`/movimientos/${movItem.ticketID}`), movItem);
-          }
-
-          await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-          loadHistorial();
-          loadMovimientos();
+      // --- ELIMINAR TIRAR Z ---
+      const btnEliminarZ = tr.querySelector(".eliminar-z");
+      if (btnEliminarZ) {
+        btnEliminarZ.addEventListener("click", () => {
+          showAdminActionModal(async () => {
+            // restaurar movimientos
+            for (const reg of mov.items || []) {
+              await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+            }
+            // marcar eliminado
+            await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
+            tr.style.backgroundColor = "#ccc";
+            btnEliminarZ.disabled = true;
+            loadMovimientos();
+          });
         });
       }
 
@@ -705,6 +710,7 @@ function mostrarHistorialPorDia(dia) {
 
   historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
+
   btnDiaPrev.disabled = fechaMin ? (dia <= fechaMin.getDate()) : false;
   btnDiaNext.disabled = fechaMax ? (dia >= fechaMax.getDate()) : false;
 }
