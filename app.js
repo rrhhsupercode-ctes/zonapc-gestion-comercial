@@ -574,11 +574,12 @@ async function loadStock(filtro = "") {
         });
 
         function actualizarPreview() {
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
-        }
+  let entero = editPrecio.value.replace(/\D/g, "");
+  if (!entero) entero = "0";
+  const dec = parseInt(editCentavos.value) || 0;
+  const combinado = parseInt(entero) + dec / 100;
+  preview.textContent = formatPrecio(combinado);
+}
 
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
         cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
