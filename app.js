@@ -449,12 +449,12 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$00000,00"
+// Formato precio "$0.000.000,00"
 function formatPrecio(num) {
-  const fijo = (parseFloat(num) || 0).toFixed(2);
-  const [ent, dec] = fijo.split(".");
-  const entStr = String(ent).padStart(5, "0");
-  return `$${entStr},${dec}`;
+  const n = parseFloat(num) || 0;
+  const partes = n.toFixed(2).split(".");
+  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `$${entero},${partes[1]}`;
 }
 
 async function loadStock(filtro = "") {
@@ -468,7 +468,6 @@ async function loadStock(filtro = "") {
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  // Orden descendente por fecha
   stockArray.sort((a, b) => {
     const fechaA = new Date(a[1].fecha || 0).getTime();
     const fechaB = new Date(b[1].fecha || 0).getTime();
@@ -506,7 +505,7 @@ async function loadStock(filtro = "") {
           background:rgba(0,0,0,0.7); z-index:9999;
         `;
         modal.innerHTML = `
-          <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
+          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
             <h2>Editar Stock ${id}</h2>
 
             <label for="edit-nombre">Nombre del producto</label>
@@ -519,9 +518,17 @@ async function loadStock(filtro = "") {
               <button id="cant-incr" style="width:30%;">+</button>
             </div>
 
-            <label for="edit-precio">Precio</label>
-            <input id="edit-precio" type="text" value="${formatPrecio(prod.precio).replace('$', '')}" placeholder="00000,00" style="width:100%; margin:5px 0; text-align:center;">
-            <p id="edit-msg" style="color:red; margin-top:5px; min-height:18px;"></p>
+            <label>Precio</label>
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <span>,</span>
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
+                .toString()
+                .padStart(2, "0")}">
+            </div>
+
+            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
             <div style="margin-top:10px;">
               <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
@@ -534,11 +541,42 @@ async function loadStock(filtro = "") {
         const editNombre = modal.querySelector("#edit-nombre");
         const editCant = modal.querySelector("#edit-cant");
         const editPrecio = modal.querySelector("#edit-precio");
+        const editCentavos = modal.querySelector("#edit-centavos");
         const editAceptar = modal.querySelector("#edit-aceptar");
         const editCancelar = modal.querySelector("#edit-cancelar");
         const editMsg = modal.querySelector("#edit-msg");
+        const preview = modal.querySelector("#preview-precio");
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
+
+        // Formateo dinámico del campo de pesos (000.000)
+        editPrecio.addEventListener("input", () => {
+          let val = editPrecio.value.replace(/\D/g, "");
+          if (val.length > 7) val = val.slice(0, 7);
+          const partes = [];
+          while (val.length > 3) {
+            partes.unshift(val.slice(-3));
+            val = val.slice(0, -3);
+          }
+          if (val) partes.unshift(val);
+          editPrecio.value = partes.join(".");
+          actualizarPreview();
+        });
+
+        editCentavos.addEventListener("input", () => {
+          let val = parseInt(editCentavos.value);
+          if (isNaN(val) || val < 0) val = 0;
+          if (val > 99) val = 99;
+          editCentavos.value = val.toString().padStart(2, "0");
+          actualizarPreview();
+        });
+
+        function actualizarPreview() {
+          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const combinado = entero + dec / 100;
+          preview.textContent = formatPrecio(combinado);
+        }
 
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
         cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
@@ -547,21 +585,25 @@ async function loadStock(filtro = "") {
         editAceptar.addEventListener("click", async () => {
           const newNombre = editNombre.value.trim();
           const newCant = parseInt(editCant.value);
-          const precioTxt = editPrecio.value.trim();
-          const precioValido = /^\d{1,5},\d{2}$/.test(precioTxt);
+          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const newPrecio = entero + dec / 100;
 
-          if (!newNombre || isNaN(newCant) || !precioValido) {
-            editMsg.textContent = "El precio es incorrecto, ejemplo: 1999,99";
+          if (!newNombre || isNaN(newCant)) {
+            editMsg.textContent = "Todos los campos son obligatorios y válidos";
             return;
           }
-
-          const newPrecio = parseFloat(precioTxt.replace(",", "."));
           if (newCant < 0 || newCant > 999) {
             editMsg.textContent = "Cantidad fuera de rango 0-999";
             return;
           }
 
-          await window.update(window.ref(`/stock/${id}`), { nombre: newNombre, cant: newCant, precio: newPrecio });
+          await window.update(window.ref(`/stock/${id}`), {
+            nombre: newNombre,
+            cant: newCant,
+            precio: newPrecio,
+          });
+
           loadStock();
           loadProductos();
           modal.remove();
