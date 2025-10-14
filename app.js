@@ -183,14 +183,23 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-// Sumar cantidades si ya existe producto en carrito
-function agregarAlCarrito(nuevoItem) {
+// Sumar cantidades si ya existe producto en carrito, con control de stock
+async function agregarAlCarrito(nuevoItem) {
+  const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+  
   const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
-  if (idx >= 0) {
-    carrito[idx].cant += nuevoItem.cant;
-  } else {
-    carrito.push(nuevoItem);
+  let totalCant = nuevoItem.cant;
+  if (idx >= 0) totalCant += carrito[idx].cant;
+
+  if ((nuevoItem.tipo === "stock" && totalCant > data.cant) || (nuevoItem.tipo === "sueltos" && totalCant > data.kg)) {
+    return alert("STOCK INSUFICIENTE");
   }
+
+  if (idx >= 0) carrito[idx].cant += nuevoItem.cant;
+  else carrito.push(nuevoItem);
+
   actualizarTabla();
 }
 
@@ -199,14 +208,7 @@ btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
-
-  const snap = await window.get(window.ref(`/stock/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
+  agregarAlCarrito({ id, nombre: "", cant, precio: 0, tipo: "stock" }); // Se llenará luego desde Firebase
   inputCodigoProducto.value = "";
 });
 
@@ -215,14 +217,7 @@ btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   let cant = parseFloat(inputKgSuelto.value);
   if (!id || cant <= 0) return;
-
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+  agregarAlCarrito({ id, nombre: "", cant, precio: 0, tipo: "sueltos" }); // Se llenará luego desde Firebase
   inputKgSuelto.value = "0.100";
   inputCodigoSuelto.value = "";
 });
@@ -237,7 +232,7 @@ btnKgMenos.addEventListener("click", () => {
   inputKgSuelto.value = val.toFixed(3);
 });
 
-// IMPRIMIR TICKET SOLO TICKET
+// IMPRIMIR TICKET
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const iframe = document.createElement("iframe");
   iframe.style.position = "absolute";
@@ -349,7 +344,6 @@ btnCobrar.addEventListener("click", async () => {
     });
   });
 });
-
 
   // --- MOVIMIENTOS ---
   const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
