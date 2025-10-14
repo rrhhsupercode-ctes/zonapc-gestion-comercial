@@ -453,10 +453,9 @@ function formatFecha(iso) {
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  // elimina ceros a la izquierda antes de formatear
-  const enteroLimpio = String(parseInt(partes[0], 10));
-  const entero = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return `$${entero},${partes[1]}`;
+  const enteroLimpio = String(parseInt(partes[0], 10)); // quita ceros a la izquierda
+  const enteroFormateado = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `$${enteroFormateado},${partes[1]}`;
 }
 
 async function loadStock(filtro = "") {
@@ -551,9 +550,10 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (000.000)
+        // Formateo dinámico del campo de pesos (sin ceros a la izquierda)
         editPrecio.addEventListener("input", () => {
           let val = editPrecio.value.replace(/\D/g, "");
+          val = val.replace(/^0+/, ""); // elimina ceros a la izquierda
           if (val.length > 7) val = val.slice(0, 7);
           const partes = [];
           while (val.length > 3) {
@@ -574,12 +574,11 @@ async function loadStock(filtro = "") {
         });
 
         function actualizarPreview() {
-  let entero = editPrecio.value.replace(/\D/g, "");
-  if (!entero) entero = "0";
-  const dec = parseInt(editCentavos.value) || 0;
-  const combinado = parseInt(entero) + dec / 100;
-  preview.textContent = formatPrecio(combinado);
-}
+          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const combinado = entero + dec / 100;
+          preview.textContent = formatPrecio(combinado);
+        }
 
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
         cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
