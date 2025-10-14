@@ -373,10 +373,47 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
+const btnTirarZ = document.getElementById("btn-tirar-z"); // botón Tirar Z
+
+// Helper: mostrar modal para pedir contraseña de administrador (devuelve la contraseña introducida o null)
+function pedirPasswordAdminModal() {
+  return new Promise((resolve) => {
+    // Crear modal
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      display:flex; justify-content:center; align-items:center;
+      background:rgba(0,0,0,0.7); z-index:10000;
+    `;
+    modal.innerHTML = `
+      <div style="background:#fff; padding:20px; border-radius:10px; text-align:center; min-width:260px;">
+        <h3>🔒 Confirmación Administrador</h3>
+        <input id="__admin-check-pass" type="password" placeholder="Contraseña" style="width:100%; margin:8px 0; padding:6px;">
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+          <button id="__admin-check-ok">OK</button>
+          <button id="__admin-check-cancel" style="background:red; color:#fff;">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector("#__admin-check-pass");
+    const ok = modal.querySelector("#__admin-check-ok");
+    const cancel = modal.querySelector("#__admin-check-cancel");
+
+    function cleanup(val) {
+      modal.remove();
+      resolve(val);
+    }
+
+    ok.addEventListener("click", () => cleanup(input.value.trim()));
+    cancel.addEventListener("click", () => cleanup(null));
+    input.addEventListener("keyup", (e) => { if (e.key === "Enter") cleanup(input.value.trim()); });
+  });
+}
 
 async function loadMovimientos() {
   const snap = await window.get(window.ref("/movimientos"));
@@ -389,6 +426,9 @@ async function loadMovimientos() {
     .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
   entries.forEach(([id, mov]) => {
+    // Si hay filtro de cajero activo, respetarlo
+    if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
+
     const tr = document.createElement("tr");
     const eliminado = mov.eliminado || false;
 
@@ -403,14 +443,13 @@ async function loadMovimientos() {
       </td>
     `;
 
-    // REIMPRIMIR
-    tr.querySelector(".reimprimir").addEventListener("click", () => {
-      mostrarModalTicket(mov);
-    });
+    // REIMPRIMIR -> abre modal de solo lectura y permite imprimir
+    tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
 
-    // ELIMINAR
+    // ELIMINAR -> pide contraseña por modal y restaura stock/sueltos al eliminar individual
     tr.querySelector(".eliminar").addEventListener("click", async () => {
-      const pass = prompt("Contraseña de administrador para eliminar ticket:");
+      const pass = await pedirPasswordAdminModal();
+      if (pass === null) return; // canceló
       const confSnap = await window.get(window.ref("/config"));
       const confVal = confSnap.exists() ? confSnap.val() : {};
       const passAdmin = confVal.passAdmin || "1918";
@@ -432,7 +471,7 @@ async function loadMovimientos() {
 
     tablaMovimientos.appendChild(tr);
 
-    // Filtro de cajeros
+    // Mantener lista de cajeros en filtro
     if (!filtroCajero.querySelector(`option[value="${mov.cajero}"]`)) {
       const opt = document.createElement("option");
       opt.value = mov.cajero;
@@ -442,88 +481,93 @@ async function loadMovimientos() {
   });
 }
 
-// Modal de solo lectura para reimprimir ticket
-function mostrarModalTicket(mov) {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;
-  `;
+// --- Tirar Z ---
+// Requiere modal admin (no prompt), genera registro único en /historial, borra solo /movimientos (filtrados por cajero) y NO restaura stock
+btnTirarZ.addEventListener("click", async () => {
+  const pass = await pedirPasswordAdminModal();
+  if (pass === null) return; // cancelado
+  const confSnap = await window.get(window.ref("/config"));
+  const confVal = confSnap.exists() ? confSnap.val() : {};
+  const passAdmin = confVal.passAdmin || "1918";
+  if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
-  let itemsHTML = mov.items.map(it => 
-    `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}`
-  ).join("\n==========\n");
-
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; text-align:left; font-family:monospace; max-width:5cm; white-space:pre-line;">
-      ${mov.ticketID}\n${new Date(mov.fecha).toLocaleDateString()} (${new Date(mov.fecha).getHours().toString().padStart(2,'0')}:${new Date(mov.fecha).getMinutes().toString().padStart(2,'0')})\nCajero: ${mov.cajero}\n==========\n
-      ${itemsHTML}\n==========\nTOTAL: $${mov.total.toFixed(2)}\nPago: ${mov.tipo}
-      <div style="text-align:center; margin-top:10px;">
-        <button id="reimprimir-ticket" style="margin-right:5px;">Reimprimir</button>
-        <button id="cancelar-ticket" style="background:red; color:#fff;">Cancelar</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  modal.querySelector("#cancelar-ticket").addEventListener("click", () => modal.remove());
-  modal.querySelector("#reimprimir-ticket").addEventListener("click", () => {
-    imprimirTicket(mov.ticketID, new Date(mov.fecha).toLocaleString(), mov.cajero, mov.items, mov.total, mov.tipo);
-  });
-}
-
-// FILTRO CAJERO
-filtroCajero.addEventListener("change", async () => {
+  // Obtener movimientos
   const snap = await window.get(window.ref("/movimientos"));
-  if (!snap.exists()) return;
-  tablaMovimientos.innerHTML = "";
-  const entries = Object.entries(snap.val())
-    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha)); // ordenar desc
+  if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
-  entries.forEach(([id, mov]) => {
-    if (filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value) {
-      const tr = document.createElement("tr");
-      const eliminado = mov.eliminado || false;
-      tr.style.backgroundColor = eliminado ? "#ccc" : "";
-      tr.innerHTML = `
-        <td>${id}</td>
-        <td>${mov.total.toFixed(2)}</td>
-        <td>${mov.tipo}</td>
-        <td>
-          <button class="reimprimir" data-id="${id}">🖨</button>
-          <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
-        </td>
-      `;
-      tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
-      tr.querySelector(".eliminar").addEventListener("click", async () => {
-        const pass = prompt("Contraseña de administrador para eliminar ticket:");
-        const confSnap = await window.get(window.ref("/config"));
-        const confVal = confSnap.exists() ? confSnap.val() : {};
-        const passAdmin = confVal.passAdmin || "1918";
-        if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+  // Ordenar asc por fecha para enumerar bien en Z
+  const todosMov = Object.entries(snap.val())
+    .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
+    .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
 
-        for (const item of mov.items) {
-          const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-          if (!snapItem.exists()) continue;
-          const data = snapItem.val();
-          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
-          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
-        }
-        await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
-        loadMovimientos();
+  if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
+
+  const fechaZ = new Date();
+  const zID = `TIRAR_Z_${fechaZ.getTime()}`;
+
+  // Calcular subtotales por tipo de pago y total general
+  const totalPorTipoPago = {};
+  let totalGeneral = 0;
+  for (const [, mov] of todosMov) {
+    if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
+    totalPorTipoPago[mov.tipo] += mov.total;
+    totalGeneral += mov.total;
+  }
+
+  const registroZ = {
+    tipo: "TIRAR Z",
+    fecha: fechaZ.toISOString(),
+    items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
+    totalPorTipoPago,
+    totalGeneral,
+    cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
+  };
+
+  // Guardar Z en historial (registro único)
+  await window.set(window.ref(`/historial/${zID}`), registroZ);
+
+  // Borrar movimientos (NO restaurar stock)
+  for (const [id] of todosMov) {
+    await window.remove(window.ref(`/movimientos/${id}`));
+  }
+
+  // Recargar vistas
+  loadMovimientos();
+  loadHistorial();
+
+  // Generar texto del ticket Tirar Z (separado por cajero y tipo de pago, con "==========")
+  let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
+  for (const cajero of registroZ.cajeros) {
+    ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+    const movCajero = registroZ.items.filter(m => m.cajero === cajero);
+    const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+    for (const tipo of tiposPago) {
+      const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+      const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+      ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+      ventasTipo.forEach(m => {
+        ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
       });
-      tablaMovimientos.appendChild(tr);
     }
-  });
+  }
+  ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
+  ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
+
+  // Imprimir Z (usa tu función de impresión 5cm)
+  if (typeof imprimirTicketZ === "function") {
+    imprimirTicketZ(ticketTexto);
+  } else {
+    // Si no existe, fallback a imprimirTicket dentro de un iframe (formato simple)
+    imprimirTicket(`TIRAR Z\n${ticketTexto}`, new Date().toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
+  }
 });
+
 
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
-// Crear controles de día dinámicos
+// Crear controles de día dinámicos (se insertan antes de la tabla)
 const controlesHistorial = document.createElement("div");
 controlesHistorial.style.cssText = `
   display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
@@ -537,7 +581,6 @@ controlesHistorial.innerHTML = `
   </span>
   <button id="historial-dia-next">▶</button>
 `;
-
 historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
 
 const historialDia = document.getElementById("historial-dia");
@@ -547,7 +590,6 @@ const btnDiaNext = document.getElementById("historial-dia-next");
 let historialRegistros = [];
 let fechaMin, fechaMax;
 
-// Cargar historial desde Firebase
 async function loadHistorial() {
   const snap = await window.get(window.ref("/historial"));
   tablaHistorial.innerHTML = "";
@@ -555,15 +597,19 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
-  // Obtener todos los registros
+  // Obtener todos los registros y convertir fecha
   Object.entries(snap.val()).forEach(([id, mov]) => {
-    historialRegistros.push({ id, ...mov, fechaObj: new Date(mov.fecha) });
+    historialRegistros.push({ id, ...mov, fechaObj: mov.fecha ? new Date(mov.fecha) : null });
   });
 
   // Ordenar por fecha descendente
-  historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
+  historialRegistros.sort((a, b) => {
+    if (!a.fechaObj) return 1;
+    if (!b.fechaObj) return -1;
+    return b.fechaObj - a.fechaObj;
+  });
 
-  // Determinar límites de fechas según regla del día 15
+  // Determinar límites según regla del día 15 (mantener registros del mes anterior + primeros 15 días; luego borrar mes anterior)
   const hoy = new Date();
   const diaHoy = hoy.getDate();
 
@@ -571,21 +617,20 @@ async function loadHistorial() {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
   } else {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    // Eliminar registros anteriores al mes actual
+    // Borrar registros anteriores al mes actual (solo en /historial)
     for (const mov of historialRegistros) {
-      if (mov.fechaObj < fechaMin) {
+      if (mov.fechaObj && mov.fechaObj < fechaMin) {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
-    historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
+    // Refrescar lista local después de eliminación
+    historialRegistros = historialRegistros.filter(mov => mov.fechaObj && mov.fechaObj >= fechaMin);
   }
 
   fechaMax = hoy;
 
-  // Por defecto, mostrar último día con registros o hoy
-  let ultimoDia = historialRegistros.length
-    ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate()))
-    : hoy.getDate();
+  // Por defecto mostrar último día con registros oppure hoy
+  let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
 
   mostrarHistorialPorDia(ultimoDia);
 }
@@ -595,44 +640,69 @@ function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
   historialRegistros
-    .filter(mov => mov.fechaObj.getDate() === dia)
+    .filter(mov => mov.fechaObj && mov.fechaObj.getDate() === dia)
     .forEach(mov => {
-      const fechaStr = `${mov.fechaObj.getDate().toString().padStart(2,'0')}/${(mov.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${mov.fechaObj.getFullYear()} (${mov.fechaObj.getHours().toString().padStart(2,'0')}:${mov.fechaObj.getMinutes().toString().padStart(2,'0')})`;
+      const fechaStr = mov.fechaObj
+        ? `${mov.fechaObj.getDate().toString().padStart(2,'0')}/${(mov.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${mov.fechaObj.getFullYear()} (${mov.fechaObj.getHours().toString().padStart(2,'0')}:${mov.fechaObj.getMinutes().toString().padStart(2,'0')})`
+        : "";
 
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${mov.id}</td>
-        <td>${mov.total.toFixed(2)}</td>
+        <td>${(typeof mov.total === "number") ? mov.total.toFixed(2) : (mov.total || "")}</td>
         <td>${mov.tipo}</td>
-        <td>${mov.cajero}</td>
+        <td>${mov.cajero || ""}</td>
         <td>${fechaStr}</td>
         <td><button class="reimprimir" data-id="${mov.id}">🖨</button></td>
       `;
 
+      // Si es un registro TIRAR Z, la reimpresión debe imprimir el ticket Z; si es venta normal, abrir modal de ticket
       tr.querySelector(".reimprimir").addEventListener("click", () => {
-        mostrarModalTicket(mov);
+        if (mov.tipo === "TIRAR Z") {
+          // reconstruir texto Z y llamar imprimirTicketZ
+          const registro = mov; // contiene items y totalPorTipoPago
+          let ticketTexto = `*** TIRAR Z (REIMPRESION) ***\n${registro.fechaObj ? registro.fechaObj.toLocaleDateString() : ""} ${registro.fechaObj ? registro.fechaObj.getHours().toString().padStart(2,'0')+':'+registro.fechaObj.getMinutes().toString().padStart(2,'0') : ""}\n`;
+          const cajeros = registro.cajeros || [...new Set((registro.items||[]).map(it => it.cajero))];
+          for (const cajero of cajeros) {
+            ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+            const movCajero = (registro.items || []).filter(i => i.cajero === cajero);
+            const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+            for (const tipo of tiposPago) {
+              const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+              const subtotal = ventasTipo.reduce((acc,m) => acc + (m.total||0), 0);
+              ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+              ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${(m.total||0).toFixed(2)}\n`);
+            }
+          }
+          ticketTexto += `\n========== TOTAL GENERAL: $${(registro.totalGeneral||0).toFixed(2)} ==========\n`;
+          ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
+          if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
+          else imprimirTicket(ticketTexto, new Date().toLocaleString(), "Z", [], (registro.totalGeneral||0), "TIRAR Z");
+        } else {
+          mostrarModalTicket(mov);
+        }
       });
 
       tablaHistorial.appendChild(tr);
     });
 
-  // Mostrar fecha completa en el span
+  // Mostrar fecha completa en el span (dd/mm/yyyy)
   historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
 
-  // Activar/desactivar botones según límites
-  btnDiaPrev.disabled = dia <= fechaMin.getDate();
-  btnDiaNext.disabled = dia >= fechaMax.getDate();
+  // Activar/desactivar botones según límites (si fechaMin no tiene día, no bloquear)
+  btnDiaPrev.disabled = fechaMin ? (dia <= fechaMin.getDate()) : false;
+  btnDiaNext.disabled = fechaMax ? (dia >= fechaMax.getDate()) : false;
 }
 
 // Botones para cambiar día
 btnDiaPrev.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
-  if (dia > fechaMin.getDate()) mostrarHistorialPorDia(dia - 1);
+  if (!isNaN(dia) && (!fechaMin || dia > fechaMin.getDate())) mostrarHistorialPorDia(dia - 1);
 });
 btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
-  if (dia < fechaMax.getDate()) mostrarHistorialPorDia(dia + 1);
+  if (!isNaN(dia) && (!fechaMax || dia < fechaMax.getDate())) mostrarHistorialPorDia(dia + 1);
 });
   
 // --- STOCK ---
