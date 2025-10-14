@@ -1172,38 +1172,45 @@ async function loadSueltos(filtro = "") {
         editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
         editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
 
-        // Precio tipo KG con centavos
-        function formatearPrecioModal(inputElement) {
-          let raw = inputElement.value.replace(/\D/g, "");
-          if (raw.length > 7) raw = raw.slice(0, 7);
-          raw = raw.padStart(7, "0");
+// Precio tipo KG con centavos
+function formatearPrecioModal(inputElement) {
+  let raw = inputElement.value.replace(/\D/g, ""); // solo números
+  if (raw.length > 7) raw = raw.slice(0, 7);
+  raw = raw.padStart(7, "0"); // rellena a 7 dígitos
 
-          let formateado = "";
-          for (let i = 0; i < raw.length; i++) {
-            formateado += raw[i];
-            const pos = raw.length - i - 1;
-            if (pos % 3 === 0 && i !== raw.length - 1) formateado += ".";
-          }
+  let val;
+  switch (raw.length) {
+    case 0: val = "0.000.000"; break;
+    case 1: val = "0.000.00" + raw; break;
+    case 2: val = "0.000.0" + raw; break;
+    case 3: val = "0.000." + raw; break;
+    case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
+    case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
+    case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
+    case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
+  }
 
-          inputElement.value = formateado;
-          actualizarPreview();
-        }
+  inputElement.value = val;
+  actualizarPreview();
+}
 
-        editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
-        editCentavos.addEventListener("input", () => {
-          let val = parseInt(editCentavos.value);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > 99) val = 99;
-          editCentavos.value = val.toString().padStart(2, "0");
-          actualizarPreview();
-        });
+editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
 
-        function actualizarPreview() {
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
-        }
+editCentavos.addEventListener("input", () => {
+  let val = parseInt(editCentavos.value);
+  if (isNaN(val) || val < 0) val = 0;
+  if (val > 99) val = 99;
+  editCentavos.value = val.toString().padStart(2, "0");
+  actualizarPreview();
+});
+
+function actualizarPreview() {
+  // quitar puntos para calcular el valor real
+  const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+  const dec = parseInt(editCentavos.value) || 0;
+  const combinado = entero + dec / 100;
+  preview.textContent = formatPrecio(combinado);
+}
 
         editCancelar.addEventListener("click", () => modal.remove());
 
