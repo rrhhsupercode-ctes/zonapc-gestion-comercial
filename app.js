@@ -449,11 +449,13 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$0.000.000,00"
+// Formato precio "$000,00"
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  let entero = String(parseInt(partes[0], 10)); // sin ceros a la izquierda
+  entero = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  if (entero === "0") entero = "000"; // default para 0
   return `$${entero},${partes[1]}`;
 }
 
@@ -520,11 +522,9 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <input id="edit-precio" type="text" placeholder="000" style="width:65%; text-align:center;" value="${prod.precio ? Math.floor(prod.precio) : "000"}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
-                .toString()
-                .padStart(2, "0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${prod.precio ? Math.round((prod.precio % 1) * 100).toString().padStart(2,"0") : "00"}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -549,10 +549,10 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (000.000)
+        // Formateo dinámico del campo de pesos (sin ceros a la izquierda)
         editPrecio.addEventListener("input", () => {
           let val = editPrecio.value.replace(/\D/g, "");
-          if (val.length > 7) val = val.slice(0, 7);
+          if (!val) val = "0";
           const partes = [];
           while (val.length > 3) {
             partes.unshift(val.slice(-3));
@@ -633,7 +633,7 @@ btnAgregarStock.addEventListener("click", async () => {
       nombre: "NUEVO",
       cant: Math.min(999, cant),
       fecha,
-      precio: 0.0,
+      precio: 0.0, // seguirá mostrando $000,00 en tabla y preview
     });
   }
 
@@ -649,6 +649,7 @@ btnBuscarStock.addEventListener("click", () => {
 
 // Inicial
 loadStock();
+
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
