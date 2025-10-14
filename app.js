@@ -208,7 +208,14 @@ btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
-  agregarAlCarrito({ id, nombre: "", cant, precio: 0, tipo: "stock" }); // Se llenará luego desde Firebase
+
+  const snap = await window.get(window.ref(`/stock/${id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+
+  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
 
@@ -217,7 +224,14 @@ btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   let cant = parseFloat(inputKgSuelto.value);
   if (!id || cant <= 0) return;
-  agregarAlCarrito({ id, nombre: "", cant, precio: 0, tipo: "sueltos" }); // Se llenará luego desde Firebase
+
+  const snap = await window.get(window.ref(`/sueltos/${id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+
+  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
   inputKgSuelto.value = "0.100";
   inputCodigoSuelto.value = "";
 });
