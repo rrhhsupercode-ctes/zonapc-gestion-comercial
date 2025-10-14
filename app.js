@@ -1035,7 +1035,7 @@ function formatFecha(iso) {
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
-  const entStr = String(entero).padStart(5, "0");
+  const entStr = String(entero).padStart(3, "0");
   const decStr = String(dec).padStart(2, "0");
   return `$${entStr},${decStr}`;
 }
@@ -1173,53 +1173,66 @@ async function loadSueltos(filtro = "") {
         editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
         editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
 
-        // Precio
-        editPrecio.addEventListener("input", () => {
-          let val = editPrecio.value.replace(/\D/g, "");
-          if (val.length > 5) val = val.slice(0, 5);
-          editPrecio.value = val;
-          actualizarPreview();
-        });
-        editCentavos.addEventListener("input", () => {
-          let val = parseInt(editCentavos.value);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > 99) val = 99;
-          editCentavos.value = val.toString().padStart(2, "0");
-          actualizarPreview();
-        });
-        function actualizarPreview() {
-          const entero = parseInt(editPrecio.value) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
-        }
+// Precio con formato tipo KG (máx 7 dígitos) y centavos aparte
+function formatearPrecioInput(inputElement) {
+  let raw = inputElement.value.replace(/\D/g, ""); // solo números
+  if (raw.length > 7) raw = raw.slice(0, 7);      // máximo 7 dígitos
+  raw = raw.padStart(7, "0");                     // rellena con ceros a la izquierda
 
-        editCancelar.addEventListener("click", () => modal.remove());
+  // Formatear con puntos de miles
+  let formateado = "";
+  for (let i = 0; i < raw.length; i++) {
+    formateado += raw[i];
+    let pos = raw.length - i - 1;
+    if (pos % 3 === 0 && i !== raw.length - 1) formateado += ".";
+  }
 
-        editAceptar.addEventListener("click", async () => {
-          const newNombre = editNombre.value.trim();
-          const newKg = parseFloat(editKg.value);
-          const entero = parseInt(editPrecio.value) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const newPrecio = entero + dec / 100;
+  inputElement.value = formateado;
+  actualizarPreview();
+}
 
-          if (!newNombre || isNaN(newKg) || newKg < 0 || newKg > 99) {
-            editMsg.textContent = "Campos obligatorios o KG inválido";
-            return;
-          }
+editPrecio.addEventListener("input", () => formatearPrecioInput(editPrecio));
 
-          await window.update(window.ref(`/sueltos/${id}`), {
-            nombre: newNombre,
-            kg: newKg,
-            precio: newPrecio,
-          });
+editCentavos.addEventListener("input", () => {
+  let val = parseInt(editCentavos.value);
+  if (isNaN(val) || val < 0) val = 0;
+  if (val > 99) val = 99;
+  editCentavos.value = val.toString().padStart(2, "0");
+  actualizarPreview();
+});
 
-          loadSueltos();
-          loadProductos();
-          modal.remove();
-        });
-      });
-    });
+function actualizarPreview() {
+  // Quita puntos para calcular el valor real
+  const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+  const dec = parseInt(editCentavos.value) || 0;
+  const combinado = entero + dec / 100;
+  preview.textContent = formatPrecio(combinado);
+}
+
+editCancelar.addEventListener("click", () => modal.remove());
+
+editAceptar.addEventListener("click", async () => {
+  const newNombre = editNombre.value.trim();
+  const newKg = parseFloat(editKg.value);
+  const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+  const dec = parseInt(editCentavos.value) || 0;
+  const newPrecio = entero + dec / 100;
+
+  if (!newNombre || isNaN(newKg) || newKg < 0 || newKg > 99) {
+    editMsg.textContent = "Campos obligatorios o KG inválido";
+    return;
+  }
+
+  await window.update(window.ref(`/sueltos/${id}`), {
+    nombre: newNombre,
+    kg: newKg,
+    precio: newPrecio,
+  });
+
+  loadSueltos();
+  loadProductos();
+  modal.remove();
+});
 
     tablaSueltos.appendChild(tr);
   });
