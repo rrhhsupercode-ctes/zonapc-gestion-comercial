@@ -522,7 +522,6 @@ function showSection(id) {
   const sec = document.getElementById(id);
   if (sec) sec.classList.remove("hidden");
 
-  // --- Actualizar contenido en tiempo real ---
   if (id === "cajeros") loadCajerosTabla();
   if (id === "cobro") {
     loadProductos();
@@ -533,7 +532,6 @@ function showSection(id) {
   if (id === "historial") loadHistorial();
 }
 
-// Cargar select de Nros de cajero 01 a 99
 function loadCajeroSelectOptions(selected = null) {
   cajeroNro.innerHTML = "";
   for (let i = 1; i <= 99; i++) {
@@ -565,7 +563,6 @@ async function loadCajerosTabla() {
           </td>
         `;
 
-        // Botón eliminar
         tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
           const confSnap = await window.get(window.ref("/config"));
           const confVal = confSnap.exists() ? confSnap.val() : {};
@@ -582,7 +579,6 @@ async function loadCajerosTabla() {
           } else alert("Contraseña incorrecta");
         });
 
-        // Botón editar
         tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
           const confSnap = await window.get(window.ref("/config"));
           const confVal = confSnap.exists() ? confSnap.val() : {};
@@ -645,8 +641,8 @@ async function loadCajerosTabla() {
               return;
             }
 
-            if (!/^[A-Za-zñÑ\s]{6,20}$/.test(nombre)) {
-              editMsg.textContent = "El nombre debe tener entre 6 y 12 letras (puede incluir espacios)";
+            if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
+              editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
               return;
             }
 
@@ -685,10 +681,10 @@ btnAgregarCajero.addEventListener("click", async () => {
     return;
   }
 
-  if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
-  editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
-  return;
-}
+  if (!/^[A-Za-zñÑ\s]{6,20}$/.test(nombre)) {
+    alert("El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ");
+    return;
+  }
 
   const confSnap = await window.get(window.ref("/config"));
   const confVal = confSnap.exists() ? confSnap.val() : {};
@@ -713,8 +709,8 @@ btnAgregarCajero.addEventListener("click", async () => {
   loadCajeros();
 });
 
-// Inicializar select al cargar la app
 loadCajeroSelectOptions();
+
 
   // --- CONFIG ---
   const configNombre = document.getElementById("config-nombre");
