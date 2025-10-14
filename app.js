@@ -969,7 +969,7 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// Función para formatear KG según nueva lógica 0.000 → 0.001 → … → 99.999
+// Formateo KG (funcional comprobado)
 function formatearKg(inputElement, msgElement, delta = 0) {
   let raw = inputElement.value.replace(/\D/g, "");
 
@@ -1005,11 +1005,11 @@ function formatearKg(inputElement, msgElement, delta = 0) {
 btnSueltoIncr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, 0.100));
 btnSueltoDecr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, -0.100));
 
-// Edición manual con validación en tiempo real y al perder foco
+// Edición manual con validación
 sueltosKg.addEventListener("input", () => formatearKg(sueltosKg, msgKg));
 sueltosKg.addEventListener("blur", () => formatearKg(sueltosKg, msgKg));
 
-// Formatea fecha ISO a DD/MM/YYYY (HH:MM)
+// Fecha
 function formatFecha(iso) {
   const d = new Date(iso);
   const dd = String(d.getDate()).padStart(2, "0");
@@ -1020,7 +1020,7 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formatea precio a "$00000,00"
+// Precio "$00000,00"
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
@@ -1029,7 +1029,7 @@ function formatPrecio(num) {
   return `$${entStr},${decStr}`;
 }
 
-// Reutilizamos modal de admin
+// Modal admin
 function showAdminActionModal(actionCallback) {
   const modal = document.createElement("div");
   modal.style.cssText = `
@@ -1164,18 +1164,21 @@ async function loadSueltos(filtro = "") {
         const kgDecr = modal.querySelector("#kg-decr");
         const kgIncr = modal.querySelector("#kg-incr");
 
-        // KG
+        // --- KG ---
         kgIncr.addEventListener("click", () => formatearKg(editKg, editKgMsg, 0.100));
         kgDecr.addEventListener("click", () => formatearKg(editKg, editKgMsg, -0.100));
         editKg.addEventListener("input", () => formatearKg(editKg, editKgMsg));
         editKg.addEventListener("blur", () => formatearKg(editKg, editKgMsg));
 
-        // Precio tipo “bruto” (igual que KG)
+        // --- PRECIO tipo bruto ---
+        function formatearPrecioBruto(inputElement, maxLength = 7) {
+          let raw = inputElement.value.replace(/\D/g, "");
+          if (raw.length > maxLength) raw = raw.slice(0, maxLength);
+          inputElement.value = raw.padStart(maxLength, "0");
+        }
+
         editPrecio.addEventListener("input", () => {
-          let raw = editPrecio.value.replace(/\D/g, "");
-          raw = raw.slice(0, 7);
-          raw = raw.padStart(7, "0");
-          editPrecio.value = raw;
+          formatearPrecioBruto(editPrecio);
           actualizarPreview();
         });
 
@@ -1258,7 +1261,6 @@ btnBuscarSuelto.addEventListener("click", () => {
 
 // Inicial
 loadSueltos();
-
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
