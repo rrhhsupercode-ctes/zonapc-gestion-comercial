@@ -453,9 +453,22 @@ function formatFecha(iso) {
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  const enteroLimpio = String(parseInt(partes[0], 10)); // quita ceros a la izquierda
+  const enteroLimpio = String(parseInt(partes[0], 10));
   const enteroFormateado = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${enteroFormateado},${partes[1]}`;
+}
+
+// Función para formatear input dinámicamente con puntos mientras tipeas
+function formatInputPrecio(value) {
+  let val = value.replace(/\D/g, "").replace(/^0+/, "");
+  if (!val) return "";
+  const partes = [];
+  while (val.length > 3) {
+    partes.unshift(val.slice(-3));
+    val = val.slice(0, -3);
+  }
+  if (val) partes.unshift(val);
+  return partes.join(".");
 }
 
 async function loadStock(filtro = "") {
@@ -521,9 +534,9 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <input id="edit-precio" type="text" placeholder="0" style="width:65%; text-align:center;" value="${formatInputPrecio(Math.floor(prod.precio))}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2, "0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2,"0")}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -548,18 +561,9 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (sin ceros a la izquierda)
+        // Formateo dinámico del campo de pesos (puntos automáticos mientras escribe)
         editPrecio.addEventListener("input", () => {
-          let val = editPrecio.value.replace(/\D/g, "");
-          val = val.replace(/^0+/, ""); // elimina ceros a la izquierda
-          if (val.length > 7) val = val.slice(0, 7);
-          const partes = [];
-          while (val.length > 3) {
-            partes.unshift(val.slice(-3));
-            val = val.slice(0, -3);
-          }
-          if (val) partes.unshift(val);
-          editPrecio.value = partes.join(".");
+          editPrecio.value = formatInputPrecio(editPrecio.value);
           actualizarPreview();
         });
 
