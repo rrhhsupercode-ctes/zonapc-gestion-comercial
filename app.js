@@ -645,6 +645,11 @@ async function loadCajerosTabla() {
               return;
             }
 
+            if (!/^[A-Za-z]{6,12}$/.test(newNombre)) {
+              editMsg.textContent = "El nombre debe tener entre 6 y 12 letras, sin números ni símbolos";
+              return;
+            }
+
             if (newNro !== id) {
               const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
               if (existingSnap.exists()) {
@@ -680,6 +685,11 @@ btnAgregarCajero.addEventListener("click", async () => {
     return;
   }
 
+  if (!/^[A-Za-z]{6,12}$/.test(nombre)) {
+    alert("El nombre debe tener entre 6 y 12 letras, sin números ni símbolos");
+    return;
+  }
+
   const existingSnap = await window.get(window.ref(`/cajeros/${nro}`));
   if (existingSnap.exists()) {
     alert("❌ Este Nro de cajero ya está en uso");
@@ -694,6 +704,7 @@ btnAgregarCajero.addEventListener("click", async () => {
 
 // Inicializar select al cargar la app
 loadCajeroSelectOptions();
+
 
   // --- CONFIG ---
   const configNombre = document.getElementById("config-nombre");
