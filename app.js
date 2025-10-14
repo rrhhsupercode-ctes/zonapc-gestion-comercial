@@ -980,9 +980,9 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// Función para formatear KG según nueva lógica 0.000 → 0.001 → … → 12.345
+// Función para formatear KG según nueva lógica 0.000 → 0.001, 0.012, 0.123, 1.234, 12.345
 function formatearKg(inputElement, msgElement, delta = 0) {
-  let raw = inputElement.value.replace(/\D/g, "");
+  let raw = inputElement.value.replace(/\D/g, ""); // solo números
 
   if (delta !== 0) {
     let val = parseFloat(inputElement.value) || 0;
@@ -1072,7 +1072,6 @@ async function loadSueltos(filtro = "") {
       </td>
     `;
 
-    // Eliminar
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/sueltos/${id}`));
@@ -1081,7 +1080,6 @@ async function loadSueltos(filtro = "") {
       });
     });
 
-    // Editar
     tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(() => {
         const modal = document.createElement("div");
@@ -1107,7 +1105,7 @@ async function loadSueltos(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0000000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${String(Math.floor(prod.precio)).padStart(7,'0').replace(/(\d)(\d{3})(\d{3})/,'$1.$2.$3')}">
               <span>,</span>
               <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2, "0")}">
             </div>
@@ -1135,7 +1133,7 @@ async function loadSueltos(filtro = "") {
         const kgDecr = modal.querySelector("#kg-decr");
         const kgIncr = modal.querySelector("#kg-incr");
 
-        // KG
+        // KG modal
         function formatearKgModal(inputElement, msgElement, delta = 0) {
           let raw = inputElement.value.replace(/\D/g, "");
 
@@ -1167,8 +1165,11 @@ async function loadSueltos(filtro = "") {
           }
         }
 
+        // Botones + y -
         kgIncr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, 0.100));
         kgDecr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, -0.100));
+
+        // Edición manual KG
         editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
         editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
 
@@ -1177,18 +1178,11 @@ async function loadSueltos(filtro = "") {
           let raw = inputElement.value.replace(/\D/g, "");
           if (raw.length > 7) raw = raw.slice(0, 7);
           raw = raw.padStart(7, "0");
-
-          let formateado = "";
-          for (let i = 0; i < raw.length; i++) {
-            formateado += raw[i];
-            const pos = raw.length - i - 1;
-            if (pos % 3 === 0 && i !== raw.length - 1) formateado += ".";
-          }
-
-          inputElement.value = formateado;
+          inputElement.value = raw[0] + "." + raw.slice(1,4) + "." + raw.slice(4,7);
           actualizarPreview();
         }
 
+        // Eventos Precio
         editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
         editCentavos.addEventListener("input", () => {
           let val = parseInt(editCentavos.value);
@@ -1269,6 +1263,7 @@ btnBuscarSuelto.addEventListener("click", () => {
 
 // Inicial
 loadSueltos();
+
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
