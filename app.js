@@ -561,7 +561,6 @@ async function loadSueltos(filtro = "") {
         </td>
       `;
 
-      // Eliminar suelto usando modal
       tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
         showAdminActionModal(async () => {
           await window.remove(window.ref(`/sueltos/${id}`));
@@ -570,7 +569,6 @@ async function loadSueltos(filtro = "") {
         });
       });
 
-      // Editar suelto usando modal
       tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
         showAdminActionModal(() => {
           const modal = document.createElement("div");
@@ -582,13 +580,20 @@ async function loadSueltos(filtro = "") {
           modal.innerHTML = `
             <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
               <h2>Editar Suelto ${id}</h2>
+              
+              <label for="edit-nombre">Nombre del producto</label>
               <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+
+              <label for="edit-kg">Cantidad en KG (0.000 - 99.000)</label>
               <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
                 <button id="kg-decr" style="width:30%;">-</button>
                 <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
                 <button id="kg-incr" style="width:30%;">+</button>
               </div>
+
+              <label for="edit-precio">Precio ($00000,00)</label>
               <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
+
               <div style="margin-top:10px;">
                 <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
                 <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
@@ -614,9 +619,7 @@ async function loadSueltos(filtro = "") {
           // Formateo en tiempo real del precio mientras escribe
           editPrecio.addEventListener("input", () => {
             let val = parseFloat(editPrecio.value);
-            if (!isNaN(val)) {
-              editPrecio.value = val.toFixed(2);
-            }
+            if (!isNaN(val)) editPrecio.value = val.toFixed(2);
           });
 
           editAceptar.addEventListener("click", async () => {
@@ -628,12 +631,10 @@ async function loadSueltos(filtro = "") {
               editMsg.textContent = "Todos los campos son obligatorios y válidos";
               return;
             }
-
             if (newKg < 0.000 || newKg > 99.000) {
               editMsg.textContent = "KG fuera de rango 0.000 - 99.000";
               return;
             }
-
             if (newPrecio < 0 || newPrecio > 99999.99) {
               editMsg.textContent = "El precio es incorrecto, ejemplo: 1999,99";
               return;
@@ -670,6 +671,7 @@ btnBuscarSuelto.addEventListener("click", () => {
   const filtro = sueltosCodigo.value.trim();
   loadSueltos(filtro);
 });
+
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
