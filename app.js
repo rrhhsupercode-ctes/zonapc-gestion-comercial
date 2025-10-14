@@ -543,6 +543,50 @@ function loadCajeroSelectOptions(selected = null) {
   }
 }
 
+// Modal de contraseña admin reutilizable
+function showAdminActionModal(actionCallback) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+      <h2>Contraseña Administrador</h2>
+      <input id="admin-pass-input" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+      <div style="margin-top:10px;">
+        <button id="admin-pass-aceptar" style="margin-right:5px;">Aceptar</button>
+        <button id="admin-pass-cancelar" style="background:red; color:#fff;">Cancelar</button>
+      </div>
+      <p id="admin-pass-msg" style="color:red; margin-top:5px;"></p>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const input = modal.querySelector("#admin-pass-input");
+  const aceptar = modal.querySelector("#admin-pass-aceptar");
+  const cancelar = modal.querySelector("#admin-pass-cancelar");
+  const msg = modal.querySelector("#admin-pass-msg");
+
+  cancelar.addEventListener("click", () => modal.remove());
+
+  aceptar.addEventListener("click", async () => {
+    const pass = input.value.trim();
+    const confSnap = await window.get(window.ref("/config"));
+    const confVal = confSnap.exists() ? confSnap.val() : {};
+    const passAdmin = confVal.passAdmin || "1918";
+    const masterPass = confVal.masterPass || "1409";
+
+    if (pass !== passAdmin && pass !== masterPass) {
+      msg.textContent = "Contraseña incorrecta";
+      return;
+    }
+    modal.remove();
+    actionCallback();
+  });
+}
+
 async function loadCajerosTabla() {
   const snap = await window.get(window.ref("/cajeros"));
   tablaCajeros.innerHTML = "";
@@ -563,22 +607,18 @@ async function loadCajerosTabla() {
           </td>
         `;
 
-        tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
-          const confSnap = await window.get(window.ref("/config"));
-          const confVal = confSnap.exists() ? confSnap.val() : {};
-          const passAdmin = confVal.passAdmin || "1918";
-          const masterPass = confVal.masterPass || "1409";
-
-          const pass = prompt("Contraseña de administrador para eliminar cajero:");
-          if (pass === passAdmin || pass === masterPass) {
+        // Eliminar cajero usando modal
+        tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
+          showAdminActionModal(async () => {
             if (confirm("Eliminar cajero?")) {
               await window.remove(window.ref(`/cajeros/${id}`));
               loadCajerosTabla();
               loadCajeros();
             }
-          } else alert("Contraseña incorrecta");
+          });
         });
 
+        // Editar cajero mantiene el modal original
         tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
           const confSnap = await window.get(window.ref("/config"));
           const confVal = confSnap.exists() ? confSnap.val() : {};
@@ -669,7 +709,8 @@ async function loadCajerosTabla() {
   }
 }
 
-btnAgregarCajero.addEventListener("click", async () => {
+// Agregar cajero usando modal
+btnAgregarCajero.addEventListener("click", () => {
   const nro = cajeroNro.value;
   const nombre = cajeroNombre.value.trim();
   const dni = cajeroDni.value.trim();
@@ -686,31 +727,21 @@ btnAgregarCajero.addEventListener("click", async () => {
     return;
   }
 
-  const confSnap = await window.get(window.ref("/config"));
-  const confVal = confSnap.exists() ? confSnap.val() : {};
-  const passAdmin = confVal.passAdmin || "1918";
-  const masterPass = confVal.masterPass || "1409";
+  showAdminActionModal(async () => {
+    const existingSnap = await window.get(window.ref(`/cajeros/${nro}`));
+    if (existingSnap.exists()) {
+      alert("❌ Este Nro de cajero ya está en uso");
+      return;
+    }
 
-  const passInput = prompt("Contraseña de administrador para agregar cajero:");
-  if (passInput !== passAdmin && passInput !== masterPass) {
-    alert("Contraseña incorrecta");
-    return;
-  }
-
-  const existingSnap = await window.get(window.ref(`/cajeros/${nro}`));
-  if (existingSnap.exists()) {
-    alert("❌ Este Nro de cajero ya está en uso");
-    return;
-  }
-
-  await window.set(window.ref(`/cajeros/${nro}`), { nombre, dni, pass });
-  cajeroNombre.value = cajeroDni.value = cajeroPass.value = "";
-  loadCajerosTabla();
-  loadCajeros();
+    await window.set(window.ref(`/cajeros/${nro}`), { nombre, dni, pass });
+    cajeroNombre.value = cajeroDni.value = cajeroPass.value = "";
+    loadCajerosTabla();
+    loadCajeros();
+  });
 });
 
 loadCajeroSelectOptions();
-
 
   // --- CONFIG ---
   const configNombre = document.getElementById("config-nombre");
@@ -756,6 +787,65 @@ loadCajeroSelectOptions();
       alert("❌ Contraseña maestra incorrecta");
     }
   });
+
+  // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
+const adminActionModal = document.createElement("div");
+adminActionModal.id = "admin-action-modal";
+adminActionModal.style.cssText = `
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none; /* oculto por defecto */
+  justify-content: center;
+  align-items: center;
+  background: rgba(0,0,0,0.7);
+  z-index: 9999;
+`;
+adminActionModal.innerHTML = `
+  <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+    <h2>🔒 Contraseña de Administrador</h2>
+    <input id="admin-action-pass-input" type="password" placeholder="Contraseña" style="width:200px; text-align:center; margin:10px 0;">
+    <p id="admin-action-pass-msg" style="color:red; margin:5px 0;"></p>
+    <div style="margin-top:10px;">
+      <button id="admin-action-pass-btn">Aceptar</button>
+      <button id="admin-action-cancel-btn" style="background:red; color:#fff;">Cancelar</button>
+    </div>
+  </div>
+`;
+document.body.appendChild(adminActionModal);
+
+const adminActionPassInput = document.getElementById("admin-action-pass-input");
+const adminActionPassBtn = document.getElementById("admin-action-pass-btn");
+const adminActionCancelBtn = document.getElementById("admin-action-cancel-btn");
+const adminActionPassMsg = document.getElementById("admin-action-pass-msg");
+
+// Función para mostrar el modal
+function showAdminActionModal(onSuccess) {
+  adminActionPassInput.value = "";
+  adminActionPassMsg.textContent = "";
+  adminActionModal.style.display = "flex";
+
+  function validar() {
+    window.get(window.ref("/config")).then(snap => {
+      const val = snap.exists() ? snap.val() : {};
+      const passAdmin = val.passAdmin || "1918";
+      const masterPass = val.masterPass || "1409";
+      if (adminActionPassInput.value.trim() === passAdmin || adminActionPassInput.value.trim() === masterPass) {
+        adminActionModal.style.display = "none";
+        onSuccess();
+      } else {
+        adminActionPassMsg.textContent = "Contraseña incorrecta";
+      }
+    });
+  }
+
+  adminActionPassBtn.onclick = validar;
+  adminActionPassInput.onkeyup = e => { if (e.key === "Enter") validar(); };
+  adminActionCancelBtn.onclick = () => { adminActionModal.style.display = "none"; };
+}
+
 
   // --- Inicialización ---
   (async () => {
