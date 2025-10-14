@@ -439,6 +439,12 @@ async function loadMovimientos() {
 
 // --- Tirar Z ---
 btnTirarZ.addEventListener("click", async () => {
+  const pass = prompt("Contraseña de administrador para Tirar Z:");
+  const confSnap = await window.get(window.ref("/config"));
+  const confVal = confSnap.exists() ? confSnap.val() : {};
+  const passAdmin = confVal.passAdmin || "1918";
+  if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+
   const snap = await window.get(window.ref("/movimientos"));
   if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
@@ -471,19 +477,22 @@ btnTirarZ.addEventListener("click", async () => {
     ticketTexto += `\n======== CAJERO: ${cajero} ========\n`;
     const movCajero = registroZ.items.filter(m => m.cajero === cajero);
 
-    // Separar por tipo de pago
+    // Separar por tipo de pago y subtotal
     const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
     for (const tipo of tiposPago) {
-      ticketTexto += `\n-- ${tipo} --\n`;
-      movCajero.filter(m => m.tipo === tipo).forEach(m => {
+      const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+      const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+
+      ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+      ventasTipo.forEach(m => {
         ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
       });
     }
   }
 
   ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
-  console.log(ticketTexto); // Para testing, reemplazar con la función real de imprimir
-  // imprimirTicketZ(ticketTexto); <-- función que imprima en 5cm de ancho
+  console.log(ticketTexto); // Para testing
+  // imprimirTicketZ(ticketTexto); <-- función real de impresión en 5cm
 });
 
 // --- STOCK ---
