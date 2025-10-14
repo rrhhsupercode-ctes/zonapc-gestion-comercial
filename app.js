@@ -36,7 +36,6 @@
     </div>
   `;
   document.body.appendChild(adminModal);
-  document.body.style.filter = "blur(2px)";
 
   const adminPassInput = document.getElementById("admin-pass-input");
   const adminPassBtn = document.getElementById("admin-pass-btn");
@@ -50,7 +49,6 @@
     const entrada = adminPassInput.value.trim();
     if (entrada === passAdmin || entrada === masterPass) {
       adminModal.remove();
-      document.body.style.filter = "none";
     } else {
       adminPassMsg.textContent = "Contraseña incorrecta";
     }
@@ -586,7 +584,6 @@ async function loadCajerosTabla() {
           </div>
         `;
         document.body.appendChild(modal);
-        document.body.style.filter = "blur(2px)";
 
         const editPassAdmin = modal.querySelector("#edit-pass-admin");
         const editNro = modal.querySelector("#edit-nro");
@@ -599,7 +596,6 @@ async function loadCajerosTabla() {
 
         editCancelar.addEventListener("click", () => {
           modal.remove();
-          document.body.style.filter = "none";
         });
 
         editAceptar.addEventListener("click", async () => {
@@ -634,7 +630,6 @@ async function loadCajerosTabla() {
           loadCajerosTabla();
           loadCajeros();
           modal.remove();
-          document.body.style.filter = "none";
         });
       });
 
