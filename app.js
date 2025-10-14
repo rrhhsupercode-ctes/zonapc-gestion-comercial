@@ -449,13 +449,12 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio
+// Formato precio "$00000,00"
 function formatPrecio(num) {
-  const entero = Math.floor(num);
-  const dec = Math.round((num - entero) * 100);
-  const entStr = String(entero).padStart(5, "0");
-  const decStr = String(dec).padStart(2, "0");
-  return `$${entStr},${decStr}`;
+  const fijo = (parseFloat(num) || 0).toFixed(2);
+  const [ent, dec] = fijo.split(".");
+  const entStr = String(ent).padStart(5, "0");
+  return `$${entStr},${dec}`;
 }
 
 async function loadStock(filtro = "") {
@@ -521,13 +520,13 @@ async function loadStock(filtro = "") {
             </div>
 
             <label for="edit-precio">Precio</label>
-            <input id="edit-precio" type="number" value="${prod.precio}" style="width:100%; margin:5px 0;">
+            <input id="edit-precio" type="text" value="${formatPrecio(prod.precio).replace('$', '')}" placeholder="00000,00" style="width:100%; margin:5px 0; text-align:center;">
+            <p id="edit-msg" style="color:red; margin-top:5px; min-height:18px;"></p>
 
             <div style="margin-top:10px;">
               <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
               <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
             </div>
-            <p id="edit-msg" style="color:red; margin-top:5px;"></p>
           </div>
         `;
         document.body.appendChild(modal);
@@ -548,18 +547,17 @@ async function loadStock(filtro = "") {
         editAceptar.addEventListener("click", async () => {
           const newNombre = editNombre.value.trim();
           const newCant = parseInt(editCant.value);
-          const newPrecio = parseFloat(editPrecio.value);
+          const precioTxt = editPrecio.value.trim();
+          const precioValido = /^\d{1,5},\d{2}$/.test(precioTxt);
 
-          if (!newNombre || isNaN(newCant) || isNaN(newPrecio)) {
-            editMsg.textContent = "Todos los campos son obligatorios";
+          if (!newNombre || isNaN(newCant) || !precioValido) {
+            editMsg.textContent = "El precio es incorrecto, ejemplo: 1999,99";
             return;
           }
+
+          const newPrecio = parseFloat(precioTxt.replace(",", "."));
           if (newCant < 0 || newCant > 999) {
             editMsg.textContent = "Cantidad fuera de rango 0-999";
-            return;
-          }
-          if (newPrecio < 0 || newPrecio > 99999.99) {
-            editMsg.textContent = "Precio incorrecto";
             return;
           }
 
@@ -589,7 +587,12 @@ btnAgregarStock.addEventListener("click", async () => {
     const newCant = Math.min(999, currentCant + cant);
     await window.update(window.ref(`/stock/${codigo}`), { cant: newCant, fecha });
   } else {
-    await window.set(window.ref(`/stock/${codigo}`), { nombre: codigo, cant: Math.min(999, cant), fecha, precio: 100 });
+    await window.set(window.ref(`/stock/${codigo}`), {
+      nombre: "NUEVO",
+      cant: Math.min(999, cant),
+      fecha,
+      precio: 0.0,
+    });
   }
 
   loadStock();
@@ -604,7 +607,6 @@ btnBuscarStock.addEventListener("click", () => {
 
 // Inicial
 loadStock();
-
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
