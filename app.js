@@ -510,12 +510,13 @@ const btnAgregarCajero = document.getElementById("agregar-cajero");
 const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbody");
 
 // Cargar select de Nros de cajero 01 a 99
-function loadCajeroSelectOptions() {
+function loadCajeroSelectOptions(selected = null) {
   cajeroNro.innerHTML = "";
   for (let i = 1; i <= 99; i++) {
     const opt = document.createElement("option");
     opt.value = String(i).padStart(2, "0");
     opt.textContent = String(i).padStart(2, "0");
+    if (selected && selected === opt.value) opt.selected = true;
     cajeroNro.appendChild(opt);
   }
 }
@@ -540,10 +541,13 @@ async function loadCajerosTabla() {
 
       // Botón eliminar
       tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
-        const pass = prompt("Contraseña de administrador para eliminar cajero:");
         const confSnap = await window.get(window.ref("/config"));
         const confVal = confSnap.exists() ? confSnap.val() : {};
-        if (pass === confVal.passAdmin || pass === confVal.masterPass) {
+        const passAdmin = confVal.passAdmin || "1918";
+        const masterPass = confVal.masterPass || "1409";
+
+        const pass = prompt("Contraseña de administrador para eliminar cajero:");
+        if (pass === passAdmin || pass === masterPass) {
           if (confirm("Eliminar cajero?")) {
             await window.remove(window.ref(`/cajeros/${id}`));
             loadCajerosTabla();
@@ -570,6 +574,7 @@ async function loadCajerosTabla() {
           <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
             <h2>Editar Cajero ${id}</h2>
             <input id="edit-pass-admin" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+            <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
             <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
             <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;">
             <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
@@ -584,6 +589,7 @@ async function loadCajerosTabla() {
         document.body.style.filter = "blur(2px)";
 
         const editPassAdmin = modal.querySelector("#edit-pass-admin");
+        const editNro = modal.querySelector("#edit-nro");
         const editNombre = modal.querySelector("#edit-nombre");
         const editDni = modal.querySelector("#edit-dni");
         const editPass = modal.querySelector("#edit-pass");
@@ -602,14 +608,29 @@ async function loadCajerosTabla() {
             editMsg.textContent = "Contraseña incorrecta";
             return;
           }
+
+          const newNro = String(editNro.value).padStart(2, "0");
           const newNombre = editNombre.value.trim();
           const newDni = editDni.value.trim();
           const newPass = editPass.value.trim();
-          if (!newNombre || !newDni || !newPass) {
+
+          if (!newNro || !newNombre || !newDni || !newPass) {
             editMsg.textContent = "Todos los campos son obligatorios";
             return;
           }
-          await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+
+          if (newNro !== id) {
+            const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
+            if (existingSnap.exists()) {
+              editMsg.textContent = "❌ Este Nro ya está en uso";
+              return;
+            }
+            await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
+            await window.remove(window.ref(`/cajeros/${id}`));
+          } else {
+            await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+          }
+
           loadCajerosTabla();
           loadCajeros();
           modal.remove();
