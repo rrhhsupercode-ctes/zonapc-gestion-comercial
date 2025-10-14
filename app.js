@@ -1141,6 +1141,7 @@ async function loadSueltos(filtro = "") {
               <span>,</span>
               <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
             </div>
+
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
             <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
@@ -1170,18 +1171,15 @@ async function loadSueltos(filtro = "") {
         editKg.addEventListener("input", () => formatearKg(editKg, editKgMsg));
         editKg.addEventListener("blur", () => formatearKg(editKg, editKgMsg));
 
-        // --- PRECIO tipo bruto ---
-        function formatearPrecioBruto(inputElement, maxLength = 7) {
+        // --- PRECIO (idéntico a STOCK) ---
+        function formatearPrecioModal(inputElement) {
           let raw = inputElement.value.replace(/\D/g, "");
-          if (raw.length > maxLength) raw = raw.slice(0, maxLength);
-          inputElement.value = raw.padStart(maxLength, "0");
+          if (raw.length > 7) raw = raw.slice(0, 7);
+          inputElement.value = raw;
+          actualizarPreview();
         }
 
-        editPrecio.addEventListener("input", () => {
-          formatearPrecioBruto(editPrecio);
-          actualizarPreview();
-        });
-
+        editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
         editCentavos.addEventListener("input", () => {
           let val = parseInt(editCentavos.value);
           if (isNaN(val) || val < 0) val = 0;
@@ -1193,12 +1191,10 @@ async function loadSueltos(filtro = "") {
         function actualizarPreview() {
           const entero = parseInt(editPrecio.value) || 0;
           const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
+          preview.textContent = formatPrecio(entero + dec / 100);
         }
 
         editCancelar.addEventListener("click", () => modal.remove());
-
         editAceptar.addEventListener("click", async () => {
           const newNombre = editNombre.value.trim();
           const newKg = parseFloat(editKg.value);
@@ -1227,6 +1223,7 @@ async function loadSueltos(filtro = "") {
     tablaSueltos.appendChild(tr);
   });
 }
+
 
 // Agregar suelto
 btnAgregarSuelto.addEventListener("click", async () => {
