@@ -580,15 +580,15 @@ async function loadSueltos(filtro = "") {
             background:rgba(0,0,0,0.7); z-index:9999;
           `;
           modal.innerHTML = `
-            <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+            <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
               <h2>Editar Suelto ${id}</h2>
               <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
-              <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:100%; margin:5px 0;">
-              <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
-              <div style="margin-top:10px; display:flex; justify-content:space-between;">
-                <button id="kg-decr">-</button>
-                <button id="kg-incr">+</button>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+                <button id="kg-decr" style="width:30%;">-</button>
+                <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
+                <button id="kg-incr" style="width:30%;">+</button>
               </div>
+              <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
               <div style="margin-top:10px;">
                 <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
                 <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
@@ -610,6 +610,14 @@ async function loadSueltos(filtro = "") {
           kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg));
           kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg));
           editCancelar.addEventListener("click", () => modal.remove());
+
+          // Formateo en tiempo real del precio mientras escribe
+          editPrecio.addEventListener("input", () => {
+            let val = parseFloat(editPrecio.value);
+            if (!isNaN(val)) {
+              editPrecio.value = val.toFixed(2);
+            }
+          });
 
           editAceptar.addEventListener("click", async () => {
             const newNombre = editNombre.value.trim();
