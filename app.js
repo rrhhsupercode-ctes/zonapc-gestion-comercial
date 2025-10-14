@@ -449,12 +449,25 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$0.000.000,00"
+// Formato precio sin ceros a la izquierda "$0.000,00"
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const entero = String(parseInt(partes[0], 10)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${entero},${partes[1]}`;
+}
+
+// Input dinámico sin ceros a la izquierda
+function formatInputPrecio(value) {
+  let val = value.replace(/\D/g, "").replace(/^0+/, "");
+  if (!val) return "0";
+  const partes = [];
+  while (val.length > 3) {
+    partes.unshift(val.slice(-3));
+    val = val.slice(0, -3);
+  }
+  if (val) partes.unshift(val);
+  return partes.join(".");
 }
 
 async function loadStock(filtro = "") {
@@ -520,14 +533,12 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <input id="edit-precio" type="text" placeholder="000" style="width:65%; text-align:center;" value="${prod.precio ? formatInputPrecio(Math.floor(prod.precio)) : '000'}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
-                .toString()
-                .padStart(2, "0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2,"0")}">
             </div>
 
-            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio || 0)}</p>
             <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
             <div style="margin-top:10px;">
@@ -549,17 +560,9 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (000.000)
+        // Formateo dinámico del input de precio
         editPrecio.addEventListener("input", () => {
-          let val = editPrecio.value.replace(/\D/g, "");
-          if (val.length > 7) val = val.slice(0, 7);
-          const partes = [];
-          while (val.length > 3) {
-            partes.unshift(val.slice(-3));
-            val = val.slice(0, -3);
-          }
-          if (val) partes.unshift(val);
-          editPrecio.value = partes.join(".");
+          editPrecio.value = formatInputPrecio(editPrecio.value);
           actualizarPreview();
         });
 
@@ -574,8 +577,7 @@ async function loadStock(filtro = "") {
         function actualizarPreview() {
           const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
           const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
+          preview.textContent = formatPrecio(entero + dec / 100);
         }
 
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
@@ -608,6 +610,8 @@ async function loadStock(filtro = "") {
           loadProductos();
           modal.remove();
         });
+
+        actualizarPreview();
       });
     });
 
@@ -640,15 +644,6 @@ btnAgregarStock.addEventListener("click", async () => {
   loadStock();
   loadProductos();
 });
-
-// Buscar
-btnBuscarStock.addEventListener("click", () => {
-  const filtro = stockCodigo.value.trim();
-  loadStock(filtro);
-});
-
-// Inicial
-loadStock();
 
 // Buscar
 btnBuscarStock.addEventListener("click", () => {
