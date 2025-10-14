@@ -1,258 +1,1192 @@
-// =========================================
-// app.js (Firebase 11.8.1) — PARTE 1
-// =========================================
+// app.js
+// Versión completa y funcional, persistente en Firebase Realtime DB v11.8.1 (compatibilidad con init.js/index.html wrappers)
+// Usa los wrappers que expone el index.html: window.ref, window.get, window.set, window.update, window.push, window.remove, window.onValue
 
-// ---------------------------
-// Inicializar Firebase
-// ---------------------------
-import {
-  getDatabase, ref, get, set, update, remove, onValue, push
-} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+/* ---------------------------
+   VARIABLES GLOBALES (mismos nombres)
+--------------------------- */
+const appSections = document.querySelectorAll("main section");
+const navBtns = document.querySelectorAll(".nav-btn");
+const appTitle = document.getElementById("app-title");
 
-import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
-} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+// Modal de contraseña inicial (ya lo tenías en tu código, lo dejamos igual)
+const initAdminModal = document.createElement("div");
+initAdminModal.id = "init-admin-modal";
+initAdminModal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;justify-content:center;align-items:center;z-index:9999;";
+initAdminModal.innerHTML = `
+  <div style="background:#fff;padding:20px;border-radius:10px;text-align:center;">
+    <h2>Ingrese contraseña de administrador</h2>
+    <input id="init-pass" type="password" placeholder="Contraseña" style="margin-bottom:10px;">
+    <button id="init-btn">Ingresar</button>
+    <p id="init-msg" style="color:red;margin-top:10px;"></p>
+  </div>
+`;
+document.body.appendChild(initAdminModal);
 
-import { app } from "./init.js";
-
-window.db = getDatabase(app);
-window.auth = getAuth(app);
-
-// ---------------------------
-// Variables globales
-// ---------------------------
+/* ---------------------------
+   ESTADO (misma nomenclatura)
+--------------------------- */
+let adminPass = "1918"; // por defecto; será sincronizado con /config en Firebase
+let masterPass = "1409";
+let currentCajero = null;
+let ticketsDiarios = {}; // no usabas, pero lo dejo por compatibilidad
 let stockData = {};
 let sueltosData = {};
+let cajerosData = {};
 let movimientosData = {};
 let historialData = {};
-let cajerosData = {};
+let ticketCounter = 1; // se sincroniza con /counters/{ISODate}.lastId
 
-let usuarioActual = null;
-let usuarioRol = null;
+/* ---------------------------
+   RUTAS / HELPERS FIREBASE
+--------------------------- */
+const dbPath = {
+  root: () => window.ref("/"),
+  stock: () => window.ref("/stock"),
+  sueltos: () => window.ref("/sueltos"),
+  cajeros: () => window.ref("/cajeros"),
+  movimientos: () => window.ref("/movimientos"),
+  movimientoId: id => window.ref(`/movimientos/${id}`),
+  historialMonth: monthKey => window.ref(`/historial/${monthKey}`),
+  config: () => window.ref("/config"),
+  countersForDate: isoDate => window.ref(`/counters/${isoDate}`)
+};
 
-// ---------------------------
-// Referencias a nodos
-// ---------------------------
-const stockRef = ref(db, "stock");
-const sueltosRef = ref(db, "sueltos");
-const movimientosRef = ref(db, "movimientos");
-const historialRef = ref(db, "historial");
-const cajerosRef = ref(db, "cajeros");
-const configRef = ref(db, "config");
+const hoyObj = () => {
+  const d = new Date();
+  const isoDate = d.toISOString().slice(0,10); // YYYY-MM-DD
+  const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; // YYYY-MM
+  return { d, isoDate, monthKey, day: d.getDate() };
+};
 
-// ---------------------------
-// Sincronización en tiempo real
-// ---------------------------
-onValue(stockRef, snap => {
-  if (snap.exists()) {
-    stockData = snap.val();
-    renderTablaStock();
-  } else {
-    stockData = {};
-    document.getElementById("tablaStockBody").innerHTML = "";
+/* ---------------------------
+   UTIL HELPERS
+--------------------------- */
+const hideAllSections = () => appSections.forEach(s => s.classList.add("hidden"));
+const showSection = (id) => {
+  hideAllSections();
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("hidden");
+};
+
+navBtns.forEach(btn => {
+  btn.addEventListener("click", () => {
+    showSection(btn.dataset.section);
+  });
+});
+
+// Helper formateo dinero
+const formatMoney = n => `$${Number(n).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+
+// Helper para fecha y hora (igual a tu función pero con paréntesis separados)
+const fechaHora = () => {
+  const d = new Date();
+  const fecha = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  const hora = `(${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')})`;
+  return `${fecha} ${hora}`;
+};
+
+/* ---------------------------
+   SYNC: listeners onValue para mantener datos locales sincronizados
+   Esto asegura que si otro cliente modifica la DB, tu UI se actualiza.
+--------------------------- */
+async function setupRealtimeListeners(){
+  try {
+    // CONFIG (shopName, passAdmin, masterPass)
+    window.onValue(dbPath.config(), snap => {
+      if (snap.exists()) {
+        const cfg = snap.val();
+        if (cfg.shopName) appTitle.textContent = cfg.shopName;
+        if (cfg.passAdmin) adminPass = String(cfg.passAdmin);
+        if (cfg.masterPass) masterPass = String(cfg.masterPass);
+      }
+    });
+
+    // STOCK
+    window.onValue(dbPath.stock(), snap => {
+      stockData = snap.exists() ? snap.val() : {};
+      actualizarSelectProductos();
+      renderStock();
+    });
+
+    // SUELTOS
+    window.onValue(dbPath.sueltos(), snap => {
+      sueltosData = snap.exists() ? snap.val() : {};
+      actualizarSelectProductos();
+      renderSueltos();
+    });
+
+    // CAJEROS
+    window.onValue(dbPath.cajeros(), snap => {
+      cajerosData = snap.exists() ? snap.val() : {};
+      renderCajeros();
+      cargarCajeroLogin();
+      actualizarFiltroCajeros();
+    });
+
+    // MOVIMIENTOS (de un día a otro movimientos puede resetearse según tu lógica; aquí mantenemos todo /movimientos)
+    window.onValue(dbPath.movimientos(), snap => {
+      movimientosData = snap.exists() ? snap.val() : {};
+      renderMovimientos();
+    });
+
+    // HISTORIAL (carga todo el nodo /historial; renderHistorial filtra por día actual)
+    window.onValue(window.ref(window.db, "/historial"), snap => {
+      historialData = snap.exists() ? snap.val() : {};
+      renderHistorial();
+    });
+
+    // Counters for today -> sync ticketCounter initial value
+    const today = hoyObj().isoDate;
+    window.onValue(dbPath.countersForDate(today), snap => {
+      const val = snap.exists() ? snap.val() : null;
+      if (val && typeof val.lastId !== "undefined") {
+        // local ticketCounter must be lastId + 1 (next)
+        ticketCounter = Number(val.lastId) + 1;
+      } else {
+        ticketCounter = 1;
+      }
+    });
+
+    console.log("Listeners realtime configurados.");
+  } catch(err){
+    console.error("Error setupRealtimeListeners:", err);
+  }
+}
+
+/* ---------------------------
+   SAVE HELPERS (call when local state mutates)
+   Cada modificación importante en stock/sueltos/cajeros/movimientos/historial/counters debe llamar a estos.
+--------------------------- */
+async function saveStock(){
+  try {
+    await window.set(dbPath.stock(), stockData);
+  } catch(e){ console.error("saveStock error:", e); }
+}
+async function saveSueltos(){
+  try {
+    await window.set(dbPath.sueltos(), sueltosData);
+  } catch(e){ console.error("saveSueltos error:", e); }
+}
+async function saveCajeros(){
+  try {
+    await window.set(dbPath.cajeros(), cajerosData);
+  } catch(e){ console.error("saveCajeros error:", e); }
+}
+async function saveMovimientos(){
+  try {
+    await window.set(dbPath.movimientos(), movimientosData);
+  } catch(e){ console.error("saveMovimientos error:", e); }
+}
+// Para historial guardamos por mes -> estructura: /historial/{YYYY-MM}/{ID} = ticket
+async function saveHistorialMonth(monthKey){
+  try {
+    const monthData = historialData && historialData[monthKey] ? historialData[monthKey] : {};
+    await window.set(dbPath.historialMonth(monthKey), monthData);
+  } catch(e){ console.error("saveHistorialMonth error:", e); }
+}
+async function saveConfig(cfg){
+  try {
+    await window.update(dbPath.config(), cfg);
+  } catch(e){ console.error("saveConfig error:", e); }
+}
+async function saveCounterForDate(isoDate, lastId){
+  try {
+    await window.set(dbPath.countersForDate(isoDate), { lastId });
+  } catch(e){ console.error("saveCounterForDate error:", e); }
+}
+
+/* ---------------------------
+   INICIO ADMIN (modal inicial)
+   Comprueba contra /config si existe, si no usa los defaults en init.js
+--------------------------- */
+document.getElementById("init-btn").addEventListener("click", async ()=> {
+  try {
+    // sincronizar config inicial antes de validar
+    const cfgSnap = await window.get(dbPath.config());
+    if (cfgSnap.exists()) {
+      const cfg = cfgSnap.val();
+      if (cfg.passAdmin) adminPass = String(cfg.passAdmin);
+      if (cfg.masterPass) masterPass = String(cfg.masterPass);
+      if (cfg.shopName) appTitle.textContent = cfg.shopName;
+    } else {
+      // persistir valores por defecto si no existía (Init.js debe haber hecho esto, pero por seguridad)
+      await saveConfig({ shopName: appTitle.textContent || "ZONAPC", passAdmin: adminPass, masterPass });
+    }
+
+    const pass = document.getElementById("init-pass").value.trim();
+    if (pass === adminPass || pass === masterPass) {
+      initAdminModal.style.display = "none";
+      showSection("cobro");
+      // iniciar listeners y cargar datos iniciales
+      await setupRealtimeListeners();
+
+      // Ensure daily counter exists
+      const today = hoyObj().isoDate;
+      const cSnap = await window.get(dbPath.countersForDate(today));
+      if (!cSnap.exists()) {
+        await saveCounterForDate(today, 0);
+        ticketCounter = 1;
+      } else {
+        const val = cSnap.val();
+        ticketCounter = (val && typeof val.lastId !== "undefined") ? Number(val.lastId) + 1 : 1;
+      }
+
+      // cargar estructuras locales (si no están por listeners inmediatos)
+      const [stockSnap, sueltosSnap, cajerosSnap] = await Promise.all([
+        window.get(dbPath.stock()),
+        window.get(dbPath.sueltos()),
+        window.get(dbPath.cajeros())
+      ]);
+      stockData = stockSnap.exists() ? stockSnap.val() : {};
+      sueltosData = sueltosSnap.exists() ? sueltosSnap.val() : {};
+      cajerosData = cajerosSnap.exists() ? cajerosSnap.val() : {};
+
+      // render inicial
+      actualizarSelectProductos();
+      renderStock();
+      renderSueltos();
+      renderCajeros();
+      cargarCajeroLogin();
+      actualizarFiltroCajeros();
+
+    } else {
+      document.getElementById("init-msg").innerText = "Contraseña incorrecta";
+    }
+  } catch(err){
+    console.error("Error en init admin:", err);
+    document.getElementById("init-msg").innerText = "Error inicializando. Revisa consola.";
   }
 });
 
-onValue(sueltosRef, snap => {
-  if (snap.exists()) {
-    sueltosData = snap.val();
-    renderTablaSueltos();
+/* ---------------------------
+   COBRAR (mismas referencias DOM)
+--------------------------- */
+const loginSelect = document.getElementById("login-usuario");
+const loginPass = document.getElementById("login-pass");
+const loginBtn = document.getElementById("btn-login");
+const loginMsg = document.getElementById("login-msg");
+const cobroControles = document.getElementById("cobro-controles");
+
+loginBtn.addEventListener("click", ()=>{
+  const cajeroNro = loginSelect.value;
+  const pass = loginPass.value.trim();
+  if (cajerosData[cajeroNro] && cajerosData[cajeroNro].pass === pass) {
+    currentCajero = cajeroNro;
+    loginMsg.innerText = "";
+    cobroControles.classList.remove("hidden");
+    document.getElementById("login-modal").classList.add("hidden");
   } else {
-    sueltosData = {};
-    document.getElementById("tablaSueltosBody").innerHTML = "";
+    loginMsg.innerText = "Contraseña incorrecta";
   }
 });
 
-onValue(movimientosRef, snap => {
-  if (snap.exists()) {
-    movimientosData = snap.val();
-    renderTablaMovimientos();
-  } else {
-    movimientosData = {};
-    document.getElementById("tablaMovBody").innerHTML = "";
-  }
-});
-
-onValue(historialRef, snap => {
-  if (snap.exists()) historialData = snap.val();
-  else historialData = {};
-});
-
-onValue(cajerosRef, snap => {
-  if (snap.exists()) {
-    cajerosData = snap.val();
-    renderTablaCajeros();
-    actualizarSelectCajeros();
-  } else {
-    cajerosData = {};
-    document.getElementById("tablaCajerosBody").innerHTML = "";
-  }
-});
-
-// ---------------------------
-// Actualización de selects (cajeros)
-// ---------------------------
-function actualizarSelectCajeros() {
-  const loginUsuarioSelect = document.getElementById("loginUsuarioSelect");
-  if (!loginUsuarioSelect) return;
-
-  loginUsuarioSelect.innerHTML = "";
-  const optDef = document.createElement("option");
-  optDef.value = "";
-  optDef.textContent = "Seleccione un cajero";
-  loginUsuarioSelect.appendChild(optDef);
-
-  Object.entries(cajerosData).forEach(([key, caj]) => {
+// Cargar select de cajeros para login
+function cargarCajeroLogin(){
+  loginSelect.innerHTML = "";
+  Object.keys(cajerosData).sort().forEach(nro => {
     const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = `${caj.nombre}`;
-    loginUsuarioSelect.appendChild(opt);
+    opt.value = nro;
+    opt.textContent = nro;
+    loginSelect.appendChild(opt);
   });
 }
 
-// ---------------------------
-// Función de login de cajero
-// ---------------------------
-async function loginCajero() {
-  const sel = document.getElementById("loginUsuarioSelect");
-  const pass = document.getElementById("loginPassInput");
-  if (!sel || !pass) return;
-
-  const userId = sel.value.trim();
-  const clave = pass.value.trim();
-
-  if (userId === "" || clave === "") {
-    alert("Complete usuario y contraseña");
-    return;
+// Select cantidad (01-99)
+const cantSelect = document.getElementById("cobro-cantidad");
+if (cantSelect && cantSelect.children.length === 0) {
+  for(let i=1;i<=99;i++){
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = String(i).padStart(2,'0');
+    cantSelect.appendChild(opt);
   }
+}
 
-  const snap = await get(ref(db, `cajeros/${userId}`));
-  if (snap.exists()) {
-    const caj = snap.val();
-    if (caj.pass === clave) {
-      usuarioActual = caj.nombre;
-      usuarioRol = caj.rol;
-      document.getElementById("loginModal").classList.add("oculto");
-      document.body.classList.remove("bloqueado");
-      document.getElementById("usuarioActivo").textContent = usuarioActual;
-      console.log("Cajero logueado:", usuarioActual);
+// Select productos STOCK y SUELTOS
+const cobroProductos = document.getElementById("cobro-productos");
+const cobroSueltos = document.getElementById("cobro-sueltos");
+function actualizarSelectProductos(){
+  if (cobroProductos) {
+    cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
+    Object.entries(stockData).forEach(([codigo,item])=>{
+      const opt = document.createElement("option");
+      opt.value = codigo;
+      opt.textContent = item.nombre || codigo;
+      cobroProductos.appendChild(opt);
+    });
+  }
+  if (cobroSueltos) {
+    cobroSueltos.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
+    Object.entries(sueltosData).forEach(([codigo,item])=>{
+      const opt = document.createElement("option");
+      opt.value = codigo;
+      opt.textContent = item.nombre || codigo;
+      cobroSueltos.appendChild(opt);
+    });
+  }
+}
+
+// Tabla de cobro
+const tablaCobro = document.querySelector("#tabla-cobro tbody");
+const totalDiv = document.getElementById("total-div");
+let cobroItems = [];
+
+function renderTablaCobro(){
+  tablaCobro.innerHTML = "";
+  let totalGeneral = 0;
+  cobroItems.forEach((item,index)=>{
+    const totalItem = item.tipo === "stock" ? item.cantidad * item.precio : item.cantidad * item.precio * item.porcentaje;
+    totalGeneral += totalItem;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.cantidad}</td>
+      <td>${item.nombre}</td>
+      <td>${formatMoney(item.tipo === "stock" ? item.precio : item.precio * (item.porcentaje || 1))}</td>
+      <td>${formatMoney(totalItem)}</td>
+      <td><button data-index="${index}" class="btn-elim-item">Eliminar</button></td>
+    `;
+    tablaCobro.appendChild(tr);
+  });
+  totalDiv.innerText = `TOTAL: ${formatMoney(totalGeneral)}`;
+  const btnCobrar = document.querySelector("#btn-cobrar");
+  if (btnCobrar) btnCobrar.classList.toggle("hidden", cobroItems.length === 0);
+}
+
+// Agregar item STOCK
+document.getElementById("btn-add-product").addEventListener("click", ()=>{
+  const codigoInput = document.getElementById("cobro-codigo");
+  const codigo = (codigoInput && codigoInput.value.trim()) || cobroProductos.value;
+  if (!codigo || !stockData[codigo]) return;
+  const cantidad = parseInt(document.getElementById("cobro-cantidad").value,10) || 1;
+  cobroItems.unshift({ tipo: "stock", codigo, nombre: stockData[codigo].nombre, cantidad, precio: Number(stockData[codigo].precio || 0) });
+  renderTablaCobro();
+});
+
+// Agregar item SUELTOS
+const kgInput = document.getElementById("input-kg-suelto");
+document.getElementById("btn-incr-kg").addEventListener("click", ()=> {
+  if (!kgInput) return;
+  let v = parseFloat(kgInput.value) || 0.1;
+  v = Math.min(99.900, (v + 0.1));
+  kgInput.value = v.toFixed(3);
+});
+document.getElementById("btn-decr-kg").addEventListener("click", ()=> {
+  if (!kgInput) return;
+  let v = parseFloat(kgInput.value) || 0.1;
+  v = Math.max(0.100, (v - 0.1));
+  kgInput.value = v.toFixed(3);
+});
+
+document.getElementById("btn-add-suelto").addEventListener("click", ()=>{
+  const codigoInput = document.getElementById("cobro-codigo-suelto");
+  const codigo = (codigoInput && codigoInput.value.trim()) || cobroSueltos.value;
+  if (!codigo || !sueltosData[codigo]) return;
+  const kg = parseFloat(kgInput.value) || 0.1;
+  const porcentaje = Number(kg.toFixed(3)); // según tu modelo
+  cobroItems.unshift({ tipo: "sueltos", codigo, nombre: sueltosData[codigo].nombre, cantidad: kg, precio: Number(sueltosData[codigo].precio || 0), porcentaje });
+  renderTablaCobro();
+});
+
+// Eliminar item de tabla (requiere contraseña admin)
+tablaCobro.addEventListener("click", async e => {
+  if (e.target.classList.contains("btn-elim-item")) {
+    const index = Number(e.target.dataset.index);
+    const admin = prompt("Contraseña de administrador para eliminar item:");
+    if (admin === adminPass) {
+      cobroItems.splice(index, 1);
+      renderTablaCobro();
     } else {
       alert("Contraseña incorrecta");
     }
-  } else {
-    alert("Cajero no encontrado");
+  }
+});
+
+// Botón Cobrar -> modal de tipos de pago
+document.getElementById("btn-cobrar").addEventListener("click", ()=> {
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;justify-content:center;align-items:center;z-index:9999;";
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:10px;text-align:center;">
+      <h2>¿Cómo pagará el Cliente?</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:10px 0;">
+        <button class="pay-btn">Efectivo</button>
+        <button class="pay-btn">Tarjeta</button>
+        <button class="pay-btn">QR</button>
+        <button class="pay-btn">Electrónico</button>
+        <button class="pay-btn">Otro</button>
+      </div>
+      <button id="cancel-pay" style="background:red;color:#fff;">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector("#cancel-pay").addEventListener("click", ()=> { modal.remove(); });
+  modal.querySelectorAll(".pay-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const tipo = btn.innerText;
+      await realizarVenta(tipo);
+      modal.remove();
+    });
+  });
+});
+
+// realizarVenta -> guarda movimientos, historial, resta stock, actualiza counters y persistencia
+async function realizarVenta(tipo){
+  if (!currentCajero) {
+    alert("Debe iniciar sesión con un cajero antes de cobrar.");
+    return;
+  }
+  if (!cobroItems || cobroItems.length === 0) {
+    alert("No hay items para cobrar.");
+    return;
+  }
+
+  try {
+    // Obtener contador diario actual en DB atomically: leer /counters/{iso}.lastId y ++
+    const today = hoyObj();
+    const counterRef = dbPath.countersForDate(today.isoDate);
+    const counterSnap = await window.get(counterRef);
+    let lastId = 0;
+    if (counterSnap.exists()) lastId = Number(counterSnap.val().lastId || 0);
+    const nextId = lastId + 1;
+    const ticketID = `ID_${String(nextId).padStart(6,'0')}`;
+
+    // Calcular total
+    const total = cobroItems.reduce((acc, it) => {
+      return acc + (it.tipo === "stock" ? (it.cantidad * it.precio) : (it.cantidad * it.precio * (it.porcentaje || 1)));
+    }, 0);
+
+    const ticket = {
+      id: ticketID,
+      cajero: currentCajero,
+      fecha: fechaHora(),
+      tipoPago: tipo,
+      items: JSON.parse(JSON.stringify(cobroItems)), // deep copy
+      total
+    };
+
+    // Guardar en /movimientos/{ticketID}
+    movimientosData = movimientosData || {};
+    movimientosData[ticketID] = ticket;
+    await saveMovimientos();
+
+    // Guardar en /historial/{YYYY-MM}/{ticketID}
+    const monthKey = today.monthKey;
+    historialData = historialData || {};
+    if (!historialData[monthKey]) historialData[monthKey] = {};
+    historialData[monthKey][ticketID] = ticket;
+    // persistir mes concreto
+    await saveHistorialMonth(monthKey);
+
+    // Actualizar contador en DB
+    await saveCounterForDate(today.isoDate, nextId);
+    ticketCounter = nextId + 1;
+
+    // Restar stock/sueltos localmente y persistir
+    for (const it of cobroItems) {
+      if (it.tipo === "stock") {
+        if (!stockData[it.codigo]) {
+          console.warn("Producto en stock no existe:", it.codigo);
+          continue;
+        }
+        stockData[it.codigo].cantidad = Number(stockData[it.codigo].cantidad || 0) - Number(it.cantidad || 0);
+        if (stockData[it.codigo].cantidad < 0) stockData[it.codigo].cantidad = 0;
+      } else {
+        if (!sueltosData[it.codigo]) {
+          console.warn("Producto en sueltos no existe:", it.codigo);
+          continue;
+        }
+        sueltosData[it.codigo].cantidad = Number(sueltosData[it.codigo].cantidad || 0) - Number(it.cantidad || 0);
+        if (sueltosData[it.codigo].cantidad < 0) sueltosData[it.codigo].cantidad = 0;
+      }
+    }
+    // persistir stock y sueltos
+    await saveStock();
+    await saveSueltos();
+
+    // Imprimir ticket
+    imprimirTicket(ticket);
+
+    // Limpiar cobro y UI
+    cobroItems = [];
+    renderTablaCobro();
+    actualizarSelectProductos();
+
+    alert("Venta realizada");
+  } catch(err) {
+    console.error("Error realizarVenta:", err);
+    alert("Error al procesar la venta. Revisa consola.");
   }
 }
 
-document.getElementById("btnLoginCajero")?.addEventListener("click", loginCajero);
+/* ---------------------------
+   FUNCIONES DE CARGA DE DATOS (sincrónicas porque listeners onValue mantienen local)
+   Se mantuvieron nombres originales.
+--------------------------- */
+async function cargarStock(){
+  try {
+    const snap = await window.get(dbPath.stock());
+    stockData = snap.exists() ? snap.val() : {};
+    actualizarSelectProductos();
+    renderStock();
+  } catch(e){ console.error("cargarStock error:", e); }
+}
+
+async function cargarSueltos(){
+  try {
+    const snap = await window.get(dbPath.sueltos());
+    sueltosData = snap.exists() ? snap.val() : {};
+    actualizarSelectProductos();
+    renderSueltos();
+  } catch(e){ console.error("cargarSueltos error:", e); }
+}
+
+async function cargarCajeros(){
+  try {
+    const snap = await window.get(dbPath.cajeros());
+    cajerosData = snap.exists() ? snap.val() : {};
+    cargarCajeroLogin();
+    renderCajeros();
+  } catch(e){ console.error("cargarCajeros error:", e); }
+}
+
+/* ---------------------------
+   IMPRESIÓN DE TICKET (igual que tu función)
+--------------------------- */
+function imprimirTicket(ticket){
+  try {
+    const win = window.open("","Ticket","width=200,height=400");
+    let html = `<pre style="width:5cm;font-family:monospace;">`;
+    html += `${ticket.id}\n${ticket.fecha}\nCajero: ${ticket.cajero}\n==========\n`;
+    ticket.items.forEach(it => {
+      const totalItem = it.tipo === "stock" ? it.cantidad * it.precio : it.cantidad * it.precio * (it.porcentaje || 1);
+      html += `${it.nombre} ${formatMoney(it.precio)} (x${it.cantidad}) = ${formatMoney(totalItem)}\n==========\n`;
+    });
+    html += `TOTAL: ${formatMoney(ticket.total)}\nPago: ${ticket.tipoPago}\n`;
+    html += `</pre>`;
+    win.document.write(html);
+    win.document.close();
+    // Intentamos forzar print; en algunas plataformas esto abre diálogo inmediato.
+    setTimeout(()=> {
+      try { win.print(); } catch(e) { console.warn("win.print fallback:", e); }
+    }, 200);
+  } catch(e) {
+    console.error("imprimirTicket error:", e);
+  }
+}
+
+/* ---------------------------
+   MOVIMIENTOS (misma UI y comportamiento)
+--------------------------- */
+const filtroCajero = document.getElementById("filtroCajero");
+const tablaMovimientos = document.querySelector("#tabla-movimientos tbody");
+const btnTirarZ = document.getElementById("btn-tirar-z");
+
+// Cargar select de cajeros para filtro
+function actualizarFiltroCajeros(){
+  if (!filtroCajero) return;
+  filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
+  Object.keys(cajerosData).sort().forEach(nro => {
+    const opt = document.createElement("option");
+    opt.value = nro;
+    opt.textContent = nro;
+    filtroCajero.appendChild(opt);
+  });
+}
+
+// Render tabla movimientos
+function renderMovimientos(){
+  if (!tablaMovimientos) return;
+  tablaMovimientos.innerHTML = "";
+  // movimientosData is an object {ID_xxxxx: ticket}
+  const arr = Object.values(movimientosData || {}).slice();
+  arr.sort((a,b) => b.id.localeCompare(a.id)); // desc
+  arr.forEach(ticket => {
+    if (filtroCajero && filtroCajero.value !== "TODOS" && ticket.cajero !== filtroCajero.value) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${ticket.id}</td>
+      <td>${formatMoney(ticket.total)}</td>
+      <td>${ticket.tipoPago}</td>
+      <td>
+        <button class="reimp-btn" data-id="${ticket.id}">Reimprimir</button>
+        <button class="elim-btn" data-id="${ticket.id}">Eliminar</button>
+      </td>
+    `;
+    tablaMovimientos.appendChild(tr);
+  });
+}
+
+// Reimprimir / Eliminar desde MOVIMIENTOS
+tablaMovimientos.addEventListener("click", async e => {
+  if (e.target.classList.contains("reimp-btn")) {
+    const id = e.target.dataset.id;
+    const ticket = movimientosData[id];
+    if (ticket) imprimirTicket(ticket);
+  }
+  if (e.target.classList.contains("elim-btn")) {
+    const id = e.target.dataset.id;
+    const pass = prompt("Contraseña administrador para eliminar ticket:");
+    if (pass === adminPass) {
+      const ticket = movimientosData[id];
+      if (!ticket) {
+        alert("Ticket no encontrado");
+        return;
+      }
+      // Restaurar stock/sueltos según items
+      for (const it of ticket.items) {
+        if (it.tipo === "stock") {
+          if (!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre || "PRODUCTO", cantidad: 0, precio: it.precio || 0 };
+          stockData[it.codigo].cantidad = Number(stockData[it.codigo].cantidad || 0) + Number(it.cantidad || 0);
+        } else {
+          if (!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre || "PRODUCTO", cantidad: 0, precio: it.precio || 0 };
+          sueltosData[it.codigo].cantidad = Number(sueltosData[it.codigo].cantidad || 0) + Number(it.cantidad || 0);
+        }
+      }
+      // Persistir stock y sueltos
+      await saveStock();
+      await saveSueltos();
+      // Borrar de movimientos y persistir
+      delete movimientosData[id];
+      await saveMovimientos();
+      renderMovimientos();
+      actualizarSelectProductos();
+      alert("Ticket eliminado correctamente");
+    } else {
+      alert("Contraseña incorrecta");
+    }
+  }
+});
+
+if (filtroCajero) filtroCajero.addEventListener("change", renderMovimientos);
+if (btnTirarZ) btnTirarZ.addEventListener("click", async ()=> {
+  if (confirm("⚠️ADVERTENCIA: Tirar Z no puede revertirse⚠️. Continuar?")) {
+    try {
+      movimientosData = {};
+      await saveMovimientos();
+      renderMovimientos();
+      alert("Tirado Z completado.");
+    } catch(e) {
+      console.error("Error tirar Z:", e);
+      alert("Error al tirar Z. Revisa consola.");
+    }
+  }
+});
+
+/* ---------------------------
+   HISTORIAL (por día con paginador opcional)
+   Tu estructura anterior guardaba tickets en historialData con meses; renderHistorial filtra por día.
+--------------------------- */
+const tablaHistorial = document.querySelector("#tabla-historial tbody");
+let historialDia = new Date(); // día mostrado actualmente
+
+function renderHistorial(){
+  if (!tablaHistorial) return;
+  tablaHistorial.innerHTML = "";
+  const hoy = historialDia.toISOString().split("T")[0]; // YYYY-MM-DD
+  // historialData tiene estructura /historial/{YYYY-MM}/{ID} = ticket
+  // Recorremos todos los meses cargados y juntamos tickets del dia buscado
+  const rows = [];
+  Object.keys(historialData || {}).forEach(monthKey => {
+    const month = historialData[monthKey] || {};
+    Object.values(month).forEach(ticket => {
+      // ticket.fecha tiene formato "DD/MM/YYYY (hh:mm)"
+      const ticketDate = ticket.fecha ? ticket.fecha.split(" ")[0].split("/").reverse().join("-") : null; // YYYY-MM-DD
+      if (ticketDate === hoy) rows.push(ticket);
+    });
+  });
+  rows.sort((a,b)=>b.id.localeCompare(a.id));
+  rows.forEach(ticket => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${ticket.id}</td>
+      <td>${formatMoney(ticket.total)}</td>
+      <td>${ticket.tipoPago}</td>
+      <td>${ticket.cajero}</td>
+      <td>${ticket.fecha}</td>
+      <td><button class="reimp-btn" data-id="${ticket.id}" data-month="${ticket.fecha ? ticket.fecha.split('/').reverse().slice(0,3).join('-').slice(0,7) : ''}">Reimprimir</button></td>
+    `;
+    tablaHistorial.appendChild(tr);
+  });
+}
+
+// Reimprimir desde historial
+tablaHistorial.addEventListener("click", e => {
+  if (e.target.classList.contains("reimp-btn")) {
+    const id = e.target.dataset.id;
+    // buscar ticket en historialData (recorremos meses)
+    let found = null;
+    Object.values(historialData || {}).forEach(month => {
+      if (month && month[id]) found = month[id];
+    });
+    if (found) imprimirTicket(found);
+  }
+});
+
+/* ---------------------------
+   STOCK (misma lógica + guardados a Firebase)
+--------------------------- */
+const tablaStock = document.querySelector("#tabla-stock tbody");
+const stockCodigo = document.getElementById("stock-codigo");
+const stockCantidad = document.getElementById("stock-cantidad");
+const btnAgregarStock = document.getElementById("agregar-stock");
+const btnBuscarStock = document.getElementById("buscar-stock");
+
+// Cargar select cantidad 001-999
+if (stockCantidad && stockCantidad.children.length === 0) {
+  for(let i=1;i<=999;i++){
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = String(i).padStart(3,'0');
+    stockCantidad.appendChild(opt);
+  }
+}
+
+btnAgregarStock.addEventListener("click", async ()=> {
+  const codigo = (stockCodigo.value || "").trim();
+  const cant = parseInt(stockCantidad.value,10) || 0;
+  const pass = prompt("Contraseña administrador para agregar stock:");
+  if (pass !== adminPass) return alert("Contraseña incorrecta");
+  if (!codigo) return alert("Ingrese código válido");
+  if (stockData[codigo]) {
+    stockData[codigo].cantidad = Number(stockData[codigo].cantidad || 0) + cant;
+    stockData[codigo].fecha = fechaHora();
+  } else {
+    stockData[codigo] = { nombre: "PRODUCTO NUEVO", cantidad: cant, precio: 0, fecha: fechaHora() };
+  }
+  await saveStock();
+  renderStock();
+  actualizarSelectProductos();
+});
+
+btnBuscarStock.addEventListener("click", renderStock);
+
+function renderStock(){
+  const filtro = (stockCodigo && (stockCodigo.value || "").trim().toLowerCase()) || "";
+  if (!tablaStock) return;
+  tablaStock.innerHTML = "";
+  // Ordenar por fecha (si no, por key)
+  const items = Object.entries(stockData || {});
+  items.sort((a,b) => {
+    const fa = a[1].fecha || "";
+    const fb = b[1].fecha || "";
+    return fb.localeCompare(fa);
+  });
+  items.forEach(([codigo,item]) => {
+    if (filtro && !codigo.includes(filtro) && !(item.nombre || "").toLowerCase().includes(filtro)) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${codigo}</td>
+      <td>${item.nombre}</td>
+      <td>${item.cantidad}</td>
+      <td>${item.fecha || fechaHora()}</td>
+      <td>${formatMoney(item.precio)}</td>
+      <td>
+        <button class="edit-stock" data-codigo="${codigo}">Editar</button>
+        <button class="del-stock" data-codigo="${codigo}">Eliminar</button>
+      </td>
+    `;
+    tablaStock.appendChild(tr);
+  });
+}
+
+// Editar/Eliminar stock (requer admin y persistir)
+tablaStock.addEventListener("click", async e => {
+  const codigo = e.target.dataset.codigo;
+  if (e.target.classList.contains("edit-stock")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    const nombre = prompt("Nuevo nombre:", stockData[codigo].nombre) || stockData[codigo].nombre;
+    const precio = parseFloat(prompt("Nuevo precio:", stockData[codigo].precio)) || 0;
+    const cant = parseInt(prompt("Nueva cantidad:", stockData[codigo].cantidad), 10) || 0;
+    stockData[codigo] = { nombre, precio, cantidad: cant, fecha: fechaHora() };
+    await saveStock();
+    renderStock();
+    actualizarSelectProductos();
+  }
+  if (e.target.classList.contains("del-stock")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    delete stockData[codigo];
+    await saveStock();
+    renderStock();
+    actualizarSelectProductos();
+  }
+});
+
+/* ---------------------------
+   SUELTOS
+--------------------------- */
+const tablaSueltos = document.querySelector("#tabla-sueltos tbody");
+const sueltosCodigo = document.getElementById("sueltos-codigo");
+const sueltosKg = document.getElementById("sueltos-kg");
+const btnIncrSueltos = document.getElementById("sueltos-btn-incr");
+const btnDecrSueltos = document.getElementById("sueltos-btn-decr");
+const btnAgregarSuelto = document.getElementById("btn-agregar-suelto");
+const btnBuscarSuelto = document.getElementById("btn-buscar-suelto");
+
+btnIncrSueltos.addEventListener("click", ()=> {
+  sueltosKg.value = (Math.min(99.000, (parseFloat(sueltosKg.value) || 0) + 0.100)).toFixed(3);
+});
+btnDecrSueltos.addEventListener("click", ()=> {
+  sueltosKg.value = (Math.max(0.000, (parseFloat(sueltosKg.value) || 0) - 0.100)).toFixed(3);
+});
+
+btnAgregarSuelto.addEventListener("click", async ()=> {
+  const codigo = (sueltosCodigo.value || "").trim();
+  const kg = parseFloat(sueltosKg.value) || 0;
+  const pass = prompt("Contraseña administrador:");
+  if (pass !== adminPass) return alert("Contraseña incorrecta");
+  if (!codigo) return alert("Ingrese codigo valido");
+  if (sueltosData[codigo]) {
+    sueltosData[codigo].cantidad = Number(sueltosData[codigo].cantidad || 0) + kg;
+    sueltosData[codigo].fecha = fechaHora();
+  } else {
+    sueltosData[codigo] = { nombre: "PRODUCTO NUEVO", cantidad: kg, precio: 0, fecha: fechaHora() };
+  }
+  await saveSueltos();
+  renderSueltos();
+  actualizarSelectProductos();
+});
+
+btnBuscarSuelto.addEventListener("click", renderSueltos);
+
+function renderSueltos(){
+  const filtro = (sueltosCodigo && (sueltosCodigo.value || "").trim().toLowerCase()) || "";
+  if (!tablaSueltos) return;
+  tablaSueltos.innerHTML = "";
+  const items = Object.entries(sueltosData || {});
+  items.sort((a,b) => {
+    const fa = a[1].fecha || "";
+    const fb = b[1].fecha || "";
+    return fb.localeCompare(fa);
+  });
+  items.forEach(([codigo,item]) => {
+    if (filtro && !codigo.includes(filtro) && !(item.nombre || "").toLowerCase().includes(filtro)) return;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${codigo}</td>
+      <td>${item.nombre}</td>
+      <td>${(Number(item.cantidad) || 0).toFixed(3)}</td>
+      <td>${item.fecha || fechaHora()}</td>
+      <td>${formatMoney(item.precio)}</td>
+      <td>
+        <button class="edit-suelto" data-codigo="${codigo}">Editar</button>
+        <button class="del-suelto" data-codigo="${codigo}">Eliminar</button>
+      </td>
+    `;
+    tablaSueltos.appendChild(tr);
+  });
+}
+
+// Editar/Eliminar SUELTOS
+tablaSueltos.addEventListener("click", async e => {
+  const codigo = e.target.dataset.codigo;
+  if (e.target.classList.contains("edit-suelto")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    const nombre = prompt("Nuevo nombre:", sueltosData[codigo].nombre) || sueltosData[codigo].nombre;
+    const precio = parseFloat(prompt("Nuevo precio:", sueltosData[codigo].precio)) || 0;
+    const kg = parseFloat(prompt("Nueva cantidad:", sueltosData[codigo].cantidad)) || 0;
+    sueltosData[codigo] = { nombre, precio, cantidad: kg, fecha: fechaHora() };
+    await saveSueltos();
+    renderSueltos();
+    actualizarSelectProductos();
+  }
+  if (e.target.classList.contains("del-suelto")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    delete sueltosData[codigo];
+    await saveSueltos();
+    renderSueltos();
+    actualizarSelectProductos();
+  }
+});
+
+/* ---------------------------
+   CAJEROS (misma UI y guardado)
+--------------------------- */
+const cajeroNro = document.getElementById("cajero-nro");
+const cajeroNombre = document.getElementById("cajero-nombre");
+const cajeroDni = document.getElementById("cajero-dni");
+const cajeroPass = document.getElementById("cajero-pass");
+const tablaCajeros = document.querySelector("#tabla-cajeros tbody");
+const btnAgregarCajero = document.getElementById("agregar-cajero");
+
+// Select Nro Cajero
+if (cajeroNro && cajeroNro.children.length === 0) {
+  for(let i=1;i<=99;i++){
+    const opt = document.createElement("option");
+    opt.value = String(i).padStart(2,'0');
+    opt.textContent = String(i).padStart(2,'0');
+    cajeroNro.appendChild(opt);
+  }
+}
+
+btnAgregarCajero.addEventListener("click", async ()=> {
+  const nro = cajeroNro.value;
+  const nombre = (cajeroNombre.value || "").trim();
+  const dni = (cajeroDni.value || "").trim();
+  const pass = (cajeroPass.value || "").trim();
+  const admin = prompt("Contraseña administrador:");
+  if (admin !== adminPass) return alert("Contraseña incorrecta");
+  if (!nro || !pass) return alert("Completar nro y contraseña del cajero");
+  cajerosData[nro] = { nombre, dni, pass };
+  await saveCajeros();
+  renderCajeros();
+  cargarCajeroLogin();
+});
+
+function renderCajeros(){
+  if (!tablaCajeros) return;
+  tablaCajeros.innerHTML = "";
+  Object.entries(cajerosData || {})
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .forEach(([nro,c]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${nro}</td>
+        <td>${c.nombre}</td>
+        <td>${c.dni}</td>
+        <td>
+          <button class="edit-cajero" data-nro="${nro}">Editar</button>
+          <button class="del-cajero" data-nro="${nro}">Eliminar</button>
+        </td>
+      `;
+      tablaCajeros.appendChild(tr);
+    });
+}
+
+tablaCajeros.addEventListener("click", async e => {
+  const nro = e.target.dataset.nro;
+  if (e.target.classList.contains("edit-cajero")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    const nombre = prompt("Nuevo nombre:", cajerosData[nro].nombre) || cajerosData[nro].nombre;
+    const dni = prompt("Nuevo DNI:", cajerosData[nro].dni) || cajerosData[nro].dni;
+    const password = prompt("Nueva contraseña:", cajerosData[nro].pass) || cajerosData[nro].pass;
+    cajerosData[nro] = { nombre, dni, pass: password };
+    await saveCajeros();
+    renderCajeros();
+    cargarCajeroLogin();
+  }
+  if (e.target.classList.contains("del-cajero")) {
+    const pass = prompt("Contraseña administrador:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    delete cajerosData[nro];
+    await saveCajeros();
+    renderCajeros();
+    cargarCajeroLogin();
+  }
+});
+
+/* ---------------------------
+   CONFIG
+--------------------------- */
+const configNombre = document.getElementById("config-nombre");
+const passActual = document.getElementById("config-pass-actual");
+const passNueva = document.getElementById("config-pass-nueva");
+const btnGuardarConfig = document.getElementById("guardar-config");
+const masterInput = document.getElementById("master-pass");
+const btnRestaurar = document.getElementById("btn-restaurar");
+
+btnGuardarConfig.addEventListener("click", async ()=> {
+  try {
+    if (passActual.value !== adminPass) return alert("Contraseña incorrecta");
+    const updates = {};
+    if (configNombre.value && configNombre.value.trim()) {
+      updates.shopName = configNombre.value.trim();
+      appTitle.textContent = configNombre.value.trim();
+    }
+    if (passNueva.value && passNueva.value.trim()) {
+      updates.passAdmin = passNueva.value.trim();
+      adminPass = passNueva.value.trim();
+    }
+    if (Object.keys(updates).length > 0) {
+      await saveConfig(updates);
+      alert("Configuración guardada");
+    } else {
+      alert("No hay cambios para guardar");
+    }
+  } catch(e) {
+    console.error("guardar-config error:", e);
+    alert("Error al guardar configuración");
+  }
+});
+
+btnRestaurar.addEventListener("click", async ()=> {
+  try {
+    if (masterInput.value === masterPass) {
+      adminPass = "1918";
+      await saveConfig({ passAdmin: adminPass });
+      alert("Contraseña de administrador restaurada");
+    } else alert("Contraseña incorrecta");
+  } catch(e) {
+    console.error("btnRestaurar error:", e);
+    alert("Error al restaurar contraseña");
+  }
+});
+
+/* ---------------------------
+   AUTO-MAINTENANCE: limpieza historial (día 15) y
+   reseteo diario de contador de tickets
+--------------------------- */
+(async () => {
+  // Limpieza: eliminar mes anterior cuando día > 15
+  async function cleanupHistorialByPolicy() {
+    try {
+      const now = hoyObj();
+      if (now.day <= 15) return;
+      const prev = new Date(now.d.getFullYear(), now.d.getMonth() - 1, 1);
+      const prevKey = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2,"0")}`;
+      const prevRef = dbPath.historialMonth(prevKey);
+      const snap = await window.get(prevRef);
+      if (!snap.exists()) return;
+      await window.remove(prevRef);
+      // actualizar historialData local
+      if (historialData && historialData[prevKey]) delete historialData[prevKey];
+      console.log(`Historial mes anterior eliminado -> ${prevKey}`);
+    } catch (err) {
+      console.error("cleanupHistorialByPolicy error:", err);
+    }
+  }
+
+  // Ensure counter for today exists
+  async function ensureDailyCounter() {
+    try {
+      const now = hoyObj();
+      const cRef = dbPath.countersForDate(now.isoDate);
+      const snap = await window.get(cRef);
+      if (!snap.exists()) {
+        await saveCounterForDate(now.isoDate, 0);
+      } else {
+        const val = snap.val();
+        if (val == null || typeof val.lastId === "undefined") {
+          await saveCounterForDate(now.isoDate, 0);
+        }
+      }
+    } catch (err) {
+      console.error("ensureDailyCounter error:", err);
+    }
+  }
+
+  // Schedule: ejecutar cleanup y ensureDailyCounter ahora y programar ejecución diaria a 00:05
+  try {
+    await cleanupHistorialByPolicy();
+    await ensureDailyCounter();
+
+    // programar a 00:05
+    const now = new Date();
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0, 0);
+    const ms = next - now;
+    setTimeout(async function runDaily() {
+      try {
+        await cleanupHistorialByPolicy();
+        await ensureDailyCounter();
+      } catch(e){ console.error("Scheduled daily error:", e); }
+      setInterval(async ()=> {
+        try {
+          await cleanupHistorialByPolicy();
+          await ensureDailyCounter();
+        } catch(e){ console.error("Scheduled daily error:", e); }
+      }, 24*60*60*1000);
+    }, Math.max(0, ms));
+  } catch(e) {
+    console.error("Auto-maintenance init error:", e);
+  }
+})();
+
+/* ---------------------------
+   INICIALIZAR UI (render inicial)
+--------------------------- */
+(function initRender(){
+  renderMovimientos();
+  renderHistorial();
+  renderStock();
+  renderSueltos();
+  renderCajeros();
+  actualizarFiltroCajeros();
+  actualizarSelectProductos();
+  // cargar listeners inmediatamente (si no accedieron al modal aún, listeners no correrán hasta que pase el init modal)
+  // pero no forzamos carga de datos hasta que admin pase modal (seguridad). Si quieres forzar carga ahora, descomenta:
+  // setupRealtimeListeners();
+})();
+
+// =========================================
+// app.js — PARTE 2 (Gestión STOCK y SUELTOS)
+// =========================================
 
 // ---------------------------
-// Cerrar sesión
+// PERSISTENCIA DEL CAJERO
 // ---------------------------
-document.getElementById("btnLogoutCajero")?.addEventListener("click", ()=>{
-  usuarioActual = null;
-  usuarioRol = null;
-  document.getElementById("loginModal").classList.remove("oculto");
-  document.body.classList.add("bloqueado");
+const cajeroActual = localStorage.getItem("cajeroActual");
+if (cajeroActual) {
+  document.getElementById("nombreCajero").textContent = cajeroActual;
+} else {
+  const modalCajero = document.getElementById("modalCajero");
+  modalCajero.style.display = "flex";
+  document.getElementById("btnGuardarCajero").onclick = () => {
+    const nombre = document.getElementById("inputCajero").value.trim();
+    if (!nombre) return alert("Ingrese nombre del cajero");
+    localStorage.setItem("cajeroActual", nombre);
+    document.getElementById("nombreCajero").textContent = nombre;
+    modalCajero.style.display = "none";
+  };
+}
+
+// ---------------------------
+// FUNCIONES GLOBALES DE GUARDADO
+// ---------------------------
+async function saveStock() {
+  await set(ref(db, "stock"), stockData);
+}
+async function saveSueltos() {
+  await set(ref(db, "sueltos"), sueltosData);
+}
+async function saveMovimientos() {
+  await set(ref(db, "movimientos"), movimientosData);
+}
+
+// ---------------------------
+// CARGA EN TIEMPO REAL DE STOCK Y SUELTOS
+// ---------------------------
+onValue(ref(db, "stock"), snap => {
+  if (!snap.exists()) return;
+  stockData = snap.val();
+  renderTablaStock();
+});
+
+onValue(ref(db, "sueltos"), snap => {
+  if (!snap.exists()) return;
+  sueltosData = snap.val();
+  renderTablaSueltos();
 });
 
 // ---------------------------
-// Render tablas (sólo estructura base)
+// AGREGAR PRODUCTO A STOCK
 // ---------------------------
-function renderTablaStock() {
-  const body = document.getElementById("tablaStockBody");
-  if (!body) return;
-  body.innerHTML = "";
-  Object.entries(stockData).forEach(([key, s])=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${s.codigo}</td>
-      <td>${s.nombre}</td>
-      <td>${s.cant}</td>
-      <td>$${s.precio.toFixed(2)}</td>
-      <td><button class="btn-editar" data-id="${key}">Editar</button></td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function renderTablaSueltos() {
-  const body = document.getElementById("tablaSueltosBody");
-  if (!body) return;
-  body.innerHTML = "";
-  Object.entries(sueltosData).forEach(([key, s])=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${s.codigo}</td>
-      <td>${s.nombre}</td>
-      <td>${s.kg.toFixed(3)}</td>
-      <td>$${s.precio.toFixed(2)}</td>
-      <td><button class="btn-editar" data-id="${key}">Editar</button></td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function renderTablaMovimientos() {
-  const body = document.getElementById("tablaMovBody");
-  if (!body) return;
-  body.innerHTML = "";
-  Object.entries(movimientosData).forEach(([key, m])=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${m.id}</td>
-      <td>$${m.total.toFixed(2)}</td>
-      <td>${m.tipoPago}</td>
-      <td><button class="btn-reimp" data-id="${key}">Reimprimir</button></td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function renderTablaCajeros() {
-  const body = document.getElementById("tablaCajerosBody");
-  if (!body) return;
-  body.innerHTML = "";
-  Object.entries(cajerosData).forEach(([key, c])=>{
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${c.nro}</td>
-      <td>${c.nombre}</td>
-      <td>${c.dni}</td>
-      <td>${c.pass}</td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-// =========================================
-// app.js (Firebase 11.8.1) — PARTE 2
-// =========================================
-
-// ---------------------------
-// AGREGAR PRODUCTO STOCK
-// ---------------------------
-const btnAgregarStock = document.getElementById("btnAgregarStock");
-btnAgregarStock?.addEventListener("click", async ()=>{
+document.getElementById("btnAgregarStock")?.addEventListener("click", async () => {
   const codigo = document.getElementById("stockCodigo").value.trim();
   const nombre = document.getElementById("stockNombre").value.trim();
   const cantidad = parseFloat(document.getElementById("stockCantidad").value);
   const precio = parseFloat(document.getElementById("stockPrecio").value);
 
-  if(!codigo || !nombre || isNaN(cantidad) || isNaN(precio)){
+  if (!codigo || !nombre || isNaN(cantidad) || isNaN(precio)) {
     alert("Complete todos los campos correctamente");
     return;
   }
 
-  const nuevo = {
+  stockData[codigo] = {
     codigo,
     nombre,
     cant: cantidad,
     precio,
     fecha: new Date().toISOString()
   };
+  await saveStock();
+  renderTablaStock();
 
-  await set(ref(db, `stock/${codigo}`), nuevo);
   document.getElementById("stockCodigo").value = "";
   document.getElementById("stockNombre").value = "";
   document.getElementById("stockCantidad").value = "";
@@ -262,72 +1196,75 @@ btnAgregarStock?.addEventListener("click", async ()=>{
 // ---------------------------
 // EDITAR PRODUCTO STOCK
 // ---------------------------
-document.getElementById("tablaStockBody")?.addEventListener("click", async e=>{
-  if(e.target.classList.contains("btn-editar")){
+document.getElementById("tablaStockBody")?.addEventListener("click", async e => {
+  if (e.target.classList.contains("btn-editar")) {
     const key = e.target.dataset.id;
-    const prodSnap = await get(ref(db, `stock/${key}`));
-    if(!prodSnap.exists()) return;
+    const p = stockData[key];
+    if (!p) return;
 
-    const p = prodSnap.val();
     const nombreNuevo = prompt("Editar nombre:", p.nombre) ?? p.nombre;
     const cantidadNueva = parseFloat(prompt("Editar cantidad:", p.cant) ?? p.cant);
     const precioNuevo = parseFloat(prompt("Editar precio:", p.precio) ?? p.precio);
 
-    if(isNaN(cantidadNueva) || isNaN(precioNuevo)){
+    if (isNaN(cantidadNueva) || isNaN(precioNuevo)) {
       alert("Valores inválidos");
       return;
     }
 
-    await update(ref(db, `stock/${key}`), {
+    stockData[key] = {
+      ...p,
       nombre: nombreNuevo,
       cant: cantidadNueva,
       precio: precioNuevo
-    });
+    };
+    await saveStock();
+    renderTablaStock();
   }
 });
 
 // ---------------------------
 // ELIMINAR PRODUCTO STOCK
 // ---------------------------
-document.getElementById("btnEliminarStock")?.addEventListener("click", async ()=>{
+document.getElementById("btnEliminarStock")?.addEventListener("click", async () => {
   const codigo = prompt("Ingrese el código a eliminar:");
-  if(!codigo) return;
+  if (!codigo) return;
 
-  const snap = await get(ref(db, `stock/${codigo}`));
-  if(!snap.exists()){
+  if (!stockData[codigo]) {
     alert("Código no encontrado");
     return;
   }
 
-  if(confirm(`¿Seguro que desea eliminar ${snap.val().nombre}?`)){
-    await remove(ref(db, `stock/${codigo}`));
+  if (confirm(`¿Seguro que desea eliminar ${stockData[codigo].nombre}?`)) {
+    delete stockData[codigo];
+    await saveStock();
+    renderTablaStock();
   }
 });
 
 // ---------------------------
 // AGREGAR PRODUCTO SUELTO
 // ---------------------------
-const btnAgregarSuelto = document.getElementById("btnAgregarSuelto");
-btnAgregarSuelto?.addEventListener("click", async ()=>{
+document.getElementById("btnAgregarSuelto")?.addEventListener("click", async () => {
   const codigo = document.getElementById("sueltoCodigo").value.trim();
   const nombre = document.getElementById("sueltoNombre").value.trim();
   const kg = parseFloat(document.getElementById("sueltoKg").value);
   const precio = parseFloat(document.getElementById("sueltoPrecio").value);
 
-  if(!codigo || !nombre || isNaN(kg) || isNaN(precio)){
+  if (!codigo || !nombre || isNaN(kg) || isNaN(precio)) {
     alert("Complete todos los campos correctamente");
     return;
   }
 
-  const nuevo = {
+  sueltosData[codigo] = {
     codigo,
     nombre,
     kg,
     precio,
     fecha: new Date().toISOString()
   };
+  await saveSueltos();
+  renderTablaSueltos();
 
-  await set(ref(db, `sueltos/${codigo}`), nuevo);
   document.getElementById("sueltoCodigo").value = "";
   document.getElementById("sueltoNombre").value = "";
   document.getElementById("sueltoKg").value = "";
@@ -337,1059 +1274,271 @@ btnAgregarSuelto?.addEventListener("click", async ()=>{
 // ---------------------------
 // EDITAR PRODUCTO SUELTO
 // ---------------------------
-document.getElementById("tablaSueltosBody")?.addEventListener("click", async e=>{
-  if(e.target.classList.contains("btn-editar")){
+document.getElementById("tablaSueltosBody")?.addEventListener("click", async e => {
+  if (e.target.classList.contains("btn-editar")) {
     const key = e.target.dataset.id;
-    const prodSnap = await get(ref(db, `sueltos/${key}`));
-    if(!prodSnap.exists()) return;
+    const p = sueltosData[key];
+    if (!p) return;
 
-    const p = prodSnap.val();
     const nombreNuevo = prompt("Editar nombre:", p.nombre) ?? p.nombre;
     const kgNuevo = parseFloat(prompt("Editar kg:", p.kg) ?? p.kg);
     const precioNuevo = parseFloat(prompt("Editar precio:", p.precio) ?? p.precio);
 
-    if(isNaN(kgNuevo) || isNaN(precioNuevo)){
+    if (isNaN(kgNuevo) || isNaN(precioNuevo)) {
       alert("Valores inválidos");
       return;
     }
 
-    await update(ref(db, `sueltos/${key}`), {
+    sueltosData[key] = {
+      ...p,
       nombre: nombreNuevo,
       kg: kgNuevo,
       precio: precioNuevo
-    });
+    };
+    await saveSueltos();
+    renderTablaSueltos();
   }
 });
 
 // ---------------------------
 // ELIMINAR PRODUCTO SUELTO
 // ---------------------------
-document.getElementById("btnEliminarSuelto")?.addEventListener("click", async ()=>{
+document.getElementById("btnEliminarSuelto")?.addEventListener("click", async () => {
   const codigo = prompt("Ingrese el código a eliminar:");
-  if(!codigo) return;
+  if (!codigo) return;
 
-  const snap = await get(ref(db, `sueltos/${codigo}`));
-  if(!snap.exists()){
+  if (!sueltosData[codigo]) {
     alert("Código no encontrado");
     return;
   }
 
-  if(confirm(`¿Seguro que desea eliminar ${snap.val().nombre}?`)){
-    await remove(ref(db, `sueltos/${codigo}`));
+  if (confirm(`¿Seguro que desea eliminar ${sueltosData[codigo].nombre}?`)) {
+    delete sueltosData[codigo];
+    await saveSueltos();
+    renderTablaSueltos();
   }
-});
-
-// ---------------------------
-// REFRESCAR TABLAS MANUALMENTE
-// ---------------------------
-document.getElementById("btnRefrescarStock")?.addEventListener("click", ()=>{
-  renderTablaStock();
-});
-
-document.getElementById("btnRefrescarSueltos")?.addEventListener("click", ()=>{
-  renderTablaSueltos();
 });
 
 // =========================================
-// app.js — PARTE 3 (Sincronización y persistencia en Firebase)
+// app.js — PARTE 3 (Cobro y Movimientos)
 // =========================================
 
-// --- Helpers DB (usar ref/get/set/update/push/remove importados al inicio del archivo) ---
-// NOTA: tu index.html ya expone window.db, window.ref, window.get, window.set, window.update, window.push, window.remove, window.onValue
-// pero por coherencia con tu código anterior usaremos ref(window.db, path) y get(...)
-
-function isoDateNow() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-function monthKeyNow() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; // YYYY-MM
-}
-
-// ---- Rutas útiles ----
-const dbPaths = {
-  stock: () => `stock`,
-  sueltos: () => `sueltos`,
-  cajeros: () => `cajeros`,
-  movimientosForDate: (iso) => `movimientos/${iso}`,
-  historialForMonth: (monthKey) => `historial/${monthKey}`,
-  countersForDate: (iso) => `counters/${iso}`
-};
-
 // ---------------------------
-// 1) Escuchar cambios en Firebase y mantener objetos locales actualizados
+// TABLA COBRO Y SELECCIÓN PRODUCTOS
 // ---------------------------
-async function attachRealtimeListeners() {
-  try {
-    // STOCK
-    window.onValue(ref(window.db, dbPaths.stock()), snap => {
-      stockData = snap.exists() ? snap.val() : {};
-      // mantener consistencia de cantidad/fecha si faltan campos
-      Object.entries(stockData).forEach(([k, v]) => {
-        if (typeof v.cantidad === "undefined" && typeof v.cant !== "undefined") {
-          v.cantidad = v.cant; // si tu DB tiene 'cant' como campo legacy
-        }
-      });
-      actualizarSelectProductos();
-      renderStock();
-    });
+const tablaCobro = document.querySelector("#tabla-cobro tbody");
+const totalDiv = document.getElementById("total-div");
+let cobroItems = [];
 
-    // SUELTOS
-    window.onValue(ref(window.db, dbPaths.sueltos()), snap => {
-      sueltosData = snap.exists() ? snap.val() : {};
-      renderSueltos();
-      actualizarSelectProductos();
-    });
-
-    // CAJEROS
-    window.onValue(ref(window.db, dbPaths.cajeros()), snap => {
-      cajerosData = snap.exists() ? snap.val() : {};
-      renderCajeros();
-      cargarCajeroLogin();
-      actualizarFiltroCajeros();
-    });
-
-    // MOVIMIENTOS (para el día actual)
-    const iso = isoDateNow();
-    window.onValue(ref(window.db, dbPaths.movimientosForDate(iso)), snap => {
-      movimientosData = snap.exists() ? snap.val() : {};
-      renderMovimientos();
-    });
-
-    // HISTORIAL (mes actual)
-    const monthKey = monthKeyNow();
-    window.onValue(ref(window.db, dbPaths.historialForMonth(monthKey)), snap => {
-      historialData = snap.exists() ? snap.val() : {};
-      renderHistorial();
-    });
-
-    // CONTADOR DIARIO inicial (asegura existencia)
-    ensureDailyCounter();
-  } catch (err) {
-    console.error("attachRealtimeListeners error:", err);
-  }
-}
-
-// Llamar cuando la app esté lista (por ejemplo justo después de init)
-attachRealtimeListeners();
-
-
-// ---------------------------
-// 2) Funciones de guardado en Firebase (llamarlas cuando hagas cambios)
-// ---------------------------
-async function saveStockToDB() {
-  try {
-    await window.set(ref(window.db, dbPaths.stock()), stockData);
-  } catch (err) {
-    console.error("saveStockToDB error:", err);
-  }
-}
-async function saveSueltosToDB() {
-  try {
-    await window.set(ref(window.db, dbPaths.sueltos()), sueltosData);
-  } catch (err) {
-    console.error("saveSueltosToDB error:", err);
-  }
-}
-async function saveCajerosToDB() {
-  try {
-    await window.set(ref(window.db, dbPaths.cajeros()), cajerosData);
-  } catch (err) {
-    console.error("saveCajerosToDB error:", err);
-  }
-}
-
-// NOTA: para movimientos e historial preferimos escribir por ticket concreto (no sobreescribir todo)
-async function saveMovimientoTicket(ticket) {
-  try {
-    const iso = isoDateNow();
-    const path = `${dbPaths.movimientosForDate(iso)}/${ticket.id}`;
-    await window.set(ref(window.db, path), ticket);
-  } catch (err) {
-    console.error("saveMovimientoTicket error:", err);
-  }
-}
-async function deleteMovimientoTicket(ticketId) {
-  try {
-    const iso = isoDateNow();
-    const path = `${dbPaths.movimientosForDate(iso)}/${ticketId}`;
-    await window.remove(ref(window.db, path));
-  } catch (err) {
-    console.error("deleteMovimientoTicket error:", err);
-  }
-}
-async function saveHistorialTicket(ticket) {
-  try {
-    const monthKey = monthKeyNow();
-    const path = `${dbPaths.historialForMonth(monthKey)}/${ticket.id}`;
-    await window.set(ref(window.db, path), ticket);
-  } catch (err) {
-    console.error("saveHistorialTicket error:", err);
-  }
-}
-
-// ---------------------------
-// 3) Contador diario seguro en Firebase (obtener y aumentar atomically)
-// ---------------------------
-/**
- * incrementDailyCounter - obtiene y aumenta lastId en /counters/{ISODate} de forma segura
- * devuelve el nuevo lastId (número)
- */
-async function incrementDailyCounterAndGet() {
-  const iso = isoDateNow();
-  const counterRef = ref(window.db, dbPaths.countersForDate(iso));
-  // no hay transacciones en los wrappers simples que usas, pero SDK tiene runTransaction
-  // para evitar complejidad usamos get -> update (hay riesgo de race condition en concurrentes,
-  // si necesitás seguridad absoluta usar runTransaction de Firebase).
-  try {
-    const snap = await get(counterRef);
-    let lastId = 0;
-    if (!snap.exists()) {
-      await window.set(counterRef, { lastId: 0 });
-    } else {
-      const val = snap.val();
-      lastId = (val && typeof val.lastId !== "undefined") ? Number(val.lastId) : 0;
-    }
-    const newId = lastId + 1;
-    await window.update(counterRef, { lastId: newId });
-    return newId;
-  } catch (err) {
-    console.error("incrementDailyCounterAndGet error:", err);
-    // fallback local
-    ticketCounter = (ticketCounter || 0) + 1;
-    return ticketCounter;
-  }
-}
-
-// ---------------------------
-// 4) Ajustes en realizarVenta para persistir TODO en DB
-// ---------------------------
-async function realizarVentaPersistente(tipo) {
-  if (!currentCajero) {
-    alert("No hay cajero logueado");
-    return;
-  }
-  if (!cobroItems || cobroItems.length === 0) {
-    alert("No hay items para cobrar");
-    return;
-  }
-
-  try {
-    // 1) obtener id diario desde Firebase
-    const newNumericId = await incrementDailyCounterAndGet();
-    const ticketID = `ID_${String(newNumericId).padStart(6, "0")}`; // ID_000001
-
-    // 2) calcular total y construir ticket
-    const total = cobroItems.reduce((acc, it) => {
-      return acc + (it.tipo === "stock" ? (it.cantidad * it.precio) : (it.cantidad * it.precio * (it.porcentaje || 1)));
-    }, 0);
-
-    const ticket = {
-      id: ticketID,
-      cajero: currentCajero || null,
-      fecha: fechaHora(),
-      tipoPago: tipo,
-      items: JSON.parse(JSON.stringify(cobroItems)), // clonar
-      total
-    };
-
-    // 3) Persistir en movimientos (/movimientos/{ISODate}/{ticketID}) y en historial (/historial/{YYYY-MM}/{ticketID})
-    await saveMovimientoTicket(ticket);
-    await saveHistorialTicket(ticket);
-
-    // 4) Actualizar stock y sueltos en memoria y en DB
-    cobroItems.forEach(it => {
-      if (it.tipo === "stock") {
-        if (!stockData[it.codigo]) {
-          // protección: si no existía, ignora o crea
-          stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio, fecha: fechaHora() };
-        }
-        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
-        if (stockData[it.codigo].cantidad < 0) stockData[it.codigo].cantidad = 0;
-      } else {
-        if (!sueltosData[it.codigo]) {
-          sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio, fecha: fechaHora() };
-        }
-        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
-        if (sueltosData[it.codigo].cantidad < 0) sueltosData[it.codigo].cantidad = 0;
-      }
-    });
-
-    // 5) Guardar los cambios de stock y sueltos en Firebase
-    await saveStockToDB();
-    await saveSueltosToDB();
-
-    // 6) Actualizar renders locales
-    cobroItems = [];
-    renderTablaCobro();
-    actualizarSelectProductos();
-    renderMovimientos();   // local render (movimientosData se actualizará por onValue/socket)
-    renderHistorial();     // historialData se actualizará por onValue
-    alert("Venta realizada correctamente");
-    // imprimir ticket (sigue tu función existente)
-    imprimirTicket(ticket);
-
-  } catch (err) {
-    console.error("realizarVentaPersistente error:", err);
-    alert("Ocurrió un error al procesar la venta");
-  }
-}
-
-// Reemplaza el binding anterior que llamaba a realizarVenta(tipo) por la versión persistente
-document.querySelectorAll(".pay-btn").forEach(btn => {
-  btn.removeEventListener?.("click", () => {}); // si existía, removemos
-});
-// Donde creas el modal (en tu código anterior), modifica la línea que llamaba a realizarVenta(tipo)
-// por: realizarVentaPersistente(tipo)
-// En caso de que no quieras tocar el modal, también puedes sobreescribir la función realizarVenta:
-window.realizarVenta = realizarVentaPersistente; // alias seguro
-
-
-// ---------------------------
-// 5) Eliminar ticket: persistir eliminación en Firebase y restaurar stock
-// ---------------------------
-async function eliminarMovimiento(ticketId) {
-  try {
-    const iso = isoDateNow();
-    const snap = await get(ref(window.db, `${dbPaths.movimientosForDate(iso)}/${ticketId}`));
-    if (!snap.exists()) {
-      alert("Ticket no encontrado en movimientos");
-      return;
-    }
-    const ticket = snap.val();
-
-    // Restaurar stock/sueltos
-    ticket.items.forEach(it => {
-      if (it.tipo === "stock") {
-        if (!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio, fecha: fechaHora() };
-        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
-      } else {
-        if (!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio, fecha: fechaHora() };
-        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
-      }
-    });
-
-    // Guardar stock y sueltos en DB
-    await saveStockToDB();
-    await saveSueltosToDB();
-
-    // Borrar ticket de movimientos en DB (no se borra de historial por diseño)
-    await deleteMovimientoTicket(ticketId);
-
-    alert("Movimiento eliminado y stock restaurado");
-  } catch (err) {
-    console.error("eliminarMovimiento error:", err);
-    alert("Error al eliminar movimiento");
-  }
-}
-
-// Integra la llamada al eliminar en tu handler existente de tablaMovimientos:
-// Reemplaza la sección donde haces delete movimientos con: await eliminarMovimiento(ticketId);
-
-// ---------------------------
-// 6) Asegurar uso de listeners/guardados cuando se edita/agrega cajero / stock / sueltos
-// ---------------------------
-// Ejemplos: en los lugares donde antes modificabas stockData[...] = ...; llama a saveStockToDB()
-// donde modificabas cajerosData => call saveCajerosToDB()
-
-// Ejemplo para agregar cajero (reemplaza tu handler o añade save):
-btnAgregarCajero.addEventListener("click", async ()=>{
-  const nro = cajeroNro.value;
-  const nombre = cajeroNombre.value.trim();
-  const dni = cajeroDni.value.trim();
-  const pass = cajeroPass.value.trim();
-  const admin = prompt("Contraseña administrador:");
-  if(admin!==adminPass) return alert("Contraseña incorrecta");
-  cajerosData[nro]={nombre,dni,pass};
-  await saveCajerosToDB(); // <-- guarda en Firebase
-  renderCajeros();
-  cargarCajeroLogin();
-});
-
-// Para agregar o editar stock/sueltos en tus handlers ya existentes, simplemente llama a saveStockToDB() / saveSueltosToDB() después
-// Ejemplo: en btnAgregarStock handler de tu código original añade await saveStockToDB(); y en btnAgregarSuelto añade await saveSueltosToDB();
-
-
-// ---------------------------
-// 7) Inicialización: asegurarse de obtener el contador e listeners ya al cargar
-// ---------------------------
-(async function initPersistence() {
-  try {
-    // Asegurar que existe contador e historial (funciones definidas en tu bloque de auto-maintenance ya incluido)
-    await ensureDailyCounter(); // tu función del final del archivo
-    // listeners ya attachados con attachRealtimeListeners()
-    console.log("Persistencia Firebase lista");
-  } catch (err) {
-    console.error("initPersistence error:", err);
-  }
-})();
-
-// =========================================
-// app.js — PARTE 4 (UI: modales, confirm admin, paginador historial, bindings finales)
-// =========================================
-
-/* ---------------------------
-   1) Sincronizar config (shopName, passAdmin, masterPass) desde Firebase
-   --------------------------- */
-const appTitleEl = document.getElementById("app-title");
-window.onValue(ref(window.db, "config"), snap => {
-  const cfg = snap.exists() ? snap.val() : null;
-  if (cfg) {
-    if (cfg.shopName) appTitleEl.textContent = cfg.shopName + " - Gestión Comercial V2.12.2";
-    if (cfg.passAdmin) adminPass = String(cfg.passAdmin);
-    if (cfg.masterPass) masterPass = String(cfg.masterPass);
-  }
-});
-
-/* ---------------------------
-   2) Modal administrativo reutilizable (en vez de prompt)
-   devuelve Promise<string|null> (password) o null si cancelado
-   y showAdminConfirm que devuelve Promise<boolean> (comparar con adminPass)
-   --------------------------- */
-function createAdminModal() {
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3>Contraseña de administrador</h3>
-      <input id="__adm_input" type="password" placeholder="Contraseña" style="width:80%;padding:8px;margin:8px 0;">
-      <div style="margin-top:12px;">
-        <button id="__adm_ok" class="btn-guardar">Aceptar</button>
-        <button id="__adm_cancel" class="btn-eliminar">Cancelar</button>
-      </div>
-      <p id="__adm_msg" style="margin-top:8px;"></p>
-    </div>
-  `;
-  return overlay;
-}
-
-function promptAdminPassword() {
-  return new Promise(resolve => {
-    const modal = createAdminModal();
-    document.body.appendChild(modal);
-    const input = modal.querySelector("#__adm_input");
-    const ok = modal.querySelector("#__adm_ok");
-    const cancel = modal.querySelector("#__adm_cancel");
-    const msg = modal.querySelector("#__adm_msg");
-
-    input.focus();
-    function cleanup() { modal.remove(); }
-
-    ok.addEventListener("click", () => {
-      const val = input.value.trim();
-      if (!val) { msg.innerText = "Ingrese la contraseña"; return; }
-      cleanup();
-      resolve(val);
-    });
-    cancel.addEventListener("click", () => { cleanup(); resolve(null); });
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") ok.click();
-      if (e.key === "Escape") cancel.click();
-    });
+// Renderizar tabla cobro
+function renderTablaCobro() {
+  tablaCobro.innerHTML = "";
+  let total = 0;
+  cobroItems.forEach((item, index) => {
+    const totalItem = item.tipo === "stock" ? item.cantidad * item.precio : item.cantidad * item.precio * item.porcentaje;
+    total += totalItem;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.cantidad}</td>
+      <td>${item.nombre}</td>
+      <td>${formatMoney(item.tipo==="stock"?item.precio:item.precio*item.porcentaje)}</td>
+      <td>${formatMoney(totalItem)}</td>
+      <td><button class="btn-elim-item" data-index="${index}">Eliminar</button></td>
+    `;
+    tablaCobro.appendChild(tr);
   });
+  totalDiv.textContent = `TOTAL: ${formatMoney(total)}`;
+  document.querySelector("#btn-cobrar").classList.toggle("hidden", cobroItems.length === 0);
 }
 
-async function showAdminConfirm() {
-  const p = await promptAdminPassword();
-  if (p === null) return false;
-  return p === adminPass || p === masterPass;
-}
+// ---------------------------
+// AGREGAR ITEMS A COBRO
+// ---------------------------
+document.getElementById("btn-add-product")?.addEventListener("click", () => {
+  const codigo = document.getElementById("cobro-codigo").value.trim() || cobroProductos.value;
+  if (!codigo || !stockData[codigo]) return;
+  const cantidad = parseInt(document.getElementById("cobro-cantidad").value, 10);
+  cobroItems.unshift({ tipo: "stock", codigo, nombre: stockData[codigo].nombre, cantidad, precio: stockData[codigo].precio });
+  renderTablaCobro();
+});
 
-/* ---------------------------
-   3) Reemplazar prompts en handlers críticos por modal admin
-   - Eliminar item en tabla cobrar
-   - Eliminar movimiento
-   - Editar/Eliminar stock y sueltos
-   - Agregar/editar/eliminar cajeros
-   --------------------------- */
+document.getElementById("btn-add-suelto")?.addEventListener("click", () => {
+  const codigo = document.getElementById("cobro-codigo-suelto").value.trim() || cobroSueltos.value;
+  if (!codigo || !sueltosData[codigo]) return;
+  const kg = parseFloat(kgInput.value);
+  cobroItems.unshift({ tipo: "sueltos", codigo, nombre: sueltosData[codigo].nombre, cantidad: kg, precio: sueltosData[codigo].precio, porcentaje: kg });
+  renderTablaCobro();
+});
 
-// 3.1 Eliminar item cargado en tabla cobrar (reemplaza prompt)
-tablaCobro.addEventListener("click", async (e) => {
+// ---------------------------
+// ELIMINAR ITEM COBRO
+// ---------------------------
+tablaCobro.addEventListener("click", e => {
   if (!e.target.classList.contains("btn-elim-item")) return;
-  const index = Number(e.target.dataset.index);
-  const ok = await showAdminConfirm();
-  if (!ok) { alert("Contraseña incorrecta"); return; }
+  const index = e.target.dataset.index;
+  const admin = prompt("Contraseña de administrador para eliminar item:");
+  if (admin !== adminPass) return alert("Contraseña incorrecta");
   cobroItems.splice(index, 1);
   renderTablaCobro();
 });
 
-// 3.2 Movimientos: reimpresión y eliminación persistente
-tablaMovimientos.addEventListener("click", async (e) => {
-  if (e.target.classList.contains("reimp-btn")) {
-    const ticket = movimientosData?.[e.target.dataset.id];
-    if (ticket) imprimirTicket(ticket);
-    return;
-  }
-  if (e.target.classList.contains("elim-btn")) {
-    const ticketId = e.target.dataset.id;
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    // llamar función persistente para eliminar y restaurar stock
-    await eliminarMovimiento(ticketId);
-    // movimientosData se actualizará por listener en Firebase; forzar render local en caso de lag
-    renderMovimientos();
-  }
-});
-
-// 3.3 Stock: cuando se edita/elimina/agrega, persistir en DB
-tablaStock.addEventListener("click", async (e) => {
-  const codigo = e.target.dataset.codigo;
-  if (!codigo) return;
-  if (e.target.classList.contains("edit-stock")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    const nombre = prompt("Nuevo nombre:", stockData[codigo].nombre) || stockData[codigo].nombre;
-    const precio = parseFloat(prompt("Nuevo precio:", stockData[codigo].precio)) || 0;
-    const cant = parseFloat(prompt("Nueva cantidad:", stockData[codigo].cantidad)) || 0;
-    stockData[codigo] = { nombre, precio, cantidad: Number(cant), fecha: fechaHora() };
-    await saveStockToDB();
-    renderStock();
-    actualizarSelectProductos();
-    return;
-  }
-  if (e.target.classList.contains("del-stock")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    delete stockData[codigo];
-    await saveStockToDB();
-    renderStock();
-    actualizarSelectProductos();
-    return;
-  }
-});
-
-// 3.4 Sueltos: editar/eliminar persistente
-tablaSueltos.addEventListener("click", async (e) => {
-  const codigo = e.target.dataset.codigo;
-  if (!codigo) return;
-  if (e.target.classList.contains("edit-suelto")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    const nombre = prompt("Nuevo nombre:", sueltosData[codigo].nombre) || sueltosData[codigo].nombre;
-    const precio = parseFloat(prompt("Nuevo precio:", sueltosData[codigo].precio)) || 0;
-    const kg = parseFloat(prompt("Nueva cantidad (KG):", sueltosData[codigo].cantidad)) || 0;
-    sueltosData[codigo] = { nombre, precio, cantidad: Number(kg), fecha: fechaHora() };
-    await saveSueltosToDB();
-    renderSueltos();
-    actualizarSelectProductos();
-    return;
-  }
-  if (e.target.classList.contains("del-suelto")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    delete sueltosData[codigo];
-    await saveSueltosToDB();
-    renderSueltos();
-    actualizarSelectProductos();
-    return;
-  }
-});
-
-// 3.5 Cajeros: persistir cambios
-tablaCajeros.addEventListener("click", async (e) => {
-  const nro = e.target.dataset.nro;
-  if (!nro) return;
-  if (e.target.classList.contains("edit-cajero")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    const nombre = prompt("Nuevo nombre:", cajerosData[nro].nombre) || cajerosData[nro].nombre;
-    const dni = prompt("Nuevo DNI:", cajerosData[nro].dni) || cajerosData[nro].dni;
-    const password = prompt("Nueva contraseña:", cajerosData[nro].pass) || cajerosData[nro].pass;
-    cajerosData[nro] = { nombre, dni, pass: password };
-    await saveCajerosToDB();
-    renderCajeros();
-    cargarCajeroLogin();
-    return;
-  }
-  if (e.target.classList.contains("del-cajero")) {
-    const ok = await showAdminConfirm();
-    if (!ok) { alert("Contraseña incorrecta"); return; }
-    delete cajerosData[nro];
-    await saveCajerosToDB();
-    renderCajeros();
-    cargarCajeroLogin();
-    return;
-  }
-});
-
-/* ---------------------------
-   4) Reemplazar add-stock y add-suelto / agregar cajero para persistir automáticamente
-   (si ya existe listener agregado, removemos previos y añadimos versiones async)
-   --------------------------- */
-
-// reinserto listeners con guardado en DB para mantener coherencia
-btnAgregarStock.removeEventListener?.("click", ()=>{});
-btnAgregarStock.addEventListener("click", async () => {
-  const codigo = stockCodigo.value.trim();
-  if (!codigo) return alert("Ingrese código");
-  const cant = parseInt(stockCantidad.value, 10) || 0;
-  const ok = await showAdminConfirm();
-  if (!ok) return alert("Contraseña incorrecta");
-  if (stockData[codigo]) {
-    stockData[codigo].cantidad = Number((Number(stockData[codigo].cantidad) + cant).toFixed(3));
-    stockData[codigo].fecha = fechaHora();
-  } else {
-    stockData[codigo] = { nombre: "PRODUCTO NUEVO", cantidad: Number(cant), precio: 0, fecha: fechaHora() };
-  }
-  await saveStockToDB();
-  renderStock();
-  actualizarSelectProductos();
-});
-
-btnAgregarSuelto.removeEventListener?.("click", ()=>{});
-btnAgregarSuelto.addEventListener("click", async () => {
-  const codigo = sueltosCodigo.value.trim();
-  if (!codigo) return alert("Ingrese código");
-  const kg = Number(parseFloat(sueltosKg.value) || 0);
-  const ok = await showAdminConfirm();
-  if (!ok) return alert("Contraseña incorrecta");
-  if (sueltosData[codigo]) {
-    sueltosData[codigo].cantidad = Number((Number(sueltosData[codigo].cantidad) + kg).toFixed(3));
-    sueltosData[codigo].fecha = fechaHora();
-  } else {
-    sueltosData[codigo] = { nombre: "PRODUCTO NUEVO", cantidad: Number(kg), precio: 0, fecha: fechaHora() };
-  }
-  await saveSueltosToDB();
-  renderSueltos();
-  actualizarSelectProductos();
-});
-
-// Agregar cajero persistente (sobrescribe listener anterior)
-btnAgregarCajero.removeEventListener?.("click", ()=>{});
-btnAgregarCajero.addEventListener("click", async () => {
-  const nro = cajeroNro.value;
-  const nombre = cajeroNombre.value.trim();
-  const dni = cajeroDni.value.trim();
-  const pass = cajeroPass.value.trim();
-  const ok = await showAdminConfirm();
-  if (!ok) return alert("Contraseña incorrecta");
-  cajerosData[nro] = { nombre, dni, pass };
-  await saveCajerosToDB();
-  renderCajeros();
-  cargarCajeroLogin();
-});
-
-/* ---------------------------
-   5) Modal Cobrar (pagos) — asegurar uso de realizarVentaPersistente
-   Si tu código ya crea un modal con botones .pay-btn, lo reemplazamos por una versión robusta
-   --------------------------- */
-document.getElementById("btn-cobrar").removeEventListener?.("click", ()=>{});
-document.getElementById("btn-cobrar").addEventListener("click", (e) => {
-  // crear modal
-  const overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.innerHTML = `
-    <div class="modal">
-      <h3>¿Cómo pagará el Cliente?</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0;">
-        <button class="pay-btn btn-ver">Efectivo</button>
-        <button class="pay-btn btn-ver">Tarjeta</button>
-        <button class="pay-btn btn-ver">QR</button>
-        <button class="pay-btn btn-ver">Electrónico</button>
-        <button class="pay-btn btn-ver">Otro</button>
+// ---------------------------
+// REALIZAR VENTA
+// ---------------------------
+document.getElementById("btn-cobrar")?.addEventListener("click", () => {
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;justify-content:center;align-items:center;z-index:9999;";
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:10px;text-align:center;">
+      <h2>Seleccione forma de pago</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:10px 0;">
+        <button class="pay-btn">Efectivo</button>
+        <button class="pay-btn">Tarjeta</button>
+        <button class="pay-btn">QR</button>
+        <button class="pay-btn">Electrónico</button>
+        <button class="pay-btn">Otro</button>
       </div>
-      <div style="margin-top:10px;">
-        <button id="__cancel_pay" class="btn-eliminar">Cancelar</button>
-      </div>
+      <button id="cancel-pay" style="background:red;color:#fff;">Cancelar</button>
     </div>
   `;
-  document.body.appendChild(overlay);
+  document.body.appendChild(modal);
 
-  overlay.querySelector("#__cancel_pay").addEventListener("click", () => overlay.remove());
-  overlay.querySelectorAll(".pay-btn").forEach(btn => {
+  modal.querySelector("#cancel-pay").addEventListener("click", () => modal.remove());
+  modal.querySelectorAll(".pay-btn").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const tipo = btn.innerText;
-      // llamar a la versión persistente
-      if (typeof realizarVentaPersistente === "function") {
-        await realizarVentaPersistente(tipo);
-      } else if (typeof window.realizarVenta === "function") {
-        await window.realizarVenta(tipo);
-      } else {
-        alert("Función de cobro no disponible");
-      }
-      overlay.remove();
+      await realizarVenta(btn.innerText);
+      modal.remove();
     });
   });
 });
 
-/* ---------------------------
-   6) Paginador Historial por día (prev / next)
-   Crea controles encima y debajo de la tabla si no existen
-   --------------------------- */
+// ---------------------------
+// FUNCION REALIZAR VENTA
+// ---------------------------
+async function realizarVenta(tipoPago) {
+  const ticketID = `ID_${String(ticketCounter).padStart(6, '0')}`;
+  ticketCounter++;
 
-(function createHistorialPaginador() {
-  // contenedor padre donde está la tabla #tabla-historial
-  const historialSection = document.getElementById("historial");
-  if (!historialSection) return;
+  const total = cobroItems.reduce((acc, it) => acc + (it.tipo === "stock" ? it.cantidad * it.precio : it.cantidad * it.precio * it.porcentaje), 0);
+  const ticket = {
+    id: ticketID,
+    cajero: currentCajero || localStorage.getItem("cajeroActual") || "ANONIMO",
+    fecha: fechaHora(),
+    tipoPago,
+    items: [...cobroItems],
+    total
+  };
 
-  // crear paginador si no existe
-  if (!document.getElementById("historial-paginador")) {
-    const pag = document.createElement("div");
-    pag.id = "historial-paginador";
-    pag.innerHTML = `
-      <button id="hist-prev">&lt; Anterior</button>
-      <div id="hist-dia-label">${historialDia.toLocaleDateString()}</div>
-      <button id="hist-next">Siguiente &gt;</button>
-    `;
-    // insertar arriba del table
-    historialSection.insertBefore(pag.cloneNode(true), historialSection.querySelector("table"));
-    // insertar abajo de la tabla
-    historialSection.appendChild(pag);
-  }
+  // Guardar en movimientos e historial
+  movimientosData[ticketID] = ticket;
+  historialData[ticketID] = ticket;
+  await saveMovimientos();
 
-  // listeners
-  function updateHistLabel() {
-    const labelEls = Array.from(document.querySelectorAll("#hist-dia-label"));
-    labelEls.forEach(el => el.textContent = historialDia.toLocaleDateString());
-  }
-
-  document.querySelectorAll("#hist-prev").forEach(btn => {
-    btn.addEventListener("click", () => {
-      historialDia.setDate(historialDia.getDate() - 1);
-      renderHistorial();
-      updateHistLabel();
-    });
+  // Restar stock/sueltos
+  cobroItems.forEach(it => {
+    if (it.tipo === "stock") stockData[it.codigo].cantidad -= it.cantidad;
+    else sueltosData[it.codigo].cantidad -= it.cantidad;
   });
-  document.querySelectorAll("#hist-next").forEach(btn => {
-    btn.addEventListener("click", () => {
-      historialDia.setDate(historialDia.getDate() + 1);
-      renderHistorial();
-      updateHistLabel();
+  await saveStock();
+  await saveSueltos();
+
+  // Imprimir ticket
+  imprimirTicket(ticket);
+
+  // Limpiar cobro
+  cobroItems = [];
+  renderTablaCobro();
+  actualizarSelectProductos();
+
+  alert("Venta realizada correctamente");
+}
+
+// ---------------------------
+// MOVIMIENTOS EN TIEMPO REAL
+// ---------------------------
+onValue(ref(db, "movimientos"), snap => {
+  movimientosData = snap.exists() ? snap.val() : {};
+  renderMovimientos();
+});
+
+function renderMovimientos() {
+  tablaMovimientos.innerHTML = "";
+  Object.values(movimientosData)
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .forEach(ticket => {
+      if (filtroCajero.value !== "TODOS" && ticket.cajero !== filtroCajero.value) return;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${ticket.id}</td>
+        <td>${formatMoney(ticket.total)}</td>
+        <td>${ticket.tipoPago}</td>
+        <td>
+          <button class="reimp-btn" data-id="${ticket.id}">Reimprimir</button>
+          <button class="elim-btn" data-id="${ticket.id}">Eliminar</button>
+        </td>
+      `;
+      tablaMovimientos.appendChild(tr);
     });
-  });
+}
 
-  updateHistLabel();
-})();
-
-/* ---------------------------
-   7) Integraciones finales / limpiezas
-   - Asegurarse que render inicial esté en sync con DB
-   --------------------------- */
-(async function finalSync() {
-  try {
-    // forzar carga inicial desde DB (si no lo hizo init)
-    await cargarStock();
-    await cargarSueltos();
-    await cargarCajeros();
-    actualizarSelectProductos();
-    renderStock();
-    renderSueltos();
-    renderCajeros();
+tablaMovimientos.addEventListener("click", async e => {
+  const id = e.target.dataset.id;
+  if (e.target.classList.contains("reimp-btn")) {
+    const ticket = movimientosData[id];
+    if (ticket) imprimirTicket(ticket);
+  }
+  if (e.target.classList.contains("elim-btn")) {
+    const pass = prompt("Contraseña administrador para eliminar ticket:");
+    if (pass !== adminPass) return alert("Contraseña incorrecta");
+    const ticket = movimientosData[id];
+    if (!ticket) return;
+    // Restaurar stock/sueltos
+    ticket.items.forEach(it => {
+      if (it.tipo === "stock") stockData[it.codigo].cantidad += it.cantidad;
+      else sueltosData[it.codigo].cantidad += it.cantidad;
+    });
+    await saveStock();
+    await saveSueltos();
+    delete movimientosData[id];
+    await saveMovimientos();
     renderMovimientos();
-    renderHistorial();
-    actualizarFiltroCajeros();
-    console.log("UI finalizado y sincronizado con Firebase.");
-  } catch (err) {
-    console.error("finalSync error:", err);
-  }
-})();
-
-/* ---------------------------
-   Nota final
-   - Todas las operaciones críticas que modifican datos ahora llaman a funciones
-     que persisten en Firebase (saveStockToDB, saveSueltosToDB, saveCajerosToDB,
-     saveMovimientoTicket, saveHistorialTicket, deleteMovimientoTicket).
-   - Los listeners en tiempo real (attachRealtimeListeners) refrescan las variables
-     locales cuando cambian en Firebase; eso permite ver cambios desde otros clientes.
-   - Las operaciones que antes usaban prompt() ahora usan un modal seguro (promptAdminPassword / showAdminConfirm).
-   --------------------------- */
-
-/***********************************************
- * Persistencia Firebase + Listeners (v11.8.1)
- * Pegar al final de app.js (después del código que ya tienes)
- ***********************************************/
-
-/* ---------- Helpers fechas / DB paths ---------- */
-const nowObj = () => {
-  const d = new Date();
-  const isoDate = d.toISOString().slice(0,10); // YYYY-MM-DD
-  const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; // YYYY-MM
-  return { d, isoDate, monthKey, day:d.getDate() };
-};
-
-const dbRef = (path) => window.ref(window.db, path);
-const countersRefFor = (isoDate) => dbRef(`/counters/${isoDate}`);
-const movimientosRef = dbRef("/movimientos");
-const historialRef = dbRef("/historial");
-const stockRef = dbRef("/stock");
-const sueltosRef = dbRef("/sueltos");
-const cajerosRef = dbRef("/cajeros");
-const configRef = dbRef("/config");
-
-/* ---------- Guardado / Lectura: funciones async ---------- */
-async function saveStockToDB(){
-  try {
-    await window.set(stockRef, stockData || {});
-    console.log("saveStockToDB OK");
-  } catch(err){ console.error("saveStockToDB:", err); }
-}
-async function saveSueltosToDB(){
-  try {
-    await window.set(sueltosRef, sueltosData || {});
-    console.log("saveSueltosToDB OK");
-  } catch(err){ console.error("saveSueltosToDB:", err); }
-}
-async function saveCajerosToDB(){
-  try {
-    await window.set(cajerosRef, cajerosData || {});
-    console.log("saveCajerosToDB OK");
-  } catch(err){ console.error("saveCajerosToDB:", err); }
-}
-
-/* Save movimientos map (por simplicidad escribimos todo)
-   Movimientos se mantiene en /movimientos */
-async function saveMovimientosToDB(){
-  try {
-    await window.set(movimientosRef, movimientosData || {});
-    console.log("saveMovimientosToDB OK");
-  } catch(err){ console.error("saveMovimientosToDB:", err); }
-}
-
-/* Save historial completo */
-async function saveHistorialToDB(){
-  try {
-    await window.set(historialRef, historialData || {});
-    console.log("saveHistorialToDB OK");
-  } catch(err){ console.error("saveHistorialToDB:", err); }
-}
-
-/* Save config (shopName, passAdmin, masterPass) */
-async function saveConfigToDB(cfg){
-  try {
-    await window.update(configRef, cfg);
-    console.log("saveConfigToDB OK");
-  } catch(err){ console.error("saveConfigToDB:", err); }
-}
-
-/* ---------- Contador diario: obtener y reservar nextId ---------- */
-async function getAndIncrementDailyCounter() {
-  const now = nowObj();
-  const cRef = countersRefFor(now.isoDate);
-  try {
-    const snap = await window.get(cRef);
-    if(!snap.exists()){
-      // crear
-      await window.set(cRef, { lastId: 0 });
-      return 1;
-    } else {
-      const val = snap.val();
-      const last = Number(val?.lastId || 0);
-      const next = last + 1;
-      await window.update(cRef, { lastId: next });
-      return next;
-    }
-  } catch(err){
-    console.error("getAndIncrementDailyCounter:", err);
-    // fallback local (no ideal)
-    return ticketCounter++;
-  }
-}
-
-/* ---------- Realizar venta persistente (usa contador diario) ---------- */
-async function realizarVentaPersistente(tipoPago) {
-  if (!currentCajero) {
-    alert("No hay cajero logueado.");
-    return;
-  }
-  if (!cobroItems || cobroItems.length === 0) {
-    alert("No hay items para cobrar.");
-    return;
-  }
-
-  try {
-    // obtener id diario persistente
-    const nextIdNum = await getAndIncrementDailyCounter();
-    const id = `ID_${String(nextIdNum).padStart(6,"0")}`;
-
-    // calcular total
-    const total = cobroItems.reduce((acc,it)=>{
-      return acc + (it.tipo==="stock" ? it.cantidad*it.precio : it.cantidad*it.precio* (it.porcentaje || 1));
-    },0);
-
-    const ticket = {
-      id,
-      cajero: currentCajero || "00",
-      fecha: fechaHora(),
-      tipoPago,
-      items: JSON.parse(JSON.stringify(cobroItems)),
-      total
-    };
-
-    // Persistir en /movimientos y en /historial (ambos)
-    // Para mantener estructura ordenada por dia en historial, guardamos por ID en raiz historial
-    movimientosData = movimientosData || {};
-    historialData = historialData || {};
-    movimientosData[id] = ticket;
-    historialData[id] = ticket;
-
-    await saveMovimientosToDB();
-    await saveHistorialToDB();
-
-    // Restar stock/sueltos y persistir
-    cobroItems.forEach(it=>{
-      if(it.tipo==="stock"){
-        if(!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
-        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
-        stockData[it.codigo].fecha = fechaHora();
-      } else {
-        if(!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
-        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
-        sueltosData[it.codigo].fecha = fechaHora();
-      }
-    });
-
-    // Persistir stock y sueltos
-    await saveStockToDB();
-    await saveSueltosToDB();
-
-    // Imprimir ticket
-    imprimirTicket(ticket);
-
-    // Limpiar cobro
-    cobroItems = [];
-    renderTablaCobro();
     actualizarSelectProductos();
-
-    alert("Venta realizada y guardada correctamente.");
-
-    return ticket;
-  } catch(err){
-    console.error("realizarVentaPersistente:", err);
-    alert("Error al realizar venta. Revisa la consola.");
-    throw err;
+    alert("Ticket eliminado correctamente");
   }
+});
+
+// ---------------------------
+// HISTORIAL DIARIO
+// ---------------------------
+onValue(ref(db, "historial"), snap => {
+  historialData = snap.exists() ? snap.val() : {};
+  renderHistorial();
+});
+
+function renderHistorial() {
+  tablaHistorial.innerHTML = "";
+  const hoy = new Date().toISOString().slice(0, 10);
+  Object.values(historialData)
+    .sort((a, b) => b.id.localeCompare(a.id))
+    .forEach(ticket => {
+      const ticketDate = ticket.fecha.split(" ")[0].split("/").reverse().join("-");
+      if (ticketDate !== hoy) return;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${ticket.id}</td>
+        <td>${formatMoney(ticket.total)}</td>
+        <td>${ticket.tipoPago}</td>
+        <td>${ticket.cajero}</td>
+        <td>${ticket.fecha}</td>
+        <td><button class="reimp-btn" data-id="${ticket.id}">Reimprimir</button></td>
+      `;
+      tablaHistorial.appendChild(tr);
+    });
 }
 
-/* ---------- Eliminar movimiento persistente ---------- */
-async function eliminarMovimiento(ticketId) {
-  try {
-    if(!movimientosData || !movimientosData[ticketId]) {
-      console.warn("eliminarMovimiento: no existe ticket en movimientos", ticketId);
-      return;
-    }
-    // Restaurar stock/sueltos segun items del ticket
-    const ticket = movimientosData[ticketId];
-    ticket.items.forEach(it=>{
-      if(it.tipo==="stock"){
-        if(!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
-        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
-        stockData[it.codigo].fecha = fechaHora();
-      } else {
-        if(!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, price: it.precio || 0 };
-        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
-        sueltosData[it.codigo].fecha = fechaHora();
-      }
-    });
-
-    // Borrar de movimientos (pero NO de historial)
-    delete movimientosData[ticketId];
-
-    // Persistir cambios
-    await saveStockToDB();
-    await saveSueltosToDB();
-    await saveMovimientosToDB();
-
-    alert("Movimiento eliminado y stock restaurado correctamente.");
-    return true;
-  } catch(err){
-    console.error("eliminarMovimiento:", err);
-    alert("Error al eliminar movimiento. Revisa la consola.");
-    throw err;
+tablaHistorial.addEventListener("click", e => {
+  if (e.target.classList.contains("reimp-btn")) {
+    const ticket = historialData[e.target.dataset.id];
+    if (ticket) imprimirTicket(ticket);
   }
-}
-
-/* ---------- Listeners en tiempo real para sincronizar UI ---------- */
-(function attachRealtimeListeners(){
-  try {
-    // STOCK listener
-    window.onValue(stockRef, snap => {
-      stockData = snap.exists() ? snap.val() : {};
-      actualizarSelectProductos();
-      renderStock();
-      console.log("Realtime: stock actualizado");
-    });
-
-    // SUELTOS listener
-    window.onValue(sueltosRef, snap => {
-      sueltosData = snap.exists() ? snap.val() : {};
-      actualizarSelectProductos();
-      renderSueltos();
-      console.log("Realtime: sueltos actualizado");
-    });
-
-    // CAJEROS listener
-    window.onValue(cajerosRef, snap => {
-      cajerosData = snap.exists() ? snap.val() : {};
-      renderCajeros();
-      cargarCajeroLogin();
-      actualizarFiltroCajeros();
-      console.log("Realtime: cajeros actualizado");
-    });
-
-    // MOVIMIENTOS listener
-    window.onValue(movimientosRef, snap => {
-      movimientosData = snap.exists() ? snap.val() : {};
-      renderMovimientos();
-      console.log("Realtime: movimientos actualizado");
-    });
-
-    // HISTORIAL listener
-    window.onValue(historialRef, snap => {
-      historialData = snap.exists() ? snap.val() : {};
-      renderHistorial();
-      console.log("Realtime: historial actualizado");
-    });
-
-    // CONFIG listener
-    window.onValue(configRef, snap => {
-      const cfg = snap.exists() ? snap.val() : null;
-      if(cfg){
-        if(cfg.shopName) appTitle.textContent = cfg.shopName + " - Gestión Comercial V2.12.2";
-        if(cfg.passAdmin) adminPass = String(cfg.passAdmin);
-        if(cfg.masterPass) masterPass = String(cfg.masterPass);
-      }
-      console.log("Realtime: config actualizado");
-    });
-
-    console.log("Listeners realtime attached.");
-  } catch(err){
-    console.error("attachRealtimeListeners:", err);
-  }
-})();
-
-/* ---------- Reemplazar las llamadas locales por persistentes en handlers ya existentes ----------
-   Estos puntos ya fueron actualizados en PARTE 4 para llamar a realizarVentaPersistente o eliminarMovimiento.
-   Asegúrate de que no existan otras funciones que manipulen stockData/cajerosData/sueltosData/movimientosData
-   sin llamar a los save* correspondientes. Si encuentras una, añade "await saveXToDB()" tras la modificación.
--------------------------------------------------------------------------- */
-
-/* ---------- Inicialización final: asegurar que la base contiene ramas mínimas ----------
-   Si init.js no se ejecutó o DB viene vacía, init.js ya creará. Aun así, por seguridad:
-*/
-(async function ensureRootBranches(){
-  try {
-    const rootR = dbRef("/");
-    const snap = await window.get(rootR);
-    if(!snap.exists() || snap.val() === null){
-      const ramasIniciales = {
-        config: { shopName: "ZONAPC", passAdmin: "1918", masterPass: "1409" },
-        cajeros: {},
-        stock: {},
-        sueltos: {},
-        movimientos: {},
-        historial: {},
-        counters: {}
-      };
-      await window.set(rootR, ramasIniciales);
-      console.log("Se crearon ramas iniciales en la DB");
-    }
-  } catch(err){ console.error("ensureRootBranches:", err); }
-})();
-
-/* ---------- Exportar utilidades globales (opcional, para debug) ---------- */
-window.__supercode_persistence = {
-  saveStockToDB, saveSueltosToDB, saveCajerosToDB,
-  saveMovimientosToDB, saveHistorialToDB,
-  realizarVentaPersistente, eliminarMovimiento, getAndIncrementDailyCounter
-};
+});
