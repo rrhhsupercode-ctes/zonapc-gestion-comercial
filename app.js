@@ -507,14 +507,14 @@ function showAdminActionModal(actionCallback) {
 }
 
 // Función para actualizar KG con decimales y límites 0.000 - 99.000
-function actualizarKg(delta) {
-  let val = parseFloat(sueltosKg.value) || 0;
+function actualizarKg(delta, inputElement) {
+  let val = parseFloat(inputElement.value) || 0;
   val = Math.min(99.000, Math.max(0.000, val + delta));
-  sueltosKg.value = val.toFixed(3);
+  inputElement.value = val.toFixed(3);
 }
 
-btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100));
-btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100));
+btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg));
+btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100, sueltosKg));
 
 // Formatea fecha ISO a DD/MM/YYYY (HH:MM)
 function formatFecha(iso) {
@@ -525,6 +525,15 @@ function formatFecha(iso) {
   const hh = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
+}
+
+// Formatea precio a "$00000,00"
+function formatPrecio(num) {
+  const entero = Math.floor(num);
+  const dec = Math.round((num - entero) * 100);
+  const entStr = String(entero).padStart(5, "0");
+  const decStr = String(dec).padStart(2, "0");
+  return `$${entStr},${decStr}`;
 }
 
 async function loadSueltos(filtro = "") {
@@ -545,7 +554,7 @@ async function loadSueltos(filtro = "") {
         <td>${prod.nombre}</td>
         <td>${parseFloat(prod.kg).toFixed(3)}</td>
         <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
-        <td>${prod.precio}</td>
+        <td>${formatPrecio(prod.precio)}</td>
         <td>
           <button data-edit-id="${id}">✏️</button>
           <button data-del-id="${id}">❌</button>
@@ -576,6 +585,10 @@ async function loadSueltos(filtro = "") {
               <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
               <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:100%; margin:5px 0;">
               <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
+              <div style="margin-top:10px; display:flex; justify-content:space-between;">
+                <button id="kg-decr">-</button>
+                <button id="kg-incr">+</button>
+              </div>
               <div style="margin-top:10px;">
                 <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
                 <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
@@ -591,7 +604,11 @@ async function loadSueltos(filtro = "") {
           const editAceptar = modal.querySelector("#edit-aceptar");
           const editCancelar = modal.querySelector("#edit-cancelar");
           const editMsg = modal.querySelector("#edit-msg");
+          const kgDecr = modal.querySelector("#kg-decr");
+          const kgIncr = modal.querySelector("#kg-incr");
 
+          kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg));
+          kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg));
           editCancelar.addEventListener("click", () => modal.remove());
 
           editAceptar.addEventListener("click", async () => {
@@ -606,6 +623,11 @@ async function loadSueltos(filtro = "") {
 
             if (newKg < 0.000 || newKg > 99.000) {
               editMsg.textContent = "KG fuera de rango 0.000 - 99.000";
+              return;
+            }
+
+            if (newPrecio < 0 || newPrecio > 99999.99) {
+              editMsg.textContent = "El precio es incorrecto, ejemplo: 1999,99";
               return;
             }
 
@@ -640,7 +662,6 @@ btnBuscarSuelto.addEventListener("click", () => {
   const filtro = sueltosCodigo.value.trim();
   loadSueltos(filtro);
 });
-
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
