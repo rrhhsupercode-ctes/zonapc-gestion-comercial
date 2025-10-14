@@ -19,7 +19,13 @@
   navButtons.forEach(btn => btn.addEventListener("click", () => showSection(btn.dataset.section)));
   showSection("cobro"); // sección por defecto
 
-  // --- LOGIN ADMINISTRADOR AL INICIO ---
+// --- LOGIN ADMINISTRADOR AL INICIO ---
+(async () => {
+  // Verificar si ya tenemos el token guardado en localStorage
+  const deviceToken = localStorage.getItem("adminDeviceToken");
+  if (deviceToken) return; // ya validado antes, no pedir contraseña
+
+  // Crear modal
   const adminModal = document.createElement("div");
   adminModal.id = "admin-modal";
   adminModal.style.cssText = `
@@ -48,6 +54,9 @@
     const masterPass = val.masterPass || "1409";
     const entrada = adminPassInput.value.trim();
     if (entrada === passAdmin || entrada === masterPass) {
+      // Generar un token aleatorio único por dispositivo
+      const token = crypto.randomUUID();
+      localStorage.setItem("adminDeviceToken", token);
       adminModal.remove();
     } else {
       adminPassMsg.textContent = "Contraseña incorrecta";
@@ -56,6 +65,7 @@
 
   adminPassBtn.addEventListener("click", validarAdmin);
   adminPassInput.addEventListener("keyup", e => { if (e.key === "Enter") validarAdmin(); });
+})();
 
   // --- LOGIN CAJERO ---
   const loginModal = document.getElementById("login-modal");
