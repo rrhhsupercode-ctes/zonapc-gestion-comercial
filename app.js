@@ -408,50 +408,119 @@
     }
   }
 
-  // --- STOCK ---
-  const stockCodigo = document.getElementById("stock-codigo");
-  const stockCantidad = document.getElementById("stock-cantidad");
-  const btnAgregarStock = document.getElementById("agregar-stock");
-  const btnBuscarStock = document.getElementById("buscar-stock");
-  const tablaStock = document.getElementById("tabla-stock").querySelector("tbody");
+// --- STOCK ---
+const stockCodigo = document.getElementById("stock-codigo");
+const stockCantidad = document.getElementById("stock-cantidad");
+const btnAgregarStock = document.getElementById("agregar-stock");
+const btnBuscarStock = document.getElementById("buscar-stock");
+const tablaStock = document.getElementById("tabla-stock").querySelector("tbody");
 
-  async function loadStock() {
-    const snap = await window.get(window.ref("/stock"));
-    tablaStock.innerHTML = "";
-    if (snap.exists()) {
-      Object.entries(snap.val()).forEach(([id, prod]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${id}</td>
-          <td>${prod.nombre}</td>
-          <td>${prod.cant}</td>
-          <td>${prod.fecha || ""}</td>
-          <td>${prod.precio}</td>
-          <td><button data-id="${id}">❌</button></td>
-        `;
-        tr.querySelector("button").addEventListener("click", async () => {
-          if (confirm("Eliminar producto?")) {
-            await window.remove(window.ref(`/stock/${id}`));
-            loadStock();
-            loadProductos();
-          }
-        });
-        tablaStock.appendChild(tr);
-      });
-    }
-  }
+// Función para actualizar Cantidad con límites 0 - 999
+function actualizarCant(delta, inputElement) {
+  let val = parseInt(inputElement.value) || 0;
+  val = Math.min(999, Math.max(0, val + delta));
+  inputElement.value = val;
+}
 
-  btnAgregarStock.addEventListener("click", async () => {
-    const codigo = stockCodigo.value.trim();
-    const cant = parseFloat(stockCantidad.value);
-    if (!codigo || cant <= 0) return;
-    const fecha = new Date().toISOString();
-    await window.set(window.ref(`/stock/${codigo}`), { nombre: codigo, cant, fecha, precio: 100 });
-    loadStock();
-    loadProductos();
+// Botones incrementar / decrementar Cantidad
+const btnStockDecr = document.getElementById("stock-btn-decr");
+const btnStockIncr = document.getElementById("stock-btn-incr");
+
+if(btnStockDecr) btnStockDecr.addEventListener("click", () => actualizarCant(-1, stockCantidad));
+if(btnStockIncr) btnStockIncr.addEventListener("click", () => actualizarCant(1, stockCantidad));
+
+// Formatea fecha ISO a DD/MM/YYYY (HH:MM)
+function formatFecha(iso) {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
+}
+
+// Formatea precio a "$00000,00"
+function formatPrecio(num) {
+  const entero = Math.floor(num);
+  const dec = Math.round((num - entero) * 100);
+  const entStr = String(entero).padStart(5, "0");
+  const decStr = String(dec).padStart(2, "0");
+  return `$${entStr},${decStr}`;
+}
+
+// Cargar Stock
+async function loadStock(filtro = "") {
+  const snap = await window.get(window.ref("/stock"));
+  tablaStock.innerHTML = "";
+  if (!snap.exists()) return;
+
+  let stockArray = Object.entries(snap.val()).filter(([id, prod]) => {
+    if (!filtro) return true;
+    filtro = filtro.toLowerCase();
+    return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  btnBuscarStock.addEventListener("click", loadStock);
+  // Orden descendente por fecha (más reciente arriba)
+  stockArray.sort((a, b) => {
+    const fechaA = new Date(a[1].fecha || 0).getTime();
+    const fechaB = new Date(b[1].fecha || 0).getTime();
+    return fechaB - fechaA;
+  });
+
+  stockArray.forEach(([id, prod]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${id}</td>
+      <td>${prod.nombre}</td>
+      <td>${prod.cant}</td>
+      <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
+      <td>${formatPrecio(prod.precio)}</td>
+      <td>
+        <button data-del-id="${id}">❌</button>
+      </td>
+    `;
+
+    // Eliminar stock (requiere admin)
+    tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(async () => {
+        await window.remove(window.ref(`/stock/${id}`));
+        loadStock();
+        loadProductos();
+      });
+    });
+
+    tablaStock.appendChild(tr);
+  });
+}
+
+// Agregar Stock (sin contraseña, suma Cant si ya existe)
+btnAgregarStock.addEventListener("click", async () => {
+  const codigo = stockCodigo.value.trim();
+  let cant = parseInt(stockCantidad.value);
+  if (!codigo || isNaN(cant) || cant <= 0) return;
+
+  const fecha = new Date().toISOString();
+  const stockRef = window.ref(`/stock/${codigo}`);
+  const snap = await window.get(stockRef);
+
+  if (snap.exists()) {
+    const existingCant = parseInt(snap.val().cant) || 0;
+    cant = Math.min(999, existingCant + cant); // máximo 999
+    await window.update(stockRef, { cant, fecha });
+  } else {
+    await window.set(stockRef, { nombre: codigo, cant: Math.min(999, cant), fecha, precio: 100 });
+  }
+
+  loadStock();
+  loadProductos();
+});
+
+// Buscar stock
+btnBuscarStock.addEventListener("click", () => {
+  const filtro = stockCodigo.value.trim();
+  loadStock(filtro);
+});
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
