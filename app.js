@@ -405,24 +405,14 @@ async function loadMovimientos() {
       </td>
     `;
 
-    // Reimprimir ticket individual
     tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
 
-    // Eliminar ticket individual con contraseña y restauración de stock
     tr.querySelector(".eliminar").addEventListener("click", async () => {
       const pass = prompt("Contraseña de administrador para eliminar ticket:");
       const confSnap = await window.get(window.ref("/config"));
       const confVal = confSnap.exists() ? confSnap.val() : {};
       const passAdmin = confVal.passAdmin || "1918";
       if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
-
-      for (const item of mov.items) {
-        const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-        if (!snapItem.exists()) continue;
-        const data = snapItem.val();
-        if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
-        else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
-      }
 
       await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
       loadMovimientos();
@@ -459,17 +449,10 @@ btnTirarZ.addEventListener("click", async () => {
   const fechaZ = new Date();
   const zID = `TIRAR_Z_${fechaZ.getTime()}`;
 
-  // Calcular totales y restaurar stock
+  // Calcular totales
   const totalPorTipoPago = {};
   let totalGeneral = 0;
   for (const [, mov] of todosMov) {
-    for (const item of mov.items) {
-      const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-      if (!snapItem.exists()) continue;
-      const data = snapItem.val();
-      if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
-      else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
-    }
     if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
     totalPorTipoPago[mov.tipo] += mov.total;
     totalGeneral += mov.total;
@@ -484,10 +467,9 @@ btnTirarZ.addEventListener("click", async () => {
     cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
   };
 
-  // Guardar solo TIRAR Z en historial, sin borrar otros registros
   await window.set(window.ref(`/historial/${zID}`), registroZ);
 
-  // Borrar movimientos
+  // Borrar movimientos solo
   for (const [id] of todosMov) {
     await window.remove(window.ref(`/movimientos/${id}`));
   }
@@ -599,7 +581,6 @@ btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (dia < fechaMax.getDate()) mostrarHistorialPorDia(dia + 1);
 });
-
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
