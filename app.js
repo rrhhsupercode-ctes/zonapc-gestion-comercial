@@ -980,34 +980,44 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// Función para actualizar KG con decimales y límites 0.000 - 99.000
-function actualizarKg(delta, inputElement, msgElement) {
-  let val = parseFloat(inputElement.value) || 0;
-  val = Math.min(99.000, Math.max(0.000, val + delta));
-  inputElement.value = val.toFixed(3);
-  if (msgElement) msgElement.textContent = "";
+// Función para formatear KG según lógica de 1-5 dígitos y límites 0.000 - 99.000
+function formatearKg(inputElement, msgElement, delta = 0) {
+  let raw = inputElement.value.replace(/\D/g, ""); // solo números
+
+  // Si viene un delta de botones, sumarlo al valor actual
+  if (delta !== 0) {
+    let val = parseFloat(inputElement.value) || 0;
+    val = Math.min(99.000, Math.max(0.000, val + delta));
+    inputElement.value = val.toFixed(3);
+    if (msgElement) msgElement.textContent = "";
+    return;
+  }
+
+  let val;
+  if (raw.length === 0) val = 0;
+  else if (raw.length === 1) val = parseFloat(raw + ".000");
+  else if (raw.length === 2) val = parseFloat("0." + raw + "0");
+  else if (raw.length === 3) val = parseFloat("0." + raw);
+  else if (raw.length === 4) val = parseFloat(raw[0] + "." + raw.slice(1));
+  else if (raw.length === 5) val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
+  else val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); // máximo 99.999
+
+  if (isNaN(val) || val < 0 || val > 99) {
+    msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
+    inputElement.value = "0.000";
+  } else {
+    inputElement.value = val.toFixed(3);
+    msgElement.textContent = "";
+  }
 }
 
 // Botones + y -
-btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100, sueltosKg, msgKg));
-btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg, msgKg));
+btnSueltoIncr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, 0.100));
+btnSueltoDecr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, -0.100));
 
-// Edición manual con validación
-sueltosKg.addEventListener("blur", () => {
-  const raw = sueltosKg.value.replace(",", ".").trim();
-  const val = parseFloat(raw);
-
-  if (isNaN(val) || val < 0 || val > 99) {
-    msgKg.textContent = "KG inválido: ejemplo 1.250 kg";
-  } else {
-    sueltosKg.value = val.toFixed(3);
-    msgKg.textContent = "";
-  }
-});
-
-sueltosKg.addEventListener("input", () => {
-  msgKg.textContent = "";
-});
+// Edición manual con validación en tiempo real y al perder foco
+sueltosKg.addEventListener("input", () => formatearKg(sueltosKg, msgKg));
+sueltosKg.addEventListener("blur", () => formatearKg(sueltosKg, msgKg));
 
 // Formatea fecha ISO a DD/MM/YYYY (HH:MM)
 function formatFecha(iso) {
@@ -1122,21 +1132,43 @@ async function loadSueltos(filtro = "") {
         const kgDecr = modal.querySelector("#kg-decr");
         const kgIncr = modal.querySelector("#kg-incr");
 
-        // Validación manual de KG
-        editKg.addEventListener("blur", () => {
-          const val = parseFloat(editKg.value.replace(",", "."));
-          if (isNaN(val) || val < 0 || val > 99) {
-            editKgMsg.textContent = "KG inválido: ejemplo 1.250 kg";
-          } else {
-            editKg.value = val.toFixed(3);
-            editKgMsg.textContent = "";
+        // Nueva función de formateo para modal
+        function formatearKgModal(inputElement, msgElement, delta = 0) {
+          let raw = inputElement.value.replace(/\D/g, "");
+
+          if (delta !== 0) {
+            let val = parseFloat(inputElement.value) || 0;
+            val = Math.min(99.000, Math.max(0.000, val + delta));
+            inputElement.value = val.toFixed(3);
+            if (msgElement) msgElement.textContent = "";
+            return;
           }
-        });
-        editKg.addEventListener("input", () => { editKgMsg.textContent = ""; });
+
+          let val;
+          if (raw.length === 0) val = 0;
+          else if (raw.length === 1) val = parseFloat(raw + ".000");
+          else if (raw.length === 2) val = parseFloat("0." + raw + "0");
+          else if (raw.length === 3) val = parseFloat("0." + raw);
+          else if (raw.length === 4) val = parseFloat(raw[0] + "." + raw.slice(1));
+          else if (raw.length === 5) val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
+          else val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
+
+          if (isNaN(val) || val < 0 || val > 99) {
+            msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
+            inputElement.value = "0.000";
+          } else {
+            inputElement.value = val.toFixed(3);
+            msgElement.textContent = "";
+          }
+        }
 
         // Botones + y -
-        kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg, editKgMsg));
-        kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg, editKgMsg));
+        kgIncr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, 0.100));
+        kgDecr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, -0.100));
+
+        // Edición manual con validación
+        editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
+        editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
 
         // Precio
         editPrecio.addEventListener("input", () => {
@@ -1223,7 +1255,6 @@ btnBuscarSuelto.addEventListener("click", () => {
 
 // Inicial
 loadSueltos();
-
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
