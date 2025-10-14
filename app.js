@@ -685,10 +685,10 @@ btnAgregarCajero.addEventListener("click", async () => {
     return;
   }
 
-  if (!/^[A-Za-z\s]{6,12}$/.test(nombre)) {
-    alert("El nombre debe tener entre 6 y 12 letras (puede incluir espacios)");
-    return;
-  }
+  if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
+  editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
+  return;
+}
 
   const confSnap = await window.get(window.ref("/config"));
   const confVal = confSnap.exists() ? confSnap.val() : {};
