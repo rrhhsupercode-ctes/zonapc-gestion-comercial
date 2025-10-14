@@ -237,22 +237,37 @@ btnKgMenos.addEventListener("click", () => {
   inputKgSuelto.value = val.toFixed(3);
 });
 
-// IMPRIMIR TICKET
+// IMPRIMIR TICKET SOLO TICKET
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-  const div = document.createElement("div");
-  div.style.cssText = `
-    max-width:5cm; margin:0 auto; font-family:monospace; text-align:left;
-    white-space:pre-line; border:1px solid #000; padding:5px;
-  `;
-  let contenido = `${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n`;
-  items.forEach(it => {
-    contenido += `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========\n`;
-  });
-  contenido += `TOTAL: $${total.toFixed(2)}\nPago: ${tipoPago}`;
-  div.textContent = contenido;
-  document.body.appendChild(div);
-  window.print();
-  div.remove();
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html>
+      <head>
+        <style>
+          body { font-family: monospace; max-width:5cm; text-align:left; white-space: pre-line; padding:5px; }
+          .ticket { border:1px solid #000; padding:5px; }
+        </style>
+      </head>
+      <body>
+        <div class="ticket">
+          ${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n
+          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
+          \nTOTAL: $${total.toFixed(2)}\nPago: ${tipoPago}
+        </div>
+      </body>
+    </html>
+  `);
+  doc.close();
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+  setTimeout(()=>iframe.remove(),500);
 }
 
 // COBRAR
@@ -334,6 +349,7 @@ btnCobrar.addEventListener("click", async () => {
     });
   });
 });
+
 
   // --- MOVIMIENTOS ---
   const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
