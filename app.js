@@ -1094,3 +1094,302 @@ document.getElementById("btn-cobrar").addEventListener("click", (e) => {
      locales cuando cambian en Firebase; eso permite ver cambios desde otros clientes.
    - Las operaciones que antes usaban prompt() ahora usan un modal seguro (promptAdminPassword / showAdminConfirm).
    --------------------------- */
+
+/***********************************************
+ * Persistencia Firebase + Listeners (v11.8.1)
+ * Pegar al final de app.js (después del código que ya tienes)
+ ***********************************************/
+
+/* ---------- Helpers fechas / DB paths ---------- */
+const nowObj = () => {
+  const d = new Date();
+  const isoDate = d.toISOString().slice(0,10); // YYYY-MM-DD
+  const monthKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; // YYYY-MM
+  return { d, isoDate, monthKey, day:d.getDate() };
+};
+
+const dbRef = (path) => window.ref(window.db, path);
+const countersRefFor = (isoDate) => dbRef(`/counters/${isoDate}`);
+const movimientosRef = dbRef("/movimientos");
+const historialRef = dbRef("/historial");
+const stockRef = dbRef("/stock");
+const sueltosRef = dbRef("/sueltos");
+const cajerosRef = dbRef("/cajeros");
+const configRef = dbRef("/config");
+
+/* ---------- Guardado / Lectura: funciones async ---------- */
+async function saveStockToDB(){
+  try {
+    await window.set(stockRef, stockData || {});
+    console.log("saveStockToDB OK");
+  } catch(err){ console.error("saveStockToDB:", err); }
+}
+async function saveSueltosToDB(){
+  try {
+    await window.set(sueltosRef, sueltosData || {});
+    console.log("saveSueltosToDB OK");
+  } catch(err){ console.error("saveSueltosToDB:", err); }
+}
+async function saveCajerosToDB(){
+  try {
+    await window.set(cajerosRef, cajerosData || {});
+    console.log("saveCajerosToDB OK");
+  } catch(err){ console.error("saveCajerosToDB:", err); }
+}
+
+/* Save movimientos map (por simplicidad escribimos todo)
+   Movimientos se mantiene en /movimientos */
+async function saveMovimientosToDB(){
+  try {
+    await window.set(movimientosRef, movimientosData || {});
+    console.log("saveMovimientosToDB OK");
+  } catch(err){ console.error("saveMovimientosToDB:", err); }
+}
+
+/* Save historial completo */
+async function saveHistorialToDB(){
+  try {
+    await window.set(historialRef, historialData || {});
+    console.log("saveHistorialToDB OK");
+  } catch(err){ console.error("saveHistorialToDB:", err); }
+}
+
+/* Save config (shopName, passAdmin, masterPass) */
+async function saveConfigToDB(cfg){
+  try {
+    await window.update(configRef, cfg);
+    console.log("saveConfigToDB OK");
+  } catch(err){ console.error("saveConfigToDB:", err); }
+}
+
+/* ---------- Contador diario: obtener y reservar nextId ---------- */
+async function getAndIncrementDailyCounter() {
+  const now = nowObj();
+  const cRef = countersRefFor(now.isoDate);
+  try {
+    const snap = await window.get(cRef);
+    if(!snap.exists()){
+      // crear
+      await window.set(cRef, { lastId: 0 });
+      return 1;
+    } else {
+      const val = snap.val();
+      const last = Number(val?.lastId || 0);
+      const next = last + 1;
+      await window.update(cRef, { lastId: next });
+      return next;
+    }
+  } catch(err){
+    console.error("getAndIncrementDailyCounter:", err);
+    // fallback local (no ideal)
+    return ticketCounter++;
+  }
+}
+
+/* ---------- Realizar venta persistente (usa contador diario) ---------- */
+async function realizarVentaPersistente(tipoPago) {
+  if (!currentCajero) {
+    alert("No hay cajero logueado.");
+    return;
+  }
+  if (!cobroItems || cobroItems.length === 0) {
+    alert("No hay items para cobrar.");
+    return;
+  }
+
+  try {
+    // obtener id diario persistente
+    const nextIdNum = await getAndIncrementDailyCounter();
+    const id = `ID_${String(nextIdNum).padStart(6,"0")}`;
+
+    // calcular total
+    const total = cobroItems.reduce((acc,it)=>{
+      return acc + (it.tipo==="stock" ? it.cantidad*it.precio : it.cantidad*it.precio* (it.porcentaje || 1));
+    },0);
+
+    const ticket = {
+      id,
+      cajero: currentCajero || "00",
+      fecha: fechaHora(),
+      tipoPago,
+      items: JSON.parse(JSON.stringify(cobroItems)),
+      total
+    };
+
+    // Persistir en /movimientos y en /historial (ambos)
+    // Para mantener estructura ordenada por dia en historial, guardamos por ID en raiz historial
+    movimientosData = movimientosData || {};
+    historialData = historialData || {};
+    movimientosData[id] = ticket;
+    historialData[id] = ticket;
+
+    await saveMovimientosToDB();
+    await saveHistorialToDB();
+
+    // Restar stock/sueltos y persistir
+    cobroItems.forEach(it=>{
+      if(it.tipo==="stock"){
+        if(!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
+        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
+        stockData[it.codigo].fecha = fechaHora();
+      } else {
+        if(!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
+        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) - Number(it.cantidad)).toFixed(3));
+        sueltosData[it.codigo].fecha = fechaHora();
+      }
+    });
+
+    // Persistir stock y sueltos
+    await saveStockToDB();
+    await saveSueltosToDB();
+
+    // Imprimir ticket
+    imprimirTicket(ticket);
+
+    // Limpiar cobro
+    cobroItems = [];
+    renderTablaCobro();
+    actualizarSelectProductos();
+
+    alert("Venta realizada y guardada correctamente.");
+
+    return ticket;
+  } catch(err){
+    console.error("realizarVentaPersistente:", err);
+    alert("Error al realizar venta. Revisa la consola.");
+    throw err;
+  }
+}
+
+/* ---------- Eliminar movimiento persistente ---------- */
+async function eliminarMovimiento(ticketId) {
+  try {
+    if(!movimientosData || !movimientosData[ticketId]) {
+      console.warn("eliminarMovimiento: no existe ticket en movimientos", ticketId);
+      return;
+    }
+    // Restaurar stock/sueltos segun items del ticket
+    const ticket = movimientosData[ticketId];
+    ticket.items.forEach(it=>{
+      if(it.tipo==="stock"){
+        if(!stockData[it.codigo]) stockData[it.codigo] = { nombre: it.nombre, cantidad: 0, precio: it.precio || 0 };
+        stockData[it.codigo].cantidad = Number((Number(stockData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
+        stockData[it.codigo].fecha = fechaHora();
+      } else {
+        if(!sueltosData[it.codigo]) sueltosData[it.codigo] = { nombre: it.nombre, cantidad: 0, price: it.precio || 0 };
+        sueltosData[it.codigo].cantidad = Number((Number(sueltosData[it.codigo].cantidad) + Number(it.cantidad)).toFixed(3));
+        sueltosData[it.codigo].fecha = fechaHora();
+      }
+    });
+
+    // Borrar de movimientos (pero NO de historial)
+    delete movimientosData[ticketId];
+
+    // Persistir cambios
+    await saveStockToDB();
+    await saveSueltosToDB();
+    await saveMovimientosToDB();
+
+    alert("Movimiento eliminado y stock restaurado correctamente.");
+    return true;
+  } catch(err){
+    console.error("eliminarMovimiento:", err);
+    alert("Error al eliminar movimiento. Revisa la consola.");
+    throw err;
+  }
+}
+
+/* ---------- Listeners en tiempo real para sincronizar UI ---------- */
+(function attachRealtimeListeners(){
+  try {
+    // STOCK listener
+    window.onValue(stockRef, snap => {
+      stockData = snap.exists() ? snap.val() : {};
+      actualizarSelectProductos();
+      renderStock();
+      console.log("Realtime: stock actualizado");
+    });
+
+    // SUELTOS listener
+    window.onValue(sueltosRef, snap => {
+      sueltosData = snap.exists() ? snap.val() : {};
+      actualizarSelectProductos();
+      renderSueltos();
+      console.log("Realtime: sueltos actualizado");
+    });
+
+    // CAJEROS listener
+    window.onValue(cajerosRef, snap => {
+      cajerosData = snap.exists() ? snap.val() : {};
+      renderCajeros();
+      cargarCajeroLogin();
+      actualizarFiltroCajeros();
+      console.log("Realtime: cajeros actualizado");
+    });
+
+    // MOVIMIENTOS listener
+    window.onValue(movimientosRef, snap => {
+      movimientosData = snap.exists() ? snap.val() : {};
+      renderMovimientos();
+      console.log("Realtime: movimientos actualizado");
+    });
+
+    // HISTORIAL listener
+    window.onValue(historialRef, snap => {
+      historialData = snap.exists() ? snap.val() : {};
+      renderHistorial();
+      console.log("Realtime: historial actualizado");
+    });
+
+    // CONFIG listener
+    window.onValue(configRef, snap => {
+      const cfg = snap.exists() ? snap.val() : null;
+      if(cfg){
+        if(cfg.shopName) appTitle.textContent = cfg.shopName + " - Gestión Comercial V2.12.2";
+        if(cfg.passAdmin) adminPass = String(cfg.passAdmin);
+        if(cfg.masterPass) masterPass = String(cfg.masterPass);
+      }
+      console.log("Realtime: config actualizado");
+    });
+
+    console.log("Listeners realtime attached.");
+  } catch(err){
+    console.error("attachRealtimeListeners:", err);
+  }
+})();
+
+/* ---------- Reemplazar las llamadas locales por persistentes en handlers ya existentes ----------
+   Estos puntos ya fueron actualizados en PARTE 4 para llamar a realizarVentaPersistente o eliminarMovimiento.
+   Asegúrate de que no existan otras funciones que manipulen stockData/cajerosData/sueltosData/movimientosData
+   sin llamar a los save* correspondientes. Si encuentras una, añade "await saveXToDB()" tras la modificación.
+-------------------------------------------------------------------------- */
+
+/* ---------- Inicialización final: asegurar que la base contiene ramas mínimas ----------
+   Si init.js no se ejecutó o DB viene vacía, init.js ya creará. Aun así, por seguridad:
+*/
+(async function ensureRootBranches(){
+  try {
+    const rootR = dbRef("/");
+    const snap = await window.get(rootR);
+    if(!snap.exists() || snap.val() === null){
+      const ramasIniciales = {
+        config: { shopName: "ZONAPC", passAdmin: "1918", masterPass: "1409" },
+        cajeros: {},
+        stock: {},
+        sueltos: {},
+        movimientos: {},
+        historial: {},
+        counters: {}
+      };
+      await window.set(rootR, ramasIniciales);
+      console.log("Se crearon ramas iniciales en la DB");
+    }
+  } catch(err){ console.error("ensureRootBranches:", err); }
+})();
+
+/* ---------- Exportar utilidades globales (opcional, para debug) ---------- */
+window.__supercode_persistence = {
+  saveStockToDB, saveSueltosToDB, saveCajerosToDB,
+  saveMovimientosToDB, saveHistorialToDB,
+  realizarVentaPersistente, eliminarMovimiento, getAndIncrementDailyCounter
+};
