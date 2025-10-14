@@ -738,21 +738,18 @@ async function loadSueltos(filtro = "") {
   tablaSueltos.innerHTML = "";
   if (!snap.exists()) return;
 
-  // Convertimos a array y filtramos
   let sueltosArray = Object.entries(snap.val()).filter(([id, prod]) => {
     if (!filtro) return true;
     filtro = filtro.toLowerCase();
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  // Ordenamos de más reciente a más viejo usando la fecha
   sueltosArray.sort((a, b) => {
     const fechaA = new Date(a[1].fecha || 0).getTime();
     const fechaB = new Date(b[1].fecha || 0).getTime();
-    return fechaB - fechaA; // descendente
+    return fechaB - fechaA;
   });
 
-  // Luego recorremos para crear las filas
   sueltosArray.forEach(([id, prod]) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -767,7 +764,6 @@ async function loadSueltos(filtro = "") {
       </td>
     `;
 
-    // Botones eliminar y editar
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/sueltos/${id}`));
@@ -777,14 +773,114 @@ async function loadSueltos(filtro = "") {
     });
 
     tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
-      // ... tu código de modal de edición
+      showAdminActionModal(() => {
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+          position:fixed; top:0; left:0; width:100%; height:100%;
+          display:flex; justify-content:center; align-items:center;
+          background:rgba(0,0,0,0.7); z-index:9999;
+        `;
+        modal.innerHTML = `
+          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
+            <h2>Editar Suelto ${id}</h2>
+
+            <label for="edit-nombre">Nombre del producto</label>
+            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+
+            <label for="edit-kg">KG (0.000 - 99.000)</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+              <button id="kg-decr" style="width:30%;">-</button>
+              <input id="edit-kg" type="number" min="0" max="99" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
+              <button id="kg-incr" style="width:30%;">+</button>
+            </div>
+
+            <label>Precio</label>
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+              <input id="edit-precio" type="text" placeholder="00000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <span>,</span>
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
+                .toString()
+                .padStart(2, "0")}">
+            </div>
+
+            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
+
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        const editNombre = modal.querySelector("#edit-nombre");
+        const editKg = modal.querySelector("#edit-kg");
+        const editPrecio = modal.querySelector("#edit-precio");
+        const editCentavos = modal.querySelector("#edit-centavos");
+        const editAceptar = modal.querySelector("#edit-aceptar");
+        const editCancelar = modal.querySelector("#edit-cancelar");
+        const editMsg = modal.querySelector("#edit-msg");
+        const preview = modal.querySelector("#preview-precio");
+        const kgDecr = modal.querySelector("#kg-decr");
+        const kgIncr = modal.querySelector("#kg-incr");
+
+        editPrecio.addEventListener("input", () => {
+          let val = editPrecio.value.replace(/\D/g, "");
+          if (val.length > 5) val = val.slice(0, 5);
+          editPrecio.value = val;
+          actualizarPreview();
+        });
+
+        editCentavos.addEventListener("input", () => {
+          let val = parseInt(editCentavos.value);
+          if (isNaN(val) || val < 0) val = 0;
+          if (val > 99) val = 99;
+          editCentavos.value = val.toString().padStart(2, "0");
+          actualizarPreview();
+        });
+
+        function actualizarPreview() {
+          const entero = parseInt(editPrecio.value) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const combinado = entero + dec / 100;
+          preview.textContent = formatPrecio(combinado);
+        }
+
+        kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg));
+        kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg));
+        editCancelar.addEventListener("click", () => modal.remove());
+
+        editAceptar.addEventListener("click", async () => {
+          const newNombre = editNombre.value.trim();
+          const newKg = parseFloat(editKg.value);
+          const entero = parseInt(editPrecio.value) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const newPrecio = entero + dec / 100;
+
+          if (!newNombre || isNaN(newKg)) {
+            editMsg.textContent = "Campos obligatorios";
+            return;
+          }
+
+          await window.update(window.ref(`/sueltos/${id}`), {
+            nombre: newNombre,
+            kg: newKg,
+            precio: newPrecio,
+          });
+
+          loadSueltos();
+          loadProductos();
+          modal.remove();
+        });
+      });
     });
 
     tablaSueltos.appendChild(tr);
   });
 }
 
-// Agregar suelto con nombre por defecto "NUEVO", sin admin y sumando KG si ya existe
+// Agregar suelto
 btnAgregarSuelto.addEventListener("click", async () => {
   const codigo = sueltosCodigo.value.trim();
   let kg = parseFloat(sueltosKg.value);
@@ -795,24 +891,26 @@ btnAgregarSuelto.addEventListener("click", async () => {
   const snap = await window.get(sueltoRef);
 
   if (snap.exists()) {
-    // Suma el KG al ya existente
     const existingKg = parseFloat(snap.val().kg) || 0;
-    kg = Math.min(99.000, existingKg + kg); // límite máximo 99.000
-    await window.update(sueltoRef, { kg, fecha }); // actualizamos KG y fecha
+    kg = Math.min(99.000, existingKg + kg);
+    await window.update(sueltoRef, { kg, fecha });
   } else {
-    // Nuevo suelto
-    await window.set(sueltoRef, { nombre: "NUEVO", kg: Math.min(99.000, Math.max(0.000, kg)), fecha, precio: 200 });
+    await window.set(sueltoRef, { nombre: "NUEVO", kg, fecha, precio: 0.0 });
   }
 
   loadSueltos();
   loadProductos();
 });
 
-// Buscar sueltos por código o nombre
+// Buscar sueltos
 btnBuscarSuelto.addEventListener("click", () => {
   const filtro = sueltosCodigo.value.trim();
   loadSueltos(filtro);
 });
+
+// Inicial
+loadSueltos();
+
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
