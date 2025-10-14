@@ -453,61 +453,194 @@
 
   btnBuscarStock.addEventListener("click", loadStock);
 
-  // --- SUELTOS ---
-  const sueltosCodigo = document.getElementById("sueltos-codigo");
-  const sueltosKg = document.getElementById("sueltos-kg");
-  const btnAgregarSuelto = document.getElementById("btn-agregar-suelto");
-  const btnBuscarSuelto = document.getElementById("btn-buscar-suelto");
-  const tablaSueltos = document.getElementById("tabla-sueltos").querySelector("tbody");
-  const btnSueltoDecr = document.getElementById("sueltos-btn-decr");
-  const btnSueltoIncr = document.getElementById("sueltos-btn-incr");
+// --- SUELTOS ---
+const sueltosCodigo = document.getElementById("sueltos-codigo");
+const sueltosKg = document.getElementById("sueltos-kg");
+const btnAgregarSuelto = document.getElementById("btn-agregar-suelto");
+const btnBuscarSuelto = document.getElementById("btn-buscar-suelto");
+const tablaSueltos = document.getElementById("tabla-sueltos").querySelector("tbody");
+const btnSueltoDecr = document.getElementById("sueltos-btn-decr");
+const btnSueltoIncr = document.getElementById("sueltos-btn-incr");
 
-  function actualizarKg(delta) {
-    let val = parseFloat(sueltosKg.value);
-    val = Math.max(0.001, val + delta);
-    sueltosKg.value = val.toFixed(3);
-  }
+// Reutilizamos el modal de admin
+function showAdminActionModal(actionCallback) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+      <h2>Contraseña Administrador</h2>
+      <input id="admin-pass-input" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+      <div style="margin-top:10px;">
+        <button id="admin-pass-aceptar" style="margin-right:5px;">Aceptar</button>
+        <button id="admin-pass-cancelar" style="background:red; color:#fff;">Cancelar</button>
+      </div>
+      <p id="admin-pass-msg" style="color:red; margin-top:5px;"></p>
+    </div>
+  `;
+  document.body.appendChild(modal);
 
-  btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100));
-  btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100));
+  const input = modal.querySelector("#admin-pass-input");
+  const aceptar = modal.querySelector("#admin-pass-aceptar");
+  const cancelar = modal.querySelector("#admin-pass-cancelar");
+  const msg = modal.querySelector("#admin-pass-msg");
 
-  async function loadSueltos() {
-    const snap = await window.get(window.ref("/sueltos"));
-    tablaSueltos.innerHTML = "";
-    if (snap.exists()) {
-      Object.entries(snap.val()).forEach(([id, prod]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${id}</td>
-          <td>${prod.nombre}</td>
-          <td>${prod.kg}</td>
-          <td>${prod.fecha || ""}</td>
-          <td>${prod.precio}</td>
-          <td><button data-id="${id}">❌</button></td>
-        `;
-        tr.querySelector("button").addEventListener("click", async () => {
-          if (confirm("Eliminar suelto?")) {
-            await window.remove(window.ref(`/sueltos/${id}`));
+  cancelar.addEventListener("click", () => modal.remove());
+
+  aceptar.addEventListener("click", async () => {
+    const pass = input.value.trim();
+    const confSnap = await window.get(window.ref("/config"));
+    const confVal = confSnap.exists() ? confSnap.val() : {};
+    const passAdmin = confVal.passAdmin || "1918";
+    const masterPass = confVal.masterPass || "1409";
+
+    if (pass !== passAdmin && pass !== masterPass) {
+      msg.textContent = "Contraseña incorrecta";
+      return;
+    }
+    modal.remove();
+    actionCallback();
+  });
+}
+
+// Función para actualizar KG con decimales y límites 0.000 - 99.000
+function actualizarKg(delta) {
+  let val = parseFloat(sueltosKg.value) || 0;
+  val = Math.min(99.000, Math.max(0.000, val + delta));
+  sueltosKg.value = val.toFixed(3);
+}
+
+btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100));
+btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100));
+
+// Formatea fecha ISO a DD/MM/YYYY (HH:MM)
+function formatFecha(iso) {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
+}
+
+async function loadSueltos(filtro = "") {
+  const snap = await window.get(window.ref("/sueltos"));
+  tablaSueltos.innerHTML = "";
+  if (!snap.exists()) return;
+
+  Object.entries(snap.val())
+    .filter(([id, prod]) => {
+      if (!filtro) return true;
+      filtro = filtro.toLowerCase();
+      return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
+    })
+    .forEach(([id, prod]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${id}</td>
+        <td>${prod.nombre}</td>
+        <td>${parseFloat(prod.kg).toFixed(3)}</td>
+        <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
+        <td>${prod.precio}</td>
+        <td>
+          <button data-edit-id="${id}">✏️</button>
+          <button data-del-id="${id}">❌</button>
+        </td>
+      `;
+
+      // Eliminar suelto usando modal
+      tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
+        showAdminActionModal(async () => {
+          await window.remove(window.ref(`/sueltos/${id}`));
+          loadSueltos();
+          loadProductos();
+        });
+      });
+
+      // Editar suelto usando modal
+      tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+        showAdminActionModal(() => {
+          const modal = document.createElement("div");
+          modal.style.cssText = `
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            display:flex; justify-content:center; align-items:center;
+            background:rgba(0,0,0,0.7); z-index:9999;
+          `;
+          modal.innerHTML = `
+            <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+              <h2>Editar Suelto ${id}</h2>
+              <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+              <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:100%; margin:5px 0;">
+              <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
+              <div style="margin-top:10px;">
+                <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+                <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+              </div>
+              <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+            </div>
+          `;
+          document.body.appendChild(modal);
+
+          const editNombre = modal.querySelector("#edit-nombre");
+          const editKg = modal.querySelector("#edit-kg");
+          const editPrecio = modal.querySelector("#edit-precio");
+          const editAceptar = modal.querySelector("#edit-aceptar");
+          const editCancelar = modal.querySelector("#edit-cancelar");
+          const editMsg = modal.querySelector("#edit-msg");
+
+          editCancelar.addEventListener("click", () => modal.remove());
+
+          editAceptar.addEventListener("click", async () => {
+            const newNombre = editNombre.value.trim();
+            const newKg = parseFloat(editKg.value);
+            const newPrecio = parseFloat(editPrecio.value);
+
+            if (!newNombre || isNaN(newKg) || isNaN(newPrecio)) {
+              editMsg.textContent = "Todos los campos son obligatorios y válidos";
+              return;
+            }
+
+            if (newKg < 0.000 || newKg > 99.000) {
+              editMsg.textContent = "KG fuera de rango 0.000 - 99.000";
+              return;
+            }
+
+            await window.update(window.ref(`/sueltos/${id}`), { nombre: newNombre, kg: newKg, precio: newPrecio });
             loadSueltos();
             loadProductos();
-          }
+            modal.remove();
+          });
         });
-        tablaSueltos.appendChild(tr);
       });
-    }
-  }
 
-  btnAgregarSuelto.addEventListener("click", async () => {
-    const codigo = sueltosCodigo.value.trim();
-    const kg = parseFloat(sueltosKg.value);
-    if (!codigo || kg <= 0) return;
+      tablaSueltos.appendChild(tr);
+    });
+}
+
+// Agregar suelto con nombre por defecto "NUEVO" y admin
+btnAgregarSuelto.addEventListener("click", () => {
+  const codigo = sueltosCodigo.value.trim();
+  const kg = parseFloat(sueltosKg.value);
+  if (!codigo || isNaN(kg)) return;
+
+  showAdminActionModal(async () => {
     const fecha = new Date().toISOString();
-    await window.set(window.ref(`/sueltos/${codigo}`), { nombre: codigo, kg, fecha, precio: 200 });
+    await window.set(window.ref(`/sueltos/${codigo}`), { nombre: "NUEVO", kg: Math.min(99.000, Math.max(0.000, kg)), fecha, precio: 200 });
     loadSueltos();
     loadProductos();
   });
+});
 
-  btnBuscarSuelto.addEventListener("click", loadSueltos);
+// Buscar sueltos por código o nombre
+btnBuscarSuelto.addEventListener("click", () => {
+  const filtro = sueltosCodigo.value.trim();
+  loadSueltos(filtro);
+});
+
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
