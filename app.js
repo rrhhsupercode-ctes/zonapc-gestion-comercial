@@ -973,7 +973,7 @@ function showAdminActionModal(actionCallback) {
   });
 }
 
-// Crear mensaje de error debajo del input (solo una vez)
+// Mensaje de error debajo del input sueltosKg
 let msgKg = document.createElement("p");
 msgKg.style.color = "red";
 msgKg.style.margin = "4px 0 0 0";
@@ -981,17 +981,16 @@ msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
 // Función para actualizar KG con decimales y límites 0.000 - 99.000
-function actualizarKg(delta, inputElement) {
+function actualizarKg(delta, inputElement, msgElement) {
   let val = parseFloat(inputElement.value) || 0;
   val = Math.min(99.000, Math.max(0.000, val + delta));
   inputElement.value = val.toFixed(3);
-  msgKg.textContent = ""; // borrar mensaje si estaba
+  if (msgElement) msgElement.textContent = "";
 }
 
-// Botones +
-btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100, sueltosKg));
-// Botones -
-btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg));
+// Botones + y -
+btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100, sueltosKg, msgKg));
+btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg, msgKg));
 
 // Edición manual con validación
 sueltosKg.addEventListener("blur", () => {
@@ -1000,18 +999,15 @@ sueltosKg.addEventListener("blur", () => {
 
   if (isNaN(val) || val < 0 || val > 99) {
     msgKg.textContent = "KG inválido: ejemplo 1.250 kg";
-    sueltosKg.value = "0.000";
   } else {
     sueltosKg.value = val.toFixed(3);
-    msgKg.textContent = ""; // borrar mensaje si es válido
+    msgKg.textContent = "";
   }
 });
 
-// Opcional: borrar mensaje al escribir
 sueltosKg.addEventListener("input", () => {
   msgKg.textContent = "";
 });
-
 
 // Formatea fecha ISO a DD/MM/YYYY (HH:MM)
 function formatFecha(iso) {
@@ -1033,6 +1029,7 @@ function formatPrecio(num) {
   return `$${entStr},${decStr}`;
 }
 
+// Cargar sueltos
 async function loadSueltos(filtro = "") {
   const snap = await window.get(window.ref("/sueltos"));
   tablaSueltos.innerHTML = "";
@@ -1090,17 +1087,16 @@ async function loadSueltos(filtro = "") {
             <label for="edit-kg">KG (0.000 - 99.000)</label>
             <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
               <button id="kg-decr" style="width:30%;">-</button>
-              <input id="edit-kg" type="number" min="0" max="99" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
+              <input id="edit-kg" type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
               <button id="kg-incr" style="width:30%;">+</button>
             </div>
+            <p id="edit-kg-msg" style="color:red; margin-top:2px; font-size:0.9em; min-height:18px;"></p>
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
               <input id="edit-precio" type="text" placeholder="00000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
-                .toString()
-                .padStart(2, "0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2, "0")}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -1116,6 +1112,7 @@ async function loadSueltos(filtro = "") {
 
         const editNombre = modal.querySelector("#edit-nombre");
         const editKg = modal.querySelector("#edit-kg");
+        const editKgMsg = modal.querySelector("#edit-kg-msg");
         const editPrecio = modal.querySelector("#edit-precio");
         const editCentavos = modal.querySelector("#edit-centavos");
         const editAceptar = modal.querySelector("#edit-aceptar");
@@ -1125,13 +1122,29 @@ async function loadSueltos(filtro = "") {
         const kgDecr = modal.querySelector("#kg-decr");
         const kgIncr = modal.querySelector("#kg-incr");
 
+        // Validación manual de KG
+        editKg.addEventListener("blur", () => {
+          const val = parseFloat(editKg.value.replace(",", "."));
+          if (isNaN(val) || val < 0 || val > 99) {
+            editKgMsg.textContent = "KG inválido: ejemplo 1.250 kg";
+          } else {
+            editKg.value = val.toFixed(3);
+            editKgMsg.textContent = "";
+          }
+        });
+        editKg.addEventListener("input", () => { editKgMsg.textContent = ""; });
+
+        // Botones + y -
+        kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg, editKgMsg));
+        kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg, editKgMsg));
+
+        // Precio
         editPrecio.addEventListener("input", () => {
           let val = editPrecio.value.replace(/\D/g, "");
           if (val.length > 5) val = val.slice(0, 5);
           editPrecio.value = val;
           actualizarPreview();
         });
-
         editCentavos.addEventListener("input", () => {
           let val = parseInt(editCentavos.value);
           if (isNaN(val) || val < 0) val = 0;
@@ -1139,7 +1152,6 @@ async function loadSueltos(filtro = "") {
           editCentavos.value = val.toString().padStart(2, "0");
           actualizarPreview();
         });
-
         function actualizarPreview() {
           const entero = parseInt(editPrecio.value) || 0;
           const dec = parseInt(editCentavos.value) || 0;
@@ -1147,8 +1159,6 @@ async function loadSueltos(filtro = "") {
           preview.textContent = formatPrecio(combinado);
         }
 
-        kgDecr.addEventListener("click", () => actualizarKg(-0.100, editKg));
-        kgIncr.addEventListener("click", () => actualizarKg(0.100, editKg));
         editCancelar.addEventListener("click", () => modal.remove());
 
         editAceptar.addEventListener("click", async () => {
@@ -1158,8 +1168,8 @@ async function loadSueltos(filtro = "") {
           const dec = parseInt(editCentavos.value) || 0;
           const newPrecio = entero + dec / 100;
 
-          if (!newNombre || isNaN(newKg)) {
-            editMsg.textContent = "Campos obligatorios";
+          if (!newNombre || isNaN(newKg) || newKg < 0 || newKg > 99) {
+            editMsg.textContent = "Campos obligatorios o KG inválido";
             return;
           }
 
@@ -1184,7 +1194,10 @@ async function loadSueltos(filtro = "") {
 btnAgregarSuelto.addEventListener("click", async () => {
   const codigo = sueltosCodigo.value.trim();
   let kg = parseFloat(sueltosKg.value);
-  if (!codigo || isNaN(kg)) return;
+  if (!codigo || isNaN(kg) || kg < 0 || kg > 99) {
+    msgKg.textContent = "KG inválido: ejemplo 1.250 kg";
+    return;
+  }
 
   const fecha = new Date().toISOString();
   const sueltoRef = window.ref(`/sueltos/${codigo}`);
