@@ -570,7 +570,7 @@ async function loadSueltos(filtro = "") {
       </td>
     `;
 
-    // Botones eliminar y editar siguen igual
+    // Botones eliminar y editar
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/sueltos/${id}`));
@@ -587,19 +587,28 @@ async function loadSueltos(filtro = "") {
   });
 }
 
-
-// Agregar suelto con nombre por defecto "NUEVO" y admin
-btnAgregarSuelto.addEventListener("click", () => {
+// Agregar suelto con nombre por defecto "NUEVO", sin admin y sumando KG si ya existe
+btnAgregarSuelto.addEventListener("click", async () => {
   const codigo = sueltosCodigo.value.trim();
-  const kg = parseFloat(sueltosKg.value);
+  let kg = parseFloat(sueltosKg.value);
   if (!codigo || isNaN(kg)) return;
 
-  showAdminActionModal(async () => {
-    const fecha = new Date().toISOString();
-    await window.set(window.ref(`/sueltos/${codigo}`), { nombre: "NUEVO", kg: Math.min(99.000, Math.max(0.000, kg)), fecha, precio: 200 });
-    loadSueltos();
-    loadProductos();
-  });
+  const fecha = new Date().toISOString();
+  const sueltoRef = window.ref(`/sueltos/${codigo}`);
+  const snap = await window.get(sueltoRef);
+
+  if (snap.exists()) {
+    // Suma el KG al ya existente
+    const existingKg = parseFloat(snap.val().kg) || 0;
+    kg = Math.min(99.000, existingKg + kg); // límite máximo 99.000
+    await window.update(sueltoRef, { kg, fecha }); // actualizamos KG y fecha
+  } else {
+    // Nuevo suelto
+    await window.set(sueltoRef, { nombre: "NUEVO", kg: Math.min(99.000, Math.max(0.000, kg)), fecha, precio: 200 });
+  }
+
+  loadSueltos();
+  loadProductos();
 });
 
 // Buscar sueltos por código o nombre
@@ -607,7 +616,6 @@ btnBuscarSuelto.addEventListener("click", () => {
   const filtro = sueltosCodigo.value.trim();
   loadSueltos(filtro);
 });
-
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
