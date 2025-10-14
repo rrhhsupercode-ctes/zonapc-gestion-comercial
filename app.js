@@ -447,7 +447,6 @@ btnTirarZ.addEventListener("click", async () => {
   const passAdmin = confVal.passAdmin || "1918";
   if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
-  // Obtener movimientos filtrados por cajero
   const snap = await window.get(window.ref("/movimientos"));
   if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
@@ -460,7 +459,9 @@ btnTirarZ.addEventListener("click", async () => {
   const fechaZ = new Date();
   const zID = `TIRAR_Z_${fechaZ.getTime()}`;
 
-  // Restaurar stock antes de borrar
+  // Calcular totales y restaurar stock
+  const totalPorTipoPago = {};
+  let totalGeneral = 0;
   for (const [, mov] of todosMov) {
     for (const item of mov.items) {
       const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
@@ -469,18 +470,11 @@ btnTirarZ.addEventListener("click", async () => {
       if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
       else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
     }
-  }
-
-  // Calcular totales
-  const totalPorTipoPago = {};
-  let totalGeneral = 0;
-  for (const [, mov] of todosMov) {
     if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
     totalPorTipoPago[mov.tipo] += mov.total;
     totalGeneral += mov.total;
   }
 
-  // Crear registro en historial
   const registroZ = {
     tipo: "TIRAR Z",
     fecha: fechaZ.toISOString(),
@@ -490,6 +484,7 @@ btnTirarZ.addEventListener("click", async () => {
     cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
   };
 
+  // Guardar solo TIRAR Z en historial, sin borrar otros registros
   await window.set(window.ref(`/historial/${zID}`), registroZ);
 
   // Borrar movimientos
@@ -500,14 +495,12 @@ btnTirarZ.addEventListener("click", async () => {
   loadMovimientos();
   loadHistorial();
 
-  // Preparar ticket Tirar Z
+  // Generar ticket Tirar Z
   let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
-
   for (const cajero of registroZ.cajeros) {
     ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
     const movCajero = registroZ.items.filter(m => m.cajero === cajero);
     const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-
     for (const tipo of tiposPago) {
       const ventasTipo = movCajero.filter(m => m.tipo === tipo);
       const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
@@ -517,7 +510,6 @@ btnTirarZ.addEventListener("click", async () => {
       });
     }
   }
-
   ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
   ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
 
@@ -528,11 +520,8 @@ btnTirarZ.addEventListener("click", async () => {
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
-// Crear controles de día
 const controlesHistorial = document.createElement("div");
-controlesHistorial.style.cssText = `
-  display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
-`;
+controlesHistorial.style.cssText = "display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;";
 controlesHistorial.innerHTML = `
   <button id="historial-dia-prev">◀</button>
   <span id="historial-dia" style="min-width:60px; text-align:center; display:inline-block;">
@@ -567,22 +556,11 @@ async function loadHistorial() {
   const hoy = new Date();
   const diaHoy = hoy.getDate();
 
-  if (diaHoy <= 15) {
-    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-  } else {
-    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    for (const mov of historialRegistros) {
-      if (mov.fechaObj < fechaMin) {
-        await window.remove(window.ref(`/historial/${mov.id}`));
-      }
-    }
-    historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
-  }
+  if (diaHoy <= 15) fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+  else fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
   fechaMax = hoy;
-  let ultimoDia = historialRegistros.length
-    ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate()))
-    : hoy.getDate();
+  const ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
 
   mostrarHistorialPorDia(ultimoDia);
 }
@@ -621,6 +599,7 @@ btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (dia < fechaMax.getDate()) mostrarHistorialPorDia(dia + 1);
 });
+
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
