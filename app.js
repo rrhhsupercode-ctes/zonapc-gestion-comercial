@@ -597,19 +597,16 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
-  // Obtener todos los registros y convertir fecha
   Object.entries(snap.val()).forEach(([id, mov]) => {
     historialRegistros.push({ id, ...mov, fechaObj: mov.fecha ? new Date(mov.fecha) : null });
   });
 
-  // Ordenar por fecha descendente
   historialRegistros.sort((a, b) => {
     if (!a.fechaObj) return 1;
     if (!b.fechaObj) return -1;
     return b.fechaObj - a.fechaObj;
   });
 
-  // Determinar límites según regla del día 15 (mantener registros del mes anterior + primeros 15 días; luego borrar mes anterior)
   const hoy = new Date();
   const diaHoy = hoy.getDate();
 
@@ -617,25 +614,19 @@ async function loadHistorial() {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
   } else {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    // Borrar registros anteriores al mes actual (solo en /historial)
     for (const mov of historialRegistros) {
       if (mov.fechaObj && mov.fechaObj < fechaMin) {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
-    // Refrescar lista local después de eliminación
     historialRegistros = historialRegistros.filter(mov => mov.fechaObj && mov.fechaObj >= fechaMin);
   }
 
   fechaMax = hoy;
-
-  // Por defecto mostrar último día con registros oppure hoy
   let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
-
   mostrarHistorialPorDia(ultimoDia);
 }
 
-// Función para mostrar solo los registros de un día específico
 function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
@@ -647,20 +638,28 @@ function mostrarHistorialPorDia(dia) {
         : "";
 
       const tr = document.createElement("tr");
+      tr.style.backgroundColor = mov.eliminado ? "#ccc" : "";
+      const esTirarZ = mov.tipo === "TIRAR Z";
+      const hoy = new Date();
+      const mismoDia = mov.fechaObj &&
+        hoy.toDateString() === mov.fechaObj.toDateString() &&
+        !mov.eliminado;
+
       tr.innerHTML = `
         <td>${mov.id}</td>
-        <td>${(typeof mov.total === "number") ? mov.total.toFixed(2) : (mov.total || "")}</td>
+        <td>${(mov.totalGeneral ?? mov.total ?? 0).toFixed(2)}</td>
         <td>${mov.tipo}</td>
-        <td>${mov.cajero || ""}</td>
+        <td>${mov.cajeros ? mov.cajeros.join(", ") : (mov.cajero || "")}</td>
         <td>${fechaStr}</td>
-        <td><button class="reimprimir" data-id="${mov.id}">🖨</button></td>
+        <td>
+          <button class="reimprimir" data-id="${mov.id}">🖨</button>
+          ${esTirarZ ? `<button class="eliminarZ" data-id="${mov.id}" ${!mismoDia ? "disabled" : ""}>❌</button>` : ""}
+        </td>
       `;
 
-      // Si es un registro TIRAR Z, la reimpresión debe imprimir el ticket Z; si es venta normal, abrir modal de ticket
       tr.querySelector(".reimprimir").addEventListener("click", () => {
         if (mov.tipo === "TIRAR Z") {
-          // reconstruir texto Z y llamar imprimirTicketZ
-          const registro = mov; // contiene items y totalPorTipoPago
+          const registro = mov;
           let ticketTexto = `*** TIRAR Z (REIMPRESION) ***\n${registro.fechaObj ? registro.fechaObj.toLocaleDateString() : ""} ${registro.fechaObj ? registro.fechaObj.getHours().toString().padStart(2,'0')+':'+registro.fechaObj.getMinutes().toString().padStart(2,'0') : ""}\n`;
           const cajeros = registro.cajeros || [...new Set((registro.items||[]).map(it => it.cajero))];
           for (const cajero of cajeros) {
@@ -676,26 +675,40 @@ function mostrarHistorialPorDia(dia) {
           }
           ticketTexto += `\n========== TOTAL GENERAL: $${(registro.totalGeneral||0).toFixed(2)} ==========\n`;
           ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
-          if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
-          else imprimirTicket(ticketTexto, new Date().toLocaleString(), "Z", [], (registro.totalGeneral||0), "TIRAR Z");
+          imprimirTicketZ(ticketTexto);
         } else {
           mostrarModalTicket(mov);
         }
       });
 
+      if (esTirarZ && mismoDia) {
+        tr.querySelector(".eliminarZ").addEventListener("click", async () => {
+          const pass = prompt("Contraseña de administrador para eliminar TIRAR Z:");
+          const confSnap = await window.get(window.ref("/config"));
+          const confVal = confSnap.exists() ? confSnap.val() : {};
+          const passAdmin = confVal.passAdmin || "1918";
+          if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+
+          // Restaurar movimientos originales
+          for (const movItem of mov.items || []) {
+            await window.set(window.ref(`/movimientos/${movItem.ticketID}`), movItem);
+          }
+
+          await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
+          loadHistorial();
+          loadMovimientos();
+        });
+      }
+
       tablaHistorial.appendChild(tr);
     });
 
-  // Mostrar fecha completa en el span (dd/mm/yyyy)
   historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
-
-  // Activar/desactivar botones según límites (si fechaMin no tiene día, no bloquear)
   btnDiaPrev.disabled = fechaMin ? (dia <= fechaMin.getDate()) : false;
   btnDiaNext.disabled = fechaMax ? (dia >= fechaMax.getDate()) : false;
 }
 
-// Botones para cambiar día
 btnDiaPrev.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (!isNaN(dia) && (!fechaMin || dia > fechaMin.getDate())) mostrarHistorialPorDia(dia - 1);
