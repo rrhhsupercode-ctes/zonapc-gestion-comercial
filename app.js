@@ -103,20 +103,24 @@
     }
   });
 
-  // --- COBRO ---
+// --- COBRO ---
 const cobroProductos = document.getElementById("cobro-productos");
 const cobroSueltos = document.getElementById("cobro-sueltos");
 const cobroCantidad = document.getElementById("cobro-cantidad");
-const inputCodigoProducto = document.getElementById("input-codigo-producto"); // NUEVO: input por código
+const inputCodigoProducto = document.getElementById("cobro-codigo");
+const inputCodigoSuelto = document.getElementById("cobro-codigo-suelto");
 const inputKgSuelto = document.getElementById("input-kg-suelto");
 const btnAddProduct = document.getElementById("btn-add-product");
 const btnAddSuelto = document.getElementById("btn-add-suelto");
+const btnKgMas = document.getElementById("btn-incr-kg");
+const btnKgMenos = document.getElementById("btn-decr-kg");
 const tablaCobro = document.getElementById("tabla-cobro").querySelector("tbody");
 const totalDiv = document.getElementById("total-div");
 const btnCobrar = document.getElementById("btn-cobrar");
 
 let carrito = [];
 
+// Cargar productos y sueltos en selects
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
   cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
@@ -148,10 +152,12 @@ async function loadProductos() {
     cobroCantidad.appendChild(opt);
   }
 
-  inputCodigoProducto.value = ""; // limpiar input código
-  inputKgSuelto.value = "0.100";  // valor por defecto
+  inputCodigoProducto.value = "";
+  inputCodigoSuelto.value = "";
+  inputKgSuelto.value = "0.100";
 }
 
+// Actualiza tabla de cobro
 function actualizarTabla() {
   tablaCobro.innerHTML = "";
   let total = 0;
@@ -181,13 +187,14 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
+// Obtener precio desde Firebase
 async function getPrecioStock(id, tipo = "stock") {
   const snap = await window.get(window.ref(`/${tipo}/${id}`));
   if (!snap.exists()) return 0;
   return snap.val().precio || 0;
 }
 
-// --- AGREGAR PRODUCTOS ---
+// AGREGAR PRODUCTO (select o input código)
 btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
@@ -200,8 +207,9 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
+// AGREGAR SUELTO (select o input código)
 btnAddSuelto.addEventListener("click", async () => {
-  const id = cobroSueltos.value;
+  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   let cant = parseFloat(inputKgSuelto.value);
   if (!id || cant <= 0) return;
   const snap = await window.get(window.ref(`/sueltos/${id}`));
@@ -210,19 +218,20 @@ btnAddSuelto.addEventListener("click", async () => {
   carrito.push({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
   actualizarTabla();
   inputKgSuelto.value = "0.100";
+  inputCodigoSuelto.value = "";
 });
 
-// --- BOTONES + / - SUELTOS ---
-document.getElementById("btn-kg-mas").addEventListener("click", () => {
+// BOTONES + / - SUELTOS
+btnKgMas.addEventListener("click", () => {
   inputKgSuelto.value = (parseFloat(inputKgSuelto.value) + 0.100).toFixed(3);
 });
-document.getElementById("btn-kg-menos").addEventListener("click", () => {
+btnKgMenos.addEventListener("click", () => {
   let val = parseFloat(inputKgSuelto.value) - 0.100;
   if (val < 0.100) val = 0.100;
   inputKgSuelto.value = val.toFixed(3);
 });
 
-// --- Cobrar con tickets diarios (sin alert de impresión) ---
+// COBRAR: tickets diarios, correlativos, sin imprimir
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -251,7 +260,7 @@ btnCobrar.addEventListener("click", async () => {
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
     btn.addEventListener("click", async () => {
       const tipoPago = btn.dataset.pay;
-      const fechaHoy = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const fechaHoy = new Date().toISOString().split("T")[0];
 
       const confSnap = await window.get(window.ref("/config"));
       const confVal = confSnap.exists() ? confSnap.val() : {};
@@ -262,11 +271,12 @@ btnCobrar.addEventListener("click", async () => {
       ultimoID++;
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
 
-      const movRef = window.push(window.ref("/movimientos"));
       const total = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
       const fecha = new Date().toISOString();
 
+      const movRef = window.push(window.ref("/movimientos"));
       await window.set(movRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha, tipo: tipoPago });
+
       const histRef = window.push(window.ref("/historial"));
       await window.set(histRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha, tipo: tipoPago });
 
