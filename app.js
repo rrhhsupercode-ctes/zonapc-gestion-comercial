@@ -530,9 +530,14 @@ controlesHistorial.style.cssText = `
 `;
 controlesHistorial.innerHTML = `
   <button id="historial-dia-prev">◀</button>
-  <span id="historial-dia" style="min-width:30px; text-align:center; display:inline-block;">01</span>
+  <span id="historial-dia" style="min-width:60px; text-align:center; display:inline-block;">
+    ${new Date().getDate().toString().padStart(2,'0')}/
+    ${(new Date().getMonth()+1).toString().padStart(2,'0')}/
+    ${new Date().getFullYear()}
+  </span>
   <button id="historial-dia-next">▶</button>
 `;
+
 historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
 
 const historialDia = document.getElementById("historial-dia");
