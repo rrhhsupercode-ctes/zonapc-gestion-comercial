@@ -727,6 +727,31 @@ function formatPrecio(num) {
   return `$${entero},${partes[1]}`;
 }
 
+// Función para formatear precio tipo KG (000.000.0X)
+function formatearPrecioModal(inputElement, centavosElement) {
+  let raw = inputElement.value.replace(/\D/g, "");
+  if (!raw) raw = "0";
+  if (raw.length > 7) raw = raw.slice(0, 7);
+
+  let val;
+  switch (raw.length) {
+    case 0: val = "0.000.000"; break;
+    case 1: val = "0.000.00" + raw; break;
+    case 2: val = "0.000.0" + raw; break;
+    case 3: val = "0.000." + raw; break;
+    case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
+    case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
+    case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
+    case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
+  }
+
+  inputElement.value = val;
+
+  const entero = parseInt(raw) || 0;
+  const dec = parseInt(centavosElement.value) || 0;
+  return entero + dec / 100;
+}
+
 async function loadStock(filtro = "") {
   const snap = await window.get(window.ref("/stock"));
   tablaStock.innerHTML = "";
@@ -774,12 +799,6 @@ async function loadStock(filtro = "") {
           display:flex; justify-content:center; align-items:center;
           background:rgba(0,0,0,0.7); z-index:9999;
         `;
-
-        // Precio inicial separado
-        const enteroInicial = Math.floor(prod.precio);
-        const centavosInicial = Math.round((prod.precio % 1) * 100).toString().padStart(2, "0");
-        const precioInputInicial = enteroInicial.toString().padStart(7, "0");
-
         modal.innerHTML = `
           <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
             <h2>Editar Stock ${id}</h2>
@@ -796,9 +815,11 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${precioInputInicial}">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
+                .toString()
+                .padStart(2, "0")}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -823,47 +844,25 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Cantidad
+        // Botones + y - de cantidad
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
         cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
 
-        // Formato dinámico de precio
-        function formatearPrecioModal(inputElement) {
-          let raw = inputElement.value.replace(/\D/g, "");
-          if (raw.length > 7) raw = raw.slice(0, 7);
-          raw = raw.padStart(7, "0");
-
-          let val;
-          switch (raw.length) {
-            case 0: val = "0.000.000"; break;
-            case 1: val = "0.000.00" + raw; break;
-            case 2: val = "0.000.0" + raw; break;
-            case 3: val = "0.000." + raw; break;
-            case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
-            case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
-            case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
-            case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
-          }
-          inputElement.value = val;
-          actualizarPreview();
-        }
-
-        editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
+        // Formateo precio estilo KG
+        editPrecio.addEventListener("input", () => {
+          const combinado = formatearPrecioModal(editPrecio, editCentavos);
+          preview.textContent = formatPrecio(combinado);
+        });
 
         editCentavos.addEventListener("input", () => {
           let val = parseInt(editCentavos.value);
           if (isNaN(val) || val < 0) val = 0;
           if (val > 99) val = 99;
           editCentavos.value = val.toString().padStart(2, "0");
-          actualizarPreview();
-        });
-
-        function actualizarPreview() {
           const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
+          const combinado = entero + val / 100;
           preview.textContent = formatPrecio(combinado);
-        }
+        });
 
         editCancelar.addEventListener("click", () => modal.remove());
 
@@ -934,7 +933,6 @@ btnBuscarStock.addEventListener("click", () => {
 
 // Inicial
 loadStock();
-
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
