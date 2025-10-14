@@ -404,8 +404,16 @@ async function loadMovimientos() {
       </td>
     `;
 
-    tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
+    // REIMPRIMIR
+    tr.querySelector(".reimprimir").addEventListener("click", () => {
+      mostrarModalTicket({
+        ...mov,
+        ticketID: id,
+        reimpresion: true
+      });
+    });
 
+    // ELIMINAR
     tr.querySelector(".eliminar").addEventListener("click", () => {
       showAdminActionModal(async () => {
         const confSnap = await window.get(window.ref("/config"));
@@ -441,78 +449,10 @@ async function loadMovimientos() {
   });
 }
 
-// --- TIRAR Z ---
-btnTirarZ.addEventListener("click", () => {
-  showAdminActionModal(async () => {
-    const snap = await window.get(window.ref("/movimientos"));
-    if (!snap.exists()) return alert("No hay movimientos para tirar Z");
-
-    const todosMov = Object.entries(snap.val())
-      .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
-      .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
-
-    if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
-
-    const fechaZ = new Date();
-    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
-
-    const totalPorTipoPago = {};
-    let totalGeneral = 0;
-    for (const [, mov] of todosMov) {
-      if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
-      totalPorTipoPago[mov.tipo] += mov.total;
-      totalGeneral += mov.total;
-    }
-
-    const registroZ = {
-      tipo: "TIRAR Z",
-      fecha: fechaZ.toISOString(),
-      items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
-      totalPorTipoPago,
-      totalGeneral,
-      cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
-    };
-
-    await window.set(window.ref(`/historial/${zID}`), registroZ);
-
-    for (const [id] of todosMov) {
-      await window.remove(window.ref(`/movimientos/${id}`));
-    }
-
-    loadMovimientos();
-    loadHistorial();
-
-    let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
-    for (const cajero of registroZ.cajeros) {
-      ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
-      const movCajero = registroZ.items.filter(m => m.cajero === cajero);
-      const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-      for (const tipo of tiposPago) {
-        const ventasTipo = movCajero.filter(m => m.tipo === tipo);
-        const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-        ventasTipo.forEach(m => {
-          ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
-        });
-      }
-    }
-    ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
-    ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
-
-    if (typeof imprimirTicketZ === "function") {
-      imprimirTicketZ(ticketTexto);
-    } else {
-      imprimirTicket(`TIRAR Z\n${ticketTexto}`, new Date().toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
-    }
-  });
-});
-
-
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
-// Crear controles de día dinámicos (se insertan antes de la tabla)
 const controlesHistorial = document.createElement("div");
 controlesHistorial.style.cssText = `
   display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
@@ -568,9 +508,7 @@ async function loadHistorial() {
   }
 
   fechaMax = hoy;
-
   let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
-
   mostrarHistorialPorDia(ultimoDia);
 }
 
@@ -628,36 +566,34 @@ function mostrarHistorialPorDia(dia) {
           ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
           if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
         } else {
-          mostrarModalTicket(mov);
+          mostrarModalTicket({
+            ...mov,
+            reimpresion: true
+          });
         }
       });
 
-// --- ELIMINAR TIRAR Z ---
-const btnEliminarZ = tr.querySelector(".eliminar-z");
-if (btnEliminarZ) {
-  btnEliminarZ.addEventListener("click", () => {
-    showAdminActionModal(async () => {
-      // restaurar movimientos
-      for (const reg of mov.items || []) {
-        await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+      // --- ELIMINAR TIRAR Z ---
+      const btnEliminarZ = tr.querySelector(".eliminar-z");
+      if (btnEliminarZ) {
+        btnEliminarZ.addEventListener("click", () => {
+          showAdminActionModal(async () => {
+            for (const reg of mov.items || []) {
+              await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+            }
+            await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
+            tr.style.backgroundColor = "#ccc";
+            btnEliminarZ.disabled = true;
+            const btnReimprimir = tr.querySelector(".reimprimir");
+            if (btnReimprimir) {
+              btnReimprimir.disabled = true;
+              btnReimprimir.style.opacity = "0.5";
+              btnReimprimir.style.pointerEvents = "none";
+            }
+            loadMovimientos();
+          });
+        });
       }
-      // marcar eliminado
-      await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-      tr.style.backgroundColor = "#ccc";
-
-      // deshabilitar ambos botones
-      btnEliminarZ.disabled = true;
-      const btnReimprimir = tr.querySelector(".reimprimir");
-      if (btnReimprimir) {
-        btnReimprimir.disabled = true;
-        btnReimprimir.style.opacity = "0.5";
-        btnReimprimir.style.pointerEvents = "none";
-      }
-
-      loadMovimientos();
-    });
-  });
-}
 
       tablaHistorial.appendChild(tr);
     });
