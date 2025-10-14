@@ -584,14 +584,14 @@ async function loadSueltos(filtro = "") {
               <label for="edit-nombre">Nombre del producto</label>
               <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
 
-              <label for="edit-kg">Cantidad en KG (0.000 - 99.000)</label>
+              <label for="edit-kg">Cantidad en KG (ejemplo: 1,500 = un kilo y medio)</label>
               <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
                 <button id="kg-decr" style="width:30%;">-</button>
                 <input id="edit-kg" type="number" min="0.000" max="99.000" step="0.001" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
                 <button id="kg-incr" style="width:30%;">+</button>
               </div>
 
-              <label for="edit-precio">Precio ($00000,00)</label>
+              <label for="edit-precio">Precio (ejemplo $1999,99 = dos mil pesos)</label>
               <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
 
               <div style="margin-top:10px;">
@@ -797,7 +797,7 @@ tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () =>
         <label for="edit-nro">Número de Cajero (1-99)</label>
         <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
 
-        <label for="edit-nombre">Nombre (6-20 letras, puede incluir espacios y ñ)</label>
+        <label for="edit-nombre">Nombre (6 a 20 letras)</label>
         <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
 
         <label for="edit-dni">DNI (8 dígitos)</label>
