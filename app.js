@@ -449,14 +449,128 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$0.000.000,00"
+// Formato precio sin ceros a la izquierda
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const entero = String(parseInt(partes[0], 10)).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${entero},${partes[1]}`;
 }
 
+// Formateo input precio mientras se escribe
+function formatInputPrecio(value) {
+  let val = value.replace(/\D/g, "").replace(/^0+/, "");
+  if (!val) return "0";
+  const partes = [];
+  while (val.length > 3) {
+    partes.unshift(val.slice(-3));
+    val = val.slice(0, -3);
+  }
+  if (val) partes.unshift(val);
+  return partes.join(".");
+}
+
+// Función para abrir modal de edición
+function openEditStockModal(id, prod) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
+      <h2>Editar Stock ${id}</h2>
+      <label for="edit-nombre">Nombre del producto</label>
+      <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+      <label for="edit-cant">Cantidad (0-999)</label>
+      <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+        <button id="cant-decr" style="width:30%;">-</button>
+        <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
+        <button id="cant-incr" style="width:30%;">+</button>
+      </div>
+      <label>Precio</label>
+      <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+        <input id="edit-precio" type="text" placeholder="0" style="width:65%; text-align:center;" value="${formatInputPrecio(Math.floor(prod.precio))}">
+        <span>,</span>
+        <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2,"0")}">
+      </div>
+      <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+      <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
+      <div style="margin-top:10px;">
+        <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+        <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const editNombre = modal.querySelector("#edit-nombre");
+  const editCant = modal.querySelector("#edit-cant");
+  const editPrecio = modal.querySelector("#edit-precio");
+  const editCentavos = modal.querySelector("#edit-centavos");
+  const editAceptar = modal.querySelector("#edit-aceptar");
+  const editCancelar = modal.querySelector("#edit-cancelar");
+  const editMsg = modal.querySelector("#edit-msg");
+  const preview = modal.querySelector("#preview-precio");
+  const cantDecr = modal.querySelector("#cant-decr");
+  const cantIncr = modal.querySelector("#cant-incr");
+
+  // Formateo precio mientras escribe
+  editPrecio.addEventListener("input", () => {
+    editPrecio.value = formatInputPrecio(editPrecio.value);
+    actualizarPreview();
+  });
+
+  editCentavos.addEventListener("input", () => {
+    let val = parseInt(editCentavos.value);
+    if (isNaN(val) || val < 0) val = 0;
+    if (val > 99) val = 99;
+    editCentavos.value = val.toString().padStart(2, "0");
+    actualizarPreview();
+  });
+
+  function actualizarPreview() {
+    const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+    const dec = parseInt(editCentavos.value) || 0;
+    preview.textContent = formatPrecio(entero + dec / 100);
+  }
+
+  cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
+  cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
+  editCancelar.addEventListener("click", () => modal.remove());
+
+  editAceptar.addEventListener("click", async () => {
+    const newNombre = editNombre.value.trim();
+    const newCant = parseInt(editCant.value);
+    const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+    const dec = parseInt(editCentavos.value) || 0;
+    const newPrecio = entero + dec / 100;
+
+    if (!newNombre || isNaN(newCant)) {
+      editMsg.textContent = "Todos los campos son obligatorios y válidos";
+      return;
+    }
+    if (newCant < 0 || newCant > 999) {
+      editMsg.textContent = "Cantidad fuera de rango 0-999";
+      return;
+    }
+
+    await window.update(window.ref(`/stock/${id}`), {
+      nombre: newNombre,
+      cant: newCant,
+      precio: newPrecio,
+    });
+
+    loadStock();
+    loadProductos();
+    modal.remove();
+  });
+
+  actualizarPreview();
+}
+
+// Cargar stock y asignar botones de editar/eliminar
 async function loadStock(filtro = "") {
   const snap = await window.get(window.ref("/stock"));
   tablaStock.innerHTML = "";
@@ -487,7 +601,7 @@ async function loadStock(filtro = "") {
         <button data-del-id="${id}">❌</button>
       </td>
     `;
-
+    // Eliminar
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/stock/${id}`));
@@ -495,120 +609,9 @@ async function loadStock(filtro = "") {
         loadProductos();
       });
     });
-
+    // Editar
     tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
-      showAdminActionModal(() => {
-        const modal = document.createElement("div");
-        modal.style.cssText = `
-          position:fixed; top:0; left:0; width:100%; height:100%;
-          display:flex; justify-content:center; align-items:center;
-          background:rgba(0,0,0,0.7); z-index:9999;
-        `;
-        modal.innerHTML = `
-          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
-            <h2>Editar Stock ${id}</h2>
-
-            <label for="edit-nombre">Nombre del producto</label>
-            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
-
-            <label for="edit-cant">Cantidad (0-999)</label>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
-              <button id="cant-decr" style="width:30%;">-</button>
-              <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
-              <button id="cant-incr" style="width:30%;">+</button>
-            </div>
-
-            <label>Precio</label>
-            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
-              <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
-                .toString()
-                .padStart(2, "0")}">
-            </div>
-
-            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
-            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
-
-            <div style="margin-top:10px;">
-              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
-
-        const editNombre = modal.querySelector("#edit-nombre");
-        const editCant = modal.querySelector("#edit-cant");
-        const editPrecio = modal.querySelector("#edit-precio");
-        const editCentavos = modal.querySelector("#edit-centavos");
-        const editAceptar = modal.querySelector("#edit-aceptar");
-        const editCancelar = modal.querySelector("#edit-cancelar");
-        const editMsg = modal.querySelector("#edit-msg");
-        const preview = modal.querySelector("#preview-precio");
-        const cantDecr = modal.querySelector("#cant-decr");
-        const cantIncr = modal.querySelector("#cant-incr");
-
-        // Formateo dinámico del campo de pesos (000.000)
-        editPrecio.addEventListener("input", () => {
-          let val = editPrecio.value.replace(/\D/g, "");
-          if (val.length > 7) val = val.slice(0, 7);
-          const partes = [];
-          while (val.length > 3) {
-            partes.unshift(val.slice(-3));
-            val = val.slice(0, -3);
-          }
-          if (val) partes.unshift(val);
-          editPrecio.value = partes.join(".");
-          actualizarPreview();
-        });
-
-        editCentavos.addEventListener("input", () => {
-          let val = parseInt(editCentavos.value);
-          if (isNaN(val) || val < 0) val = 0;
-          if (val > 99) val = 99;
-          editCentavos.value = val.toString().padStart(2, "0");
-          actualizarPreview();
-        });
-
-        function actualizarPreview() {
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
-        }
-
-        cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
-        cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
-        editCancelar.addEventListener("click", () => modal.remove());
-
-        editAceptar.addEventListener("click", async () => {
-          const newNombre = editNombre.value.trim();
-          const newCant = parseInt(editCant.value);
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const newPrecio = entero + dec / 100;
-
-          if (!newNombre || isNaN(newCant)) {
-            editMsg.textContent = "Todos los campos son obligatorios y válidos";
-            return;
-          }
-          if (newCant < 0 || newCant > 999) {
-            editMsg.textContent = "Cantidad fuera de rango 0-999";
-            return;
-          }
-
-          await window.update(window.ref(`/stock/${id}`), {
-            nombre: newNombre,
-            cant: newCant,
-            precio: newPrecio,
-          });
-
-          loadStock();
-          loadProductos();
-          modal.remove();
-        });
-      });
+      showAdminActionModal(() => openEditStockModal(id, prod));
     });
 
     tablaStock.appendChild(tr);
@@ -641,7 +644,7 @@ btnAgregarStock.addEventListener("click", async () => {
   loadProductos();
 });
 
-// Buscar
+// Buscar stock
 btnBuscarStock.addEventListener("click", () => {
   const filtro = stockCodigo.value.trim();
   loadStock(filtro);
