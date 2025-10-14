@@ -417,18 +417,24 @@ const tablaStock = document.getElementById("tabla-stock").querySelector("tbody")
 const btnStockDecr = document.getElementById("stock-btn-decr");
 const btnStockIncr = document.getElementById("stock-btn-incr");
 
-// Asegurar que no hay duplicidad de listeners
-btnStockDecr?.removeEventListener("click", () => {});
-btnStockIncr?.removeEventListener("click", () => {});
+// Cargar opciones 1 a 999 si el input es un <select>
+if (stockCantidad.tagName === "SELECT") {
+  stockCantidad.innerHTML = "";
+  for (let i = 1; i <= 999; i++) {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = i;
+    stockCantidad.appendChild(opt);
+  }
+}
 
-// Control de cantidad con límites 0–999 (solo enteros)
+// Actualiza cantidad (0–999)
 function actualizarCant(delta, inputElement) {
   let val = parseInt(inputElement.value) || 0;
   val = Math.min(999, Math.max(0, val + delta));
   inputElement.value = val;
 }
 
-// Botones + / -
 if (btnStockDecr) btnStockDecr.addEventListener("click", () => actualizarCant(-1, stockCantidad));
 if (btnStockIncr) btnStockIncr.addEventListener("click", () => actualizarCant(1, stockCantidad));
 
@@ -463,6 +469,7 @@ async function loadStock(filtro = "") {
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
+  // Orden descendente por fecha
   stockArray.sort((a, b) => {
     const fechaA = new Date(a[1].fecha || 0).getTime();
     const fechaB = new Date(b[1].fecha || 0).getTime();
@@ -483,7 +490,6 @@ async function loadStock(filtro = "") {
       </td>
     `;
 
-    // Eliminar con modal admin
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/stock/${id}`));
@@ -492,7 +498,6 @@ async function loadStock(filtro = "") {
       });
     });
 
-    // Editar producto
     tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(() => {
         const modal = document.createElement("div");
@@ -504,55 +509,61 @@ async function loadStock(filtro = "") {
         modal.innerHTML = `
           <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
             <h2>Editar Stock ${id}</h2>
-            <label>Nombre</label>
-            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%;margin:5px 0;">
-            <label>Cantidad (0–999)</label>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin:5px 0;">
+
+            <label for="edit-nombre">Nombre del producto</label>
+            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+
+            <label for="edit-cant">Cantidad (0-999)</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
               <button id="cant-decr" style="width:30%;">-</button>
-              <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%;text-align:center;">
+              <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
               <button id="cant-incr" style="width:30%;">+</button>
             </div>
-            <label>Precio</label>
-            <input id="edit-precio" type="number" value="${prod.precio}" style="width:100%;margin:5px 0;">
-            <p id="edit-msg" style="color:red;margin:5px 0;"></p>
-            <button id="edit-aceptar">Aceptar</button>
-            <button id="edit-cancelar" style="background:red;color:#fff;">Cancelar</button>
+
+            <label for="edit-precio">Precio</label>
+            <input id="edit-precio" type="number" value="${prod.precio}" style="width:100%; margin:5px 0;">
+
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+            <p id="edit-msg" style="color:red; margin-top:5px;"></p>
           </div>
         `;
         document.body.appendChild(modal);
 
-        const nombre = modal.querySelector("#edit-nombre");
-        const cant = modal.querySelector("#edit-cant");
-        const precio = modal.querySelector("#edit-precio");
-        const msg = modal.querySelector("#edit-msg");
-        const aceptar = modal.querySelector("#edit-aceptar");
-        const cancelar = modal.querySelector("#edit-cancelar");
-        const decr = modal.querySelector("#cant-decr");
-        const incr = modal.querySelector("#cant-incr");
+        const editNombre = modal.querySelector("#edit-nombre");
+        const editCant = modal.querySelector("#edit-cant");
+        const editPrecio = modal.querySelector("#edit-precio");
+        const editAceptar = modal.querySelector("#edit-aceptar");
+        const editCancelar = modal.querySelector("#edit-cancelar");
+        const editMsg = modal.querySelector("#edit-msg");
+        const cantDecr = modal.querySelector("#cant-decr");
+        const cantIncr = modal.querySelector("#cant-incr");
 
-        decr.addEventListener("click", () => actualizarCant(-1, cant));
-        incr.addEventListener("click", () => actualizarCant(1, cant));
-        cancelar.addEventListener("click", () => modal.remove());
+        cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
+        cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
+        editCancelar.addEventListener("click", () => modal.remove());
 
-        aceptar.addEventListener("click", async () => {
-          const newNombre = nombre.value.trim();
-          const newCant = parseInt(cant.value);
-          const newPrecio = parseFloat(precio.value);
+        editAceptar.addEventListener("click", async () => {
+          const newNombre = editNombre.value.trim();
+          const newCant = parseInt(editCant.value);
+          const newPrecio = parseFloat(editPrecio.value);
 
           if (!newNombre || isNaN(newCant) || isNaN(newPrecio)) {
-            msg.textContent = "Todos los campos son obligatorios.";
+            editMsg.textContent = "Todos los campos son obligatorios";
             return;
           }
           if (newCant < 0 || newCant > 999) {
-            msg.textContent = "Cantidad fuera de rango 0–999.";
+            editMsg.textContent = "Cantidad fuera de rango 0-999";
+            return;
+          }
+          if (newPrecio < 0 || newPrecio > 99999.99) {
+            editMsg.textContent = "Precio incorrecto";
             return;
           }
 
-          await window.update(window.ref(`/stock/${id}`), {
-            nombre: newNombre,
-            cant: newCant,
-            precio: newPrecio,
-          });
+          await window.update(window.ref(`/stock/${id}`), { nombre: newNombre, cant: newCant, precio: newPrecio });
           loadStock();
           loadProductos();
           modal.remove();
@@ -564,27 +575,21 @@ async function loadStock(filtro = "") {
   });
 }
 
-// Agregar o sumar stock (sin admin)
+// Agregar stock (suma si existe)
 btnAgregarStock.addEventListener("click", async () => {
   const codigo = stockCodigo.value.trim();
   const cant = parseInt(stockCantidad.value);
-  if (!codigo || isNaN(cant)) return;
+  if (!codigo || isNaN(cant) || cant <= 0) return;
 
-  const refStock = window.ref(`/stock/${codigo}`);
-  const snap = await window.get(refStock);
+  const snap = await window.get(window.ref(`/stock/${codigo}`));
   const fecha = new Date().toISOString();
 
   if (snap.exists()) {
-    const actual = parseInt(snap.val().cant) || 0;
-    const nuevo = Math.min(999, actual + cant);
-    await window.update(refStock, { cant: nuevo, fecha });
+    const currentCant = parseInt(snap.val().cant) || 0;
+    const newCant = Math.min(999, currentCant + cant);
+    await window.update(window.ref(`/stock/${codigo}`), { cant: newCant, fecha });
   } else {
-    await window.set(refStock, {
-      nombre: codigo,
-      cant: Math.min(999, Math.max(0, cant)),
-      fecha,
-      precio: 100,
-    });
+    await window.set(window.ref(`/stock/${codigo}`), { nombre: codigo, cant: Math.min(999, cant), fecha, precio: 100 });
   }
 
   loadStock();
@@ -596,6 +601,10 @@ btnBuscarStock.addEventListener("click", () => {
   const filtro = stockCodigo.value.trim();
   loadStock(filtro);
 });
+
+// Inicial
+loadStock();
+
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
