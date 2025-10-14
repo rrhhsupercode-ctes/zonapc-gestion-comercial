@@ -517,13 +517,13 @@ const cajeroPass = document.getElementById("cajero-pass");
 const btnAgregarCajero = document.getElementById("agregar-cajero");
 const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbody");
 
-  function showSection(id) {
+function showSection(id) {
   sections.forEach(s => s.classList.add("hidden"));
   const sec = document.getElementById(id);
   if (sec) sec.classList.remove("hidden");
 
   // --- Actualizar contenido en tiempo real ---
-  if (id === "cajeros") loadCajerosTabla(); // recarga la tabla cada vez que se muestra
+  if (id === "cajeros") loadCajerosTabla();
   if (id === "cobro") {
     loadProductos();
     loadStock();
@@ -532,7 +532,6 @@ const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbo
   if (id === "movimientos") loadMovimientos();
   if (id === "historial") loadHistorial();
 }
-
 
 // Cargar select de Nros de cajero 01 a 99
 function loadCajeroSelectOptions(selected = null) {
@@ -552,7 +551,6 @@ async function loadCajerosTabla() {
   loadCajeroSelectOptions();
 
   if (snap.exists()) {
-    // Ordenar por nro de cajero de menor a mayor
     Object.entries(snap.val())
       .sort(([idA], [idB]) => Number(idA) - Number(idB))
       .forEach(([id, cajero]) => {
@@ -591,7 +589,6 @@ async function loadCajerosTabla() {
           const passAdmin = confVal.passAdmin || "1918";
           const masterPass = confVal.masterPass || "1409";
 
-          // Crear modal
           const modal = document.createElement("div");
           modal.style.cssText = `
             position:fixed; top:0; left:0; width:100%; height:100%;
@@ -604,7 +601,7 @@ async function loadCajerosTabla() {
               <input id="edit-pass-admin" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
               <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
               <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
-              <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;">
+              <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
               <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
               <div style="margin-top:10px;">
                 <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
@@ -624,9 +621,7 @@ async function loadCajerosTabla() {
           const editCancelar = modal.querySelector("#edit-cancelar");
           const editMsg = modal.querySelector("#edit-msg");
 
-          editCancelar.addEventListener("click", () => {
-            modal.remove();
-          });
+          editCancelar.addEventListener("click", () => modal.remove());
 
           editAceptar.addEventListener("click", async () => {
             const adminInput = editPassAdmin.value.trim();
@@ -642,6 +637,11 @@ async function loadCajerosTabla() {
 
             if (!newNro || !newNombre || !newDni || !newPass) {
               editMsg.textContent = "Todos los campos son obligatorios";
+              return;
+            }
+
+            if (!/^\d{8}$/.test(newDni)) {
+              editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
               return;
             }
 
@@ -674,6 +674,11 @@ btnAgregarCajero.addEventListener("click", async () => {
   const dni = cajeroDni.value.trim();
   const pass = cajeroPass.value.trim();
   if (!nro || !nombre || !dni || !pass) return;
+
+  if (!/^\d{8}$/.test(dni)) {
+    alert("El DNI debe tener exactamente 8 dígitos");
+    return;
+  }
 
   const existingSnap = await window.get(window.ref(`/cajeros/${nro}`));
   if (existingSnap.exists()) {
