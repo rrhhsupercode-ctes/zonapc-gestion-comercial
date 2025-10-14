@@ -507,6 +507,23 @@ const cajeroPass = document.getElementById("cajero-pass");
 const btnAgregarCajero = document.getElementById("agregar-cajero");
 const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbody");
 
+  function showSection(id) {
+  sections.forEach(s => s.classList.add("hidden"));
+  const sec = document.getElementById(id);
+  if (sec) sec.classList.remove("hidden");
+
+  // --- Actualizar contenido en tiempo real ---
+  if (id === "cajeros") loadCajerosTabla(); // recarga la tabla cada vez que se muestra
+  if (id === "cobro") {
+    loadProductos();
+    loadStock();
+    loadSueltos();
+  }
+  if (id === "movimientos") loadMovimientos();
+  if (id === "historial") loadHistorial();
+}
+
+
 // Cargar select de Nros de cajero 01 a 99
 function loadCajeroSelectOptions(selected = null) {
   cajeroNro.innerHTML = "";
