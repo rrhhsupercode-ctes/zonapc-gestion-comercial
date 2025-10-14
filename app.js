@@ -1081,163 +1081,162 @@ async function loadSueltos(filtro = "") {
       });
     });
 
-    // Editar
-    tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
-      showAdminActionModal(() => {
-        const modal = document.createElement("div");
-        modal.style.cssText = `
-          position:fixed; top:0; left:0; width:100%; height:100%;
-          display:flex; justify-content:center; align-items:center;
-          background:rgba(0,0,0,0.7); z-index:9999;
-        `;
-        modal.innerHTML = `
-          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
-            <h2>Editar Suelto ${id}</h2>
+    //Editar
+tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+  showAdminActionModal(() => {
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      display:flex; justify-content:center; align-items:center;
+      background:rgba(0,0,0,0.7); z-index:9999;
+    `;
+    // Convertir precio a entero y centavos separados
+    const enteroInicial = Math.floor(prod.precio);
+    const centavosInicial = Math.round((prod.precio % 1) * 100).toString().padStart(2, "0");
+    // Formatear entero a 7 dígitos con ceros a la izquierda para el input
+    const precioInputInicial = enteroInicial.toString().padStart(7, "0");
 
-            <label for="edit-nombre">Nombre del producto</label>
-            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+    modal.innerHTML = `
+      <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
+        <h2>Editar Suelto ${id}</h2>
 
-            <label for="edit-kg">KG (0.000 - 99.000)</label>
-            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
-              <button id="kg-decr" style="width:30%;">-</button>
-              <input id="edit-kg" type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
-              <button id="kg-incr" style="width:30%;">+</button>
-            </div>
-            <p id="edit-kg-msg" style="color:red; margin-top:2px; font-size:0.9em; min-height:18px;"></p>
+        <label for="edit-nombre">Nombre del producto</label>
+        <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
 
-            <label>Precio</label>
-            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0000000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
-              <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2, "0")}">
-            </div>
+        <label for="edit-kg">KG (0.000 - 99.000)</label>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+          <button id="kg-decr" style="width:30%;">-</button>
+          <input id="edit-kg" type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
+          <button id="kg-incr" style="width:30%;">+</button>
+        </div>
+        <p id="edit-kg-msg" style="color:red; margin-top:2px; font-size:0.9em; min-height:18px;"></p>
 
-            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
-            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
+        <label>Precio</label>
+        <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+          <input id="edit-precio" type="text" placeholder="0000000" style="width:65%; text-align:center;" value="${precioInputInicial}">
+          <span>,</span>
+          <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
+        </div>
 
-            <div style="margin-top:10px;">
-              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-            </div>
-          </div>
-        `;
-        document.body.appendChild(modal);
+        <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+        <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
-        const editNombre = modal.querySelector("#edit-nombre");
-        const editKg = modal.querySelector("#edit-kg");
-        const editKgMsg = modal.querySelector("#edit-kg-msg");
-        const editPrecio = modal.querySelector("#edit-precio");
-        const editCentavos = modal.querySelector("#edit-centavos");
-        const editAceptar = modal.querySelector("#edit-aceptar");
-        const editCancelar = modal.querySelector("#edit-cancelar");
-        const editMsg = modal.querySelector("#edit-msg");
-        const preview = modal.querySelector("#preview-precio");
-        const kgDecr = modal.querySelector("#kg-decr");
-        const kgIncr = modal.querySelector("#kg-incr");
+        <div style="margin-top:10px;">
+          <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+          <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
 
-        // KG
-        function formatearKgModal(inputElement, msgElement, delta = 0) {
-          let raw = inputElement.value.replace(/\D/g, "");
+    const editNombre = modal.querySelector("#edit-nombre");
+    const editKg = modal.querySelector("#edit-kg");
+    const editKgMsg = modal.querySelector("#edit-kg-msg");
+    const editPrecio = modal.querySelector("#edit-precio");
+    const editCentavos = modal.querySelector("#edit-centavos");
+    const editAceptar = modal.querySelector("#edit-aceptar");
+    const editCancelar = modal.querySelector("#edit-cancelar");
+    const editMsg = modal.querySelector("#edit-msg");
+    const preview = modal.querySelector("#preview-precio");
+    const kgDecr = modal.querySelector("#kg-decr");
+    const kgIncr = modal.querySelector("#kg-incr");
 
-          if (delta !== 0) {
-            let val = parseFloat(inputElement.value) || 0;
-            val = Math.min(99.000, Math.max(0.000, val + delta));
-            inputElement.value = val.toFixed(3);
-            if (msgElement) msgElement.textContent = "";
-            return;
-          }
+    // KG
+    function formatearKgModal(inputElement, msgElement, delta = 0) {
+      let raw = inputElement.value.replace(/\D/g, "");
+      if (delta !== 0) {
+        let val = parseFloat(inputElement.value) || 0;
+        val = Math.min(99.000, Math.max(0.000, val + delta));
+        inputElement.value = val.toFixed(3);
+        if (msgElement) msgElement.textContent = "";
+        return;
+      }
+      let val;
+      switch (raw.length) {
+        case 0: val = 0.000; break;
+        case 1: val = parseFloat("0.00" + raw); break;
+        case 2: val = parseFloat("0.0" + raw); break;
+        case 3: val = parseFloat("0." + raw); break;
+        case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+        case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+        default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+      }
+      if (isNaN(val) || val < 0 || val > 99) {
+        msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
+        inputElement.value = "0.000";
+      } else {
+        inputElement.value = val.toFixed(3);
+        msgElement.textContent = "";
+      }
+    }
 
-          let val;
-          switch (raw.length) {
-            case 0: val = 0.000; break;
-            case 1: val = parseFloat("0.00" + raw); break;
-            case 2: val = parseFloat("0.0" + raw); break;
-            case 3: val = parseFloat("0." + raw); break;
-            case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
-            case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-            default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-          }
+    kgIncr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, 0.100));
+    kgDecr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, -0.100));
+    editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
+    editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
 
-          if (isNaN(val) || val < 0 || val > 99) {
-            msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-            inputElement.value = "0.000";
-          } else {
-            inputElement.value = val.toFixed(3);
-            msgElement.textContent = "";
-          }
-        }
+    // Precio tipo KG con centavos (igual a KG)
+    function formatearPrecioModal(inputElement) {
+      let raw = inputElement.value.replace(/\D/g, "");
+      if (raw.length > 7) raw = raw.slice(0, 7);
+      raw = raw.padStart(7, "0");
+      let val;
+      switch (raw.length) {
+        case 0: val = "0.000.000"; break;
+        case 1: val = "0.000.00" + raw; break;
+        case 2: val = "0.000.0" + raw; break;
+        case 3: val = "0.000." + raw; break;
+        case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
+        case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
+        case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
+        case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
+      }
+      inputElement.value = val;
+      actualizarPreview();
+    }
 
-        kgIncr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, 0.100));
-        kgDecr.addEventListener("click", () => formatearKgModal(editKg, editKgMsg, -0.100));
-        editKg.addEventListener("input", () => formatearKgModal(editKg, editKgMsg));
-        editKg.addEventListener("blur", () => formatearKgModal(editKg, editKgMsg));
-
-// Precio tipo KG con centavos
-function formatearPrecioModal(inputElement) {
-  let raw = inputElement.value.replace(/\D/g, ""); // solo números
-  if (raw.length > 7) raw = raw.slice(0, 7);
-  raw = raw.padStart(7, "0"); // rellena a 7 dígitos
-
-  let val;
-  switch (raw.length) {
-    case 0: val = "0.000.000"; break;
-    case 1: val = "0.000.00" + raw; break;
-    case 2: val = "0.000.0" + raw; break;
-    case 3: val = "0.000." + raw; break;
-    case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
-    case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
-    case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
-    case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
-  }
-
-  inputElement.value = val;
-  actualizarPreview();
-}
-
-editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
-
-editCentavos.addEventListener("input", () => {
-  let val = parseInt(editCentavos.value);
-  if (isNaN(val) || val < 0) val = 0;
-  if (val > 99) val = 99;
-  editCentavos.value = val.toString().padStart(2, "0");
-  actualizarPreview();
-});
-
-function actualizarPreview() {
-  // quitar puntos para calcular el valor real
-  const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-  const dec = parseInt(editCentavos.value) || 0;
-  const combinado = entero + dec / 100;
-  preview.textContent = formatPrecio(combinado);
-}
-
-        editCancelar.addEventListener("click", () => modal.remove());
-
-        editAceptar.addEventListener("click", async () => {
-          const newNombre = editNombre.value.trim();
-          const newKg = parseFloat(editKg.value);
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const newPrecio = entero + dec / 100;
-
-          if (!newNombre || isNaN(newKg) || newKg < 0 || newKg > 99) {
-            editMsg.textContent = "Campos obligatorios o KG inválido";
-            return;
-          }
-
-          await window.update(window.ref(`/sueltos/${id}`), {
-            nombre: newNombre,
-            kg: newKg,
-            precio: newPrecio,
-          });
-
-          loadSueltos();
-          loadProductos();
-          modal.remove();
-        });
-      });
+    editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
+    editCentavos.addEventListener("input", () => {
+      let val = parseInt(editCentavos.value);
+      if (isNaN(val) || val < 0) val = 0;
+      if (val > 99) val = 99;
+      editCentavos.value = val.toString().padStart(2, "0");
+      actualizarPreview();
     });
+
+    function actualizarPreview() {
+      const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+      const dec = parseInt(editCentavos.value) || 0;
+      const combinado = entero + dec / 100;
+      preview.textContent = formatPrecio(combinado);
+    }
+
+    editCancelar.addEventListener("click", () => modal.remove());
+
+    editAceptar.addEventListener("click", async () => {
+      const newNombre = editNombre.value.trim();
+      const newKg = parseFloat(editKg.value);
+      const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+      const dec = parseInt(editCentavos.value) || 0;
+      const newPrecio = entero + dec / 100;
+
+      if (!newNombre || isNaN(newKg) || newKg < 0 || newKg > 99) {
+        editMsg.textContent = "Campos obligatorios o KG inválido";
+        return;
+      }
+
+      await window.update(window.ref(`/sueltos/${id}`), {
+        nombre: newNombre,
+        kg: newKg,
+        precio: newPrecio,
+      });
+
+      loadSueltos();
+      loadProductos();
+      modal.remove();
+    });
+  });
+});
 
     tablaSueltos.appendChild(tr);
   });
