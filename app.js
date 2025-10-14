@@ -104,182 +104,6 @@
   });
 
 // --- COBRO ---
-const cobroProductos = document.getElementById("cobro-productos");
-const cobroSueltos = document.getElementById("cobro-sueltos");
-const cobroCantidad = document.getElementById("cobro-cantidad");
-const inputCodigoProducto = document.getElementById("cobro-codigo");
-const inputCodigoSuelto = document.getElementById("cobro-codigo-suelto");
-const inputKgSuelto = document.getElementById("input-kg-suelto");
-const btnAddProduct = document.getElementById("btn-add-product");
-const btnAddSuelto = document.getElementById("btn-add-suelto");
-const btnKgMas = document.getElementById("btn-incr-kg");
-const btnKgMenos = document.getElementById("btn-decr-kg");
-const tablaCobro = document.getElementById("tabla-cobro").querySelector("tbody");
-const totalDiv = document.getElementById("total-div");
-const btnCobrar = document.getElementById("btn-cobrar");
-
-let carrito = [];
-
-// Cargar productos y sueltos en selects
-async function loadProductos() {
-  const snap = await window.get(window.ref("/stock"));
-  cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
-  if (snap.exists()) Object.entries(snap.val()).forEach(([k, v]) => {
-    const opt = document.createElement("option");
-    opt.value = k;
-    opt.textContent = v.nombre;
-    cobroProductos.appendChild(opt);
-  });
-
-  const sueltosSnap = await window.get(window.ref("/sueltos"));
-  cobroSueltos.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-    const opt = document.createElement("option");
-    opt.value = k;
-    opt.textContent = v.nombre;
-    cobroSueltos.appendChild(opt);
-  });
-
-  cobroCantidad.innerHTML = "";
-  for (let i = 1; i <= 99; i++) {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = i;
-    cobroCantidad.appendChild(opt);
-  }
-
-  inputCodigoProducto.value = "";
-  inputCodigoSuelto.value = "";
-  inputKgSuelto.value = "0.100";
-}
-
-// Actualiza tabla de cobro
-function actualizarTabla() {
-  tablaCobro.innerHTML = "";
-  let total = 0;
-  carrito.forEach((item, idx) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${item.tipo === "stock" ? item.cant : item.cant.toFixed(3)}</td>
-      <td>${item.nombre}</td>
-      <td>${item.precio.toFixed(2)}</td>
-      <td>${(item.cant * item.precio).toFixed(2)}</td>
-      <td><button data-idx="${idx}">❌</button></td>
-    `;
-    tr.querySelector("button").addEventListener("click", async () => {
-      const pass = prompt("Contraseña de administrador para eliminar item:");
-      const snap = await window.get(window.ref("/config"));
-      const val = snap.exists() ? snap.val() : {};
-      const passAdmin = val.passAdmin || "1918";
-      if (pass === passAdmin || pass === val.masterPass) {
-        carrito.splice(idx, 1);
-        actualizarTabla();
-      } else alert("Contraseña incorrecta");
-    });
-    tablaCobro.appendChild(tr);
-    total += item.cant * item.precio;
-  });
-  totalDiv.textContent = `TOTAL: $${total.toFixed(2)}`;
-  btnCobrar.classList.toggle("hidden", carrito.length === 0);
-}
-
-// Sumar cantidades si ya existe producto en carrito, con control de stock
-async function agregarAlCarrito(nuevoItem) {
-  const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-  
-  const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
-  let totalCant = nuevoItem.cant;
-  if (idx >= 0) totalCant += carrito[idx].cant;
-
-  if ((nuevoItem.tipo === "stock" && totalCant > data.cant) || (nuevoItem.tipo === "sueltos" && totalCant > data.kg)) {
-    return alert("STOCK INSUFICIENTE");
-  }
-
-  if (idx >= 0) carrito[idx].cant += nuevoItem.cant;
-  else carrito.push(nuevoItem);
-
-  actualizarTabla();
-}
-
-// AGREGAR PRODUCTO
-btnAddProduct.addEventListener("click", async () => {
-  let id = cobroProductos.value || inputCodigoProducto.value.trim();
-  let cant = parseInt(cobroCantidad.value);
-  if (!id || cant <= 0) return;
-
-  const snap = await window.get(window.ref(`/stock/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
-  inputCodigoProducto.value = "";
-});
-
-// AGREGAR SUELTO
-btnAddSuelto.addEventListener("click", async () => {
-  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
-  let cant = parseFloat(inputKgSuelto.value);
-  if (!id || cant <= 0) return;
-
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
-  inputKgSuelto.value = "0.100";
-  inputCodigoSuelto.value = "";
-});
-
-// BOTONES + / - SUELTOS
-btnKgMas.addEventListener("click", () => {
-  inputKgSuelto.value = (parseFloat(inputKgSuelto.value) + 0.100).toFixed(3);
-});
-btnKgMenos.addEventListener("click", () => {
-  let val = parseFloat(inputKgSuelto.value) - 0.100;
-  if (val < 0.100) val = 0.100;
-  inputKgSuelto.value = val.toFixed(3);
-});
-
-// IMPRIMIR TICKET
-function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "absolute";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(`
-    <html>
-      <head>
-        <style>
-          body { font-family: monospace; max-width:5cm; text-align:left; white-space: pre-line; padding:5px; }
-          .ticket { border:1px solid #000; padding:5px; }
-        </style>
-      </head>
-      <body>
-        <div class="ticket">
-          ${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n
-          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
-          \nTOTAL: $${total.toFixed(2)}\nPago: ${tipoPago}
-        </div>
-      </body>
-    </html>
-  `);
-  doc.close();
-  iframe.contentWindow.focus();
-  iframe.contentWindow.print();
-  setTimeout(()=>iframe.remove(),500);
-}
-
-// COBRAR
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -323,24 +147,37 @@ btnCobrar.addEventListener("click", async () => {
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
       const total = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
 
-      // Guardar movimientos
-      const movRef = window.push(window.ref("/movimientos"));
-      await window.set(movRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha: fecha.toISOString(), tipo: tipoPago });
+      // Guardar movimientos con ticketID como clave
+      await window.set(window.ref(`/movimientos/${ticketID}`), {
+        ticketID,
+        cajero: currentUser.id,
+        items: carrito,
+        total,
+        fecha: fecha.toISOString(),
+        tipo: tipoPago,
+        eliminado: false
+      });
 
-      // Guardar historial
-      const histRef = window.push(window.ref("/historial"));
-      await window.set(histRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha: fecha.toISOString(), tipo: tipoPago });
+      // Guardar historial con ticketID como clave
+      await window.set(window.ref(`/historial/${ticketID}`), {
+        ticketID,
+        cajero: currentUser.id,
+        items: carrito,
+        total,
+        fecha: fecha.toISOString(),
+        tipo: tipoPago
+      });
 
+      // Actualizar configuración de tickets
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
       // Actualizar stock
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-        if (snapItem.exists()) {
-          const data = snapItem.val();
-          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
-          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
-        }
+        if (!snapItem.exists()) continue;
+        const data = snapItem.val();
+        if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
+        else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
       }
 
       // Imprimir ticket
@@ -359,6 +196,7 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
+
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
@@ -367,10 +205,13 @@ async function loadMovimientos() {
   const snap = await window.get(window.ref("/movimientos"));
   tablaMovimientos.innerHTML = "";
   filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
-
   if (!snap.exists()) return;
 
-  Object.entries(snap.val()).forEach(([id, mov]) => {
+  // Ordenar por fecha descendente (más reciente arriba)
+  const entries = Object.entries(snap.val())
+    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+
+  entries.forEach(([id, mov]) => {
     const tr = document.createElement("tr");
     const eliminado = mov.eliminado || false;
 
@@ -398,7 +239,7 @@ async function loadMovimientos() {
       const passAdmin = confVal.passAdmin || "1918";
       if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
-      // Restaurar stock
+      // Restaurar stock/sueltos
       for (const item of mov.items) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (!snapItem.exists()) continue;
@@ -461,7 +302,10 @@ filtroCajero.addEventListener("change", async () => {
   const snap = await window.get(window.ref("/movimientos"));
   if (!snap.exists()) return;
   tablaMovimientos.innerHTML = "";
-  Object.entries(snap.val()).forEach(([id, mov]) => {
+  const entries = Object.entries(snap.val())
+    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha)); // ordenar desc
+
+  entries.forEach(([id, mov]) => {
     if (filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value) {
       const tr = document.createElement("tr");
       const eliminado = mov.eliminado || false;
