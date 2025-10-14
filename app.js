@@ -980,11 +980,10 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// Función para formatear KG según lógica de 1-5 dígitos y límites 0.000 - 99.000
+// Función para formatear KG según nueva lógica 0.000 → 0.001, 0.012, 0.123, 1.234, 12.345
 function formatearKg(inputElement, msgElement, delta = 0) {
   let raw = inputElement.value.replace(/\D/g, ""); // solo números
 
-  // Si viene un delta de botones, sumarlo al valor actual
   if (delta !== 0) {
     let val = parseFloat(inputElement.value) || 0;
     val = Math.min(99.000, Math.max(0.000, val + delta));
@@ -994,13 +993,15 @@ function formatearKg(inputElement, msgElement, delta = 0) {
   }
 
   let val;
-  if (raw.length === 0) val = 0;
-  else if (raw.length === 1) val = parseFloat(raw + ".000");
-  else if (raw.length === 2) val = parseFloat("0." + raw + "0");
-  else if (raw.length === 3) val = parseFloat("0." + raw);
-  else if (raw.length === 4) val = parseFloat(raw[0] + "." + raw.slice(1));
-  else if (raw.length === 5) val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
-  else val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); // máximo 99.999
+  switch (raw.length) {
+    case 0: val = 0.000; break;
+    case 1: val = parseFloat("0.00" + raw); break;
+    case 2: val = parseFloat("0.0" + raw); break;
+    case 3: val = parseFloat("0." + raw); break;
+    case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+    case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+    default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+  }
 
   if (isNaN(val) || val < 0 || val > 99) {
     msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
@@ -1132,7 +1133,7 @@ async function loadSueltos(filtro = "") {
         const kgDecr = modal.querySelector("#kg-decr");
         const kgIncr = modal.querySelector("#kg-incr");
 
-        // Nueva función de formateo para modal
+        // Función formateo modal igual que principal
         function formatearKgModal(inputElement, msgElement, delta = 0) {
           let raw = inputElement.value.replace(/\D/g, "");
 
@@ -1145,13 +1146,15 @@ async function loadSueltos(filtro = "") {
           }
 
           let val;
-          if (raw.length === 0) val = 0;
-          else if (raw.length === 1) val = parseFloat(raw + ".000");
-          else if (raw.length === 2) val = parseFloat("0." + raw + "0");
-          else if (raw.length === 3) val = parseFloat("0." + raw);
-          else if (raw.length === 4) val = parseFloat(raw[0] + "." + raw.slice(1));
-          else if (raw.length === 5) val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
-          else val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5));
+          switch (raw.length) {
+            case 0: val = 0.000; break;
+            case 1: val = parseFloat("0.00" + raw); break;
+            case 2: val = parseFloat("0.0" + raw); break;
+            case 3: val = parseFloat("0." + raw); break;
+            case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+            case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+            default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+          }
 
           if (isNaN(val) || val < 0 || val > 99) {
             msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
