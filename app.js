@@ -687,23 +687,32 @@ function mostrarHistorialPorDia(dia) {
         }
       });
 
-      // --- ELIMINAR TIRAR Z ---
-      const btnEliminarZ = tr.querySelector(".eliminar-z");
-      if (btnEliminarZ) {
-        btnEliminarZ.addEventListener("click", () => {
-          showAdminActionModal(async () => {
-            // restaurar movimientos
-            for (const reg of mov.items || []) {
-              await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
-            }
-            // marcar eliminado
-            await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-            tr.style.backgroundColor = "#ccc";
-            btnEliminarZ.disabled = true;
-            loadMovimientos();
-          });
-        });
+// --- ELIMINAR TIRAR Z ---
+const btnEliminarZ = tr.querySelector(".eliminar-z");
+if (btnEliminarZ) {
+  btnEliminarZ.addEventListener("click", () => {
+    showAdminActionModal(async () => {
+      // restaurar movimientos
+      for (const reg of mov.items || []) {
+        await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
       }
+      // marcar eliminado
+      await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
+      tr.style.backgroundColor = "#ccc";
+
+      // deshabilitar ambos botones
+      btnEliminarZ.disabled = true;
+      const btnReimprimir = tr.querySelector(".reimprimir");
+      if (btnReimprimir) {
+        btnReimprimir.disabled = true;
+        btnReimprimir.style.opacity = "0.5";
+        btnReimprimir.style.pointerEvents = "none";
+      }
+
+      loadMovimientos();
+    });
+  });
+}
 
       tablaHistorial.appendChild(tr);
     });
