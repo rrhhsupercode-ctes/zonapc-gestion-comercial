@@ -501,54 +501,148 @@
 
   btnBuscarSuelto.addEventListener("click", loadSueltos);
 
-  // --- CAJEROS ---
-  const cajeroNro = document.getElementById("cajero-nro");
-  const cajeroNombre = document.getElementById("cajero-nombre");
-  const cajeroDni = document.getElementById("cajero-dni");
-  const cajeroPass = document.getElementById("cajero-pass");
-  const btnAgregarCajero = document.getElementById("agregar-cajero");
-  const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbody");
+// --- CAJEROS ---
+const cajeroNro = document.getElementById("cajero-nro");
+const cajeroNombre = document.getElementById("cajero-nombre");
+const cajeroDni = document.getElementById("cajero-dni");
+const cajeroPass = document.getElementById("cajero-pass");
+const btnAgregarCajero = document.getElementById("agregar-cajero");
+const tablaCajeros = document.getElementById("tabla-cajeros").querySelector("tbody");
 
-  async function loadCajerosTabla() {
-    const snap = await window.get(window.ref("/cajeros"));
-    tablaCajeros.innerHTML = "";
-    cajeroNro.innerHTML = "";
-    if (snap.exists()) {
-      Object.entries(snap.val()).forEach(([id, cajero]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${id}</td>
-          <td>${cajero.nombre}</td>
-          <td>${cajero.dni}</td>
-          <td><button data-id="${id}">❌</button></td>
-        `;
-        tr.querySelector("button").addEventListener("click", async () => {
+// Cargar select de Nros de cajero 01 a 99
+function loadCajeroSelectOptions() {
+  cajeroNro.innerHTML = "";
+  for (let i = 1; i <= 99; i++) {
+    const opt = document.createElement("option");
+    opt.value = String(i).padStart(2, "0");
+    opt.textContent = String(i).padStart(2, "0");
+    cajeroNro.appendChild(opt);
+  }
+}
+
+async function loadCajerosTabla() {
+  const snap = await window.get(window.ref("/cajeros"));
+  tablaCajeros.innerHTML = "";
+  loadCajeroSelectOptions();
+
+  if (snap.exists()) {
+    Object.entries(snap.val()).forEach(([id, cajero]) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${id}</td>
+        <td>${cajero.nombre}</td>
+        <td>${cajero.dni}</td>
+        <td>
+          <button data-edit-id="${id}">✏️</button>
+          <button data-del-id="${id}">❌</button>
+        </td>
+      `;
+
+      // Botón eliminar
+      tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
+        const pass = prompt("Contraseña de administrador para eliminar cajero:");
+        const confSnap = await window.get(window.ref("/config"));
+        const confVal = confSnap.exists() ? confSnap.val() : {};
+        if (pass === confVal.passAdmin || pass === confVal.masterPass) {
           if (confirm("Eliminar cajero?")) {
             await window.remove(window.ref(`/cajeros/${id}`));
             loadCajerosTabla();
             loadCajeros();
           }
-        });
-        tablaCajeros.appendChild(tr);
-        const opt = document.createElement("option");
-        opt.value = id;
-        opt.textContent = cajero.nombre;
-        cajeroNro.appendChild(opt);
+        } else alert("Contraseña incorrecta");
       });
-    }
+
+      // Botón editar
+      tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
+        const confSnap = await window.get(window.ref("/config"));
+        const confVal = confSnap.exists() ? confSnap.val() : {};
+        const passAdmin = confVal.passAdmin || "1918";
+        const masterPass = confVal.masterPass || "1409";
+
+        // Crear modal
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+          position:fixed; top:0; left:0; width:100%; height:100%;
+          display:flex; justify-content:center; align-items:center;
+          background:rgba(0,0,0,0.7); z-index:9999;
+        `;
+        modal.innerHTML = `
+          <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+            <h2>Editar Cajero ${id}</h2>
+            <input id="edit-pass-admin" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+            <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
+            <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;">
+            <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+            <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+          </div>
+        `;
+        document.body.appendChild(modal);
+        document.body.style.filter = "blur(2px)";
+
+        const editPassAdmin = modal.querySelector("#edit-pass-admin");
+        const editNombre = modal.querySelector("#edit-nombre");
+        const editDni = modal.querySelector("#edit-dni");
+        const editPass = modal.querySelector("#edit-pass");
+        const editAceptar = modal.querySelector("#edit-aceptar");
+        const editCancelar = modal.querySelector("#edit-cancelar");
+        const editMsg = modal.querySelector("#edit-msg");
+
+        editCancelar.addEventListener("click", () => {
+          modal.remove();
+          document.body.style.filter = "none";
+        });
+
+        editAceptar.addEventListener("click", async () => {
+          const adminInput = editPassAdmin.value.trim();
+          if (adminInput !== passAdmin && adminInput !== masterPass) {
+            editMsg.textContent = "Contraseña incorrecta";
+            return;
+          }
+          const newNombre = editNombre.value.trim();
+          const newDni = editDni.value.trim();
+          const newPass = editPass.value.trim();
+          if (!newNombre || !newDni || !newPass) {
+            editMsg.textContent = "Todos los campos son obligatorios";
+            return;
+          }
+          await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+          loadCajerosTabla();
+          loadCajeros();
+          modal.remove();
+          document.body.style.filter = "none";
+        });
+      });
+
+      tablaCajeros.appendChild(tr);
+    });
+  }
+}
+
+btnAgregarCajero.addEventListener("click", async () => {
+  const nro = cajeroNro.value;
+  const nombre = cajeroNombre.value.trim();
+  const dni = cajeroDni.value.trim();
+  const pass = cajeroPass.value.trim();
+  if (!nro || !nombre || !dni || !pass) return;
+
+  const existingSnap = await window.get(window.ref(`/cajeros/${nro}`));
+  if (existingSnap.exists()) {
+    alert("❌ Este Nro de cajero ya está en uso");
+    return;
   }
 
-  btnAgregarCajero.addEventListener("click", async () => {
-    const nombre = cajeroNombre.value.trim();
-    const dni = cajeroDni.value.trim();
-    const pass = cajeroPass.value.trim();
-    if (!nombre || !dni || !pass) return;
-    const id = Date.now().toString();
-    await window.set(window.ref(`/cajeros/${id}`), { nombre, dni, pass });
-    cajeroNombre.value = cajeroDni.value = cajeroPass.value = "";
-    loadCajerosTabla();
-    loadCajeros();
-  });
+  await window.set(window.ref(`/cajeros/${nro}`), { nombre, dni, pass });
+  cajeroNombre.value = cajeroDni.value = cajeroPass.value = "";
+  loadCajerosTabla();
+  loadCajeros();
+});
+
+// Inicializar select al cargar la app
+loadCajeroSelectOptions();
 
   // --- CONFIG ---
   const configNombre = document.getElementById("config-nombre");
