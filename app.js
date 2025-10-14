@@ -124,25 +124,21 @@ let carrito = [];
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
   cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
-  if (snap.exists()) {
-    Object.entries(snap.val()).forEach(([k, v]) => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = v.nombre;
-      cobroProductos.appendChild(opt);
-    });
-  }
+  if (snap.exists()) Object.entries(snap.val()).forEach(([k, v]) => {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = v.nombre;
+    cobroProductos.appendChild(opt);
+  });
 
   const sueltosSnap = await window.get(window.ref("/sueltos"));
   cobroSueltos.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = v.nombre;
-      cobroSueltos.appendChild(opt);
-    });
-  }
+  if (sueltosSnap.exists()) Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = v.nombre;
+    cobroSueltos.appendChild(opt);
+  });
 
   cobroCantidad.innerHTML = "";
   for (let i = 1; i <= 99; i++) {
@@ -187,36 +183,46 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-// Obtener precio desde Firebase
-async function getPrecioStock(id, tipo = "stock") {
-  const snap = await window.get(window.ref(`/${tipo}/${id}`));
-  if (!snap.exists()) return 0;
-  return snap.val().precio || 0;
+// Sumar cantidades si ya existe producto en carrito
+function agregarAlCarrito(nuevoItem) {
+  const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
+  if (idx >= 0) {
+    carrito[idx].cant += nuevoItem.cant;
+  } else {
+    carrito.push(nuevoItem);
+  }
+  actualizarTabla();
 }
 
-// AGREGAR PRODUCTO (select o input código)
+// AGREGAR PRODUCTO
 btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
+
   const snap = await window.get(window.ref(`/stock/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
-  carrito.push({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
-  actualizarTabla();
+
+  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
 
-// AGREGAR SUELTO (select o input código)
+// AGREGAR SUELTO
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   let cant = parseFloat(inputKgSuelto.value);
   if (!id || cant <= 0) return;
+
   const snap = await window.get(window.ref(`/sueltos/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
-  carrito.push({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
-  actualizarTabla();
+
+  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
   inputKgSuelto.value = "0.100";
   inputCodigoSuelto.value = "";
 });
@@ -231,7 +237,25 @@ btnKgMenos.addEventListener("click", () => {
   inputKgSuelto.value = val.toFixed(3);
 });
 
-// COBRAR: tickets diarios, correlativos, sin imprimir
+// IMPRIMIR TICKET
+function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  const div = document.createElement("div");
+  div.style.cssText = `
+    max-width:5cm; margin:0 auto; font-family:monospace; text-align:left;
+    white-space:pre-line; border:1px solid #000; padding:5px;
+  `;
+  let contenido = `${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n`;
+  items.forEach(it => {
+    contenido += `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========\n`;
+  });
+  contenido += `TOTAL: $${total.toFixed(2)}\nPago: ${tipoPago}`;
+  div.textContent = contenido;
+  document.body.appendChild(div);
+  window.print();
+  div.remove();
+}
+
+// COBRAR
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -271,17 +295,21 @@ btnCobrar.addEventListener("click", async () => {
       ultimoID++;
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
 
-      const total = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
-      const fecha = new Date().toISOString();
+      const fecha = new Date();
+      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
+      const total = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
 
+      // Guardar movimientos
       const movRef = window.push(window.ref("/movimientos"));
-      await window.set(movRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha, tipo: tipoPago });
+      await window.set(movRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha: fecha.toISOString(), tipo: tipoPago });
 
+      // Guardar historial
       const histRef = window.push(window.ref("/historial"));
-      await window.set(histRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha, tipo: tipoPago });
+      await window.set(histRef, { ticketID, cajero: currentUser.id, items: carrito, total, fecha: fecha.toISOString(), tipo: tipoPago });
 
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
+      // Actualizar stock
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (snapItem.exists()) {
@@ -290,6 +318,11 @@ btnCobrar.addEventListener("click", async () => {
           else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
         }
       }
+
+      // Imprimir ticket
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, total, tipoPago);
+
+      alert("VENTA FINALIZADA");
 
       carrito = [];
       actualizarTabla();
@@ -301,7 +334,6 @@ btnCobrar.addEventListener("click", async () => {
     });
   });
 });
-
 
   // --- MOVIMIENTOS ---
   const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
