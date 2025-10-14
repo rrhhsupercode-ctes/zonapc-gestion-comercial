@@ -414,20 +414,18 @@ const stockCantidad = document.getElementById("stock-cantidad");
 const btnAgregarStock = document.getElementById("agregar-stock");
 const btnBuscarStock = document.getElementById("buscar-stock");
 const tablaStock = document.getElementById("tabla-stock").querySelector("tbody");
+const btnStockDecr = document.getElementById("stock-btn-decr");
+const btnStockIncr = document.getElementById("stock-btn-incr");
 
-// Función para actualizar Cantidad con límites 0 - 999
+// Función para actualizar Cantidad con límites 0 - 999 y valores enteros
 function actualizarCant(delta, inputElement) {
   let val = parseInt(inputElement.value) || 0;
   val = Math.min(999, Math.max(0, val + delta));
   inputElement.value = val;
 }
 
-// Botones incrementar / decrementar Cantidad
-const btnStockDecr = document.getElementById("stock-btn-decr");
-const btnStockIncr = document.getElementById("stock-btn-incr");
-
-if(btnStockDecr) btnStockDecr.addEventListener("click", () => actualizarCant(-1, stockCantidad));
-if(btnStockIncr) btnStockIncr.addEventListener("click", () => actualizarCant(1, stockCantidad));
+btnStockDecr.addEventListener("click", () => actualizarCant(-1, stockCantidad));
+btnStockIncr.addEventListener("click", () => actualizarCant(1, stockCantidad));
 
 // Formatea fecha ISO a DD/MM/YYYY (HH:MM)
 function formatFecha(iso) {
@@ -449,7 +447,6 @@ function formatPrecio(num) {
   return `$${entStr},${decStr}`;
 }
 
-// Cargar Stock
 async function loadStock(filtro = "") {
   const snap = await window.get(window.ref("/stock"));
   tablaStock.innerHTML = "";
@@ -461,7 +458,7 @@ async function loadStock(filtro = "") {
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  // Orden descendente por fecha (más reciente arriba)
+  // Ordenar por fecha descendente (más reciente arriba)
   stockArray.sort((a, b) => {
     const fechaA = new Date(a[1].fecha || 0).getTime();
     const fechaB = new Date(b[1].fecha || 0).getTime();
@@ -477,11 +474,11 @@ async function loadStock(filtro = "") {
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td>${formatPrecio(prod.precio)}</td>
       <td>
+        <button data-edit-id="${id}">✏️</button>
         <button data-del-id="${id}">❌</button>
       </td>
     `;
 
-    // Eliminar stock (requiere admin)
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
       showAdminActionModal(async () => {
         await window.remove(window.ref(`/stock/${id}`));
@@ -490,33 +487,103 @@ async function loadStock(filtro = "") {
       });
     });
 
+    tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(() => {
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+          position:fixed; top:0; left:0; width:100%; height:100%;
+          display:flex; justify-content:center; align-items:center;
+          background:rgba(0,0,0,0.7); z-index:9999;
+        `;
+        modal.innerHTML = `
+          <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
+            <h2>Editar Stock ${id}</h2>
+            
+            <label for="edit-nombre">Nombre del producto</label>
+            <input id="edit-nombre" type="text" placeholder="Nombre" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+
+            <label for="edit-cant">Cantidad (0-999)</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+              <button id="cant-decr" style="width:30%;">-</button>
+              <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
+              <button id="cant-incr" style="width:30%;">+</button>
+            </div>
+
+            <label for="edit-precio">Precio</label>
+            <input id="edit-precio" type="number" placeholder="Precio" value="${prod.precio}" style="width:100%; margin:5px 0;">
+
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+            <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+          </div>
+        `;
+        document.body.appendChild(modal);
+
+        const editNombre = modal.querySelector("#edit-nombre");
+        const editCant = modal.querySelector("#edit-cant");
+        const editPrecio = modal.querySelector("#edit-precio");
+        const editAceptar = modal.querySelector("#edit-aceptar");
+        const editCancelar = modal.querySelector("#edit-cancelar");
+        const editMsg = modal.querySelector("#edit-msg");
+        const cantDecr = modal.querySelector("#cant-decr");
+        const cantIncr = modal.querySelector("#cant-incr");
+
+        cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
+        cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
+        editCancelar.addEventListener("click", () => modal.remove());
+
+        editAceptar.addEventListener("click", async () => {
+          const newNombre = editNombre.value.trim();
+          const newCant = parseInt(editCant.value);
+          const newPrecio = parseFloat(editPrecio.value);
+
+          if (!newNombre || isNaN(newCant) || isNaN(newPrecio)) {
+            editMsg.textContent = "Todos los campos son obligatorios y válidos";
+            return;
+          }
+          if (newCant < 0 || newCant > 999) {
+            editMsg.textContent = "Cantidad fuera de rango 0-999";
+            return;
+          }
+          if (newPrecio < 0 || newPrecio > 99999.99) {
+            editMsg.textContent = "Precio incorrecto";
+            return;
+          }
+
+          await window.update(window.ref(`/stock/${id}`), { nombre: newNombre, cant: newCant, precio: newPrecio });
+          loadStock();
+          loadProductos();
+          modal.remove();
+        });
+      });
+    });
+
     tablaStock.appendChild(tr);
   });
 }
 
-// Agregar Stock (sin contraseña, suma Cant si ya existe)
+// Agregar stock con suma si ya existe (sin admin)
 btnAgregarStock.addEventListener("click", async () => {
   const codigo = stockCodigo.value.trim();
-  let cant = parseInt(stockCantidad.value);
-  if (!codigo || isNaN(cant) || cant <= 0) return;
+  const cant = parseInt(stockCantidad.value);
+  if (!codigo || isNaN(cant)) return;
 
+  const snap = await window.get(window.ref(`/stock/${codigo}`));
   const fecha = new Date().toISOString();
-  const stockRef = window.ref(`/stock/${codigo}`);
-  const snap = await window.get(stockRef);
-
   if (snap.exists()) {
-    const existingCant = parseInt(snap.val().cant) || 0;
-    cant = Math.min(999, existingCant + cant); // máximo 999
-    await window.update(stockRef, { cant, fecha });
+    const currentCant = parseInt(snap.val().cant) || 0;
+    const newCant = Math.min(999, currentCant + cant);
+    await window.update(window.ref(`/stock/${codigo}`), { cant: newCant });
   } else {
-    await window.set(stockRef, { nombre: codigo, cant: Math.min(999, cant), fecha, precio: 100 });
+    await window.set(window.ref(`/stock/${codigo}`), { nombre: codigo, cant: Math.min(999, Math.max(0, cant)), fecha, precio: 100 });
   }
-
   loadStock();
   loadProductos();
 });
 
-// Buscar stock
+// Buscar stock por código o nombre
 btnBuscarStock.addEventListener("click", () => {
   const filtro = stockCodigo.value.trim();
   loadStock(filtro);
