@@ -449,11 +449,13 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$0.000.000,00"
+// Formato precio "$1.234,56" (sin ceros a la izquierda)
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  // elimina ceros a la izquierda antes de formatear
+  const enteroLimpio = String(parseInt(partes[0], 10));
+  const entero = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${entero},${partes[1]}`;
 }
 
