@@ -618,7 +618,17 @@ function mostrarHistorialPorDia(dia) {
       tablaHistorial.appendChild(tr);
     });
 
-  historialDia.textContent = dia;
+  // Mostrar fecha completa en lugar de solo el día
+  const fechaMostrada = historialRegistros.find(m => m.fechaObj.getDate() === dia);
+  if (fechaMostrada) {
+    historialDia.textContent = `${fechaMostrada.fechaObj.getDate().toString().padStart(2,'0')}/${
+      (fechaMostrada.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${
+      fechaMostrada.fechaObj.getFullYear()}`;
+  } else {
+    // Si no hay registros para ese día, mostrar día seleccionado
+    historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(new Date().getMonth()+1).toString().padStart(2,'0')}/${new Date().getFullYear()}`;
+  }
+
   historialDia.dataset.dia = dia;
 }
 
