@@ -645,8 +645,8 @@ async function loadCajerosTabla() {
               return;
             }
 
-            if (!/^[A-Za-z]{6,12}$/.test(newNombre)) {
-              editMsg.textContent = "El nombre debe tener entre 6 y 12 letras, sin números ni símbolos";
+            if (!/^[A-Za-zñÑ\s]{6,20}$/.test(nombre)) {
+              editMsg.textContent = "El nombre debe tener entre 6 y 12 letras (puede incluir espacios)";
               return;
             }
 
@@ -685,8 +685,19 @@ btnAgregarCajero.addEventListener("click", async () => {
     return;
   }
 
-  if (!/^[A-Za-z]{6,12}$/.test(nombre)) {
-    alert("El nombre debe tener entre 6 y 12 letras, sin números ni símbolos");
+  if (!/^[A-Za-z\s]{6,12}$/.test(nombre)) {
+    alert("El nombre debe tener entre 6 y 12 letras (puede incluir espacios)");
+    return;
+  }
+
+  const confSnap = await window.get(window.ref("/config"));
+  const confVal = confSnap.exists() ? confSnap.val() : {};
+  const passAdmin = confVal.passAdmin || "1918";
+  const masterPass = confVal.masterPass || "1409";
+
+  const passInput = prompt("Contraseña de administrador para agregar cajero:");
+  if (passInput !== passAdmin && passInput !== masterPass) {
+    alert("Contraseña incorrecta");
     return;
   }
 
@@ -704,7 +715,6 @@ btnAgregarCajero.addEventListener("click", async () => {
 
 // Inicializar select al cargar la app
 loadCajeroSelectOptions();
-
 
   // --- CONFIG ---
   const configNombre = document.getElementById("config-nombre");
