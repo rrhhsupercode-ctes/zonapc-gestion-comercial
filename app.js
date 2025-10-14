@@ -449,18 +449,19 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$1.234,56" (sin ceros a la izquierda)
+// Formato precio "$1.234,56" sin ceros a la izquierda
 function formatPrecio(num) {
   const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
+  // quita ceros a la izquierda
   const enteroLimpio = String(parseInt(partes[0], 10));
   const enteroFormateado = enteroLimpio.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${enteroFormateado},${partes[1]}`;
 }
 
-// Función para formatear input dinámicamente con puntos mientras tipeas
+// Función para formatear input dinámicamente con puntos mientras tipeas (sin ceros a la izquierda)
 function formatInputPrecio(value) {
-  let val = value.replace(/\D/g, "").replace(/^0+/, "");
+  let val = value.replace(/\D/g, "").replace(/^0+/, ""); // elimina ceros a la izquierda
   if (!val) return "";
   const partes = [];
   while (val.length > 3) {
@@ -534,7 +535,7 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0" style="width:65%; text-align:center;" value="${formatInputPrecio(Math.floor(prod.precio))}">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${formatInputPrecio(Math.floor(prod.precio))}">
               <span>,</span>
               <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100).toString().padStart(2,"0")}">
             </div>
@@ -561,7 +562,7 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (puntos automáticos mientras escribe)
+        // Formateo dinámico del campo de pesos sin ceros a la izquierda
         editPrecio.addEventListener("input", () => {
           editPrecio.value = formatInputPrecio(editPrecio.value);
           actualizarPreview();
