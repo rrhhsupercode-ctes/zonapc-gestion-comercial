@@ -521,12 +521,12 @@ filtroCajero.addEventListener("change", async () => {
 
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
-const historialDia = document.getElementById("historial-dia"); // input o span para mostrar dia seleccionado
+const historialDia = document.getElementById("historial-dia"); // span para mostrar día
 const btnDiaPrev = document.getElementById("historial-dia-prev");
 const btnDiaNext = document.getElementById("historial-dia-next");
 
-let historialFechaActual = new Date(); // Fecha usada para filtrar
 let historialRegistros = [];
+let historialFechaActual = new Date(); // fecha usada para filtrar
 
 async function loadHistorial() {
   const snap = await window.get(window.ref("/historial"));
@@ -535,15 +535,14 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
-  // Obtener todos los registros
+  // Guardar todos los registros con fecha como objeto
   Object.entries(snap.val()).forEach(([id, mov]) => {
     historialRegistros.push({ id, ...mov, fechaObj: new Date(mov.fecha) });
   });
 
-  // Ordenar por fecha descendente
+  // Ordenar descendente por fecha
   historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
 
-  // Filtrar según regla del día 15
   const hoy = new Date();
   const diaHoy = hoy.getDate();
   let fechaMin;
@@ -560,11 +559,10 @@ async function loadHistorial() {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
-    // Filtrar después de eliminar
     historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
   }
 
-  // Mostrar día seleccionado, por defecto hoy
+  // Mostrar día seleccionado por defecto
   if (!historialDia.dataset.dia) {
     historialDia.dataset.dia = hoy.getDate();
   }
@@ -572,7 +570,7 @@ async function loadHistorial() {
   mostrarHistorialPorDia(parseInt(historialDia.dataset.dia));
 }
 
-// Función para mostrar solo los registros de un día específico
+// Mostrar solo registros de un día específico
 function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
@@ -598,6 +596,7 @@ function mostrarHistorialPorDia(dia) {
       tablaHistorial.appendChild(tr);
     });
 
+  // Actualizar visual del día
   historialDia.textContent = dia;
   historialDia.dataset.dia = dia;
 }
@@ -609,8 +608,11 @@ btnDiaPrev.addEventListener("click", () => {
 });
 btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
-  if (dia < new Date().getDate()) mostrarHistorialPorDia(dia + 1);
+  const hoy = new Date();
+  let maxDia = hoy.getDate();
+  mostrarHistorialPorDia(dia < maxDia ? dia + 1 : dia);
 });
+
 
 
 // --- STOCK ---
