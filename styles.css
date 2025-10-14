@@ -189,9 +189,10 @@ tbody tr:nth-child(even) {
   justify-content: center;
   align-items: center;
   z-index: 999;
-  backdrop-filter: blur(4px); /* borroso de fondo */
+  backdrop-filter: blur(4px); /* solo el fondo borroso */
 }
 
+/* El modal en sí no se verá borroso */
 .modal {
   background: #fff;
   padding: 22px;
@@ -203,6 +204,13 @@ tbody tr:nth-child(even) {
   text-align: center;
   position: relative;
   transition: transform 0.25s ease, opacity 0.25s ease;
+  backdrop-filter: none; /* ¡IMPORTANTE! */
+}
+
+/* Para modales creados vía JS inline style */
+#admin-modal,
+.modal-inline-js {
+  backdrop-filter: none !important;
 }
 
 .modal.hidden {
