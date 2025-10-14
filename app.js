@@ -544,8 +544,8 @@ const historialDia = document.getElementById("historial-dia");
 const btnDiaPrev = document.getElementById("historial-dia-prev");
 const btnDiaNext = document.getElementById("historial-dia-next");
 
-let historialFechaActual = new Date(); // Fecha usada para filtrar
 let historialRegistros = [];
+let fechaMin, fechaMax;
 
 // Cargar historial desde Firebase
 async function loadHistorial() {
@@ -563,16 +563,13 @@ async function loadHistorial() {
   // Ordenar por fecha descendente
   historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
 
-  // Filtrar según regla del día 15
+  // Determinar límites de fechas según regla del día 15
   const hoy = new Date();
   const diaHoy = hoy.getDate();
-  let fechaMin;
 
   if (diaHoy <= 15) {
-    // Desde día 1 del mes anterior
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
   } else {
-    // Solo mes actual desde día 1
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
     // Eliminar registros anteriores al mes actual
     for (const mov of historialRegistros) {
@@ -580,16 +577,17 @@ async function loadHistorial() {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
-    // Filtrar después de eliminar
     historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
   }
 
-  // Mostrar día seleccionado, por defecto hoy
-  if (!historialDia.dataset.dia) {
-    historialDia.dataset.dia = hoy.getDate();
-  }
+  fechaMax = hoy;
 
-  mostrarHistorialPorDia(parseInt(historialDia.dataset.dia));
+  // Por defecto, mostrar último día con registros o hoy
+  let ultimoDia = historialRegistros.length
+    ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate()))
+    : hoy.getDate();
+
+  mostrarHistorialPorDia(ultimoDia);
 }
 
 // Función para mostrar solo los registros de un día específico
@@ -618,30 +616,23 @@ function mostrarHistorialPorDia(dia) {
       tablaHistorial.appendChild(tr);
     });
 
-  // Mostrar fecha completa en lugar de solo el día
-  const fechaMostrada = historialRegistros.find(m => m.fechaObj.getDate() === dia);
-  if (fechaMostrada) {
-    historialDia.textContent = `${fechaMostrada.fechaObj.getDate().toString().padStart(2,'0')}/${
-      (fechaMostrada.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${
-      fechaMostrada.fechaObj.getFullYear()}`;
-  } else {
-    // Si no hay registros para ese día, mostrar día seleccionado
-    historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(new Date().getMonth()+1).toString().padStart(2,'0')}/${new Date().getFullYear()}`;
-  }
-
+  // Mostrar fecha completa en el span
+  historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
+
+  // Activar/desactivar botones según límites
+  btnDiaPrev.disabled = dia <= fechaMin.getDate();
+  btnDiaNext.disabled = dia >= fechaMax.getDate();
 }
 
 // Botones para cambiar día
 btnDiaPrev.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
-  if (dia > 1) mostrarHistorialPorDia(dia - 1);
+  if (dia > fechaMin.getDate()) mostrarHistorialPorDia(dia - 1);
 });
 btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
-  const hoy = new Date();
-  const maxDia = hoy.getDate();
-  if (dia < maxDia) mostrarHistorialPorDia(dia + 1);
+  if (dia < fechaMax.getDate()) mostrarHistorialPorDia(dia + 1);
 });
 
 // --- STOCK ---
