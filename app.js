@@ -781,80 +781,90 @@ async function loadCajerosTabla() {
           });
         });
 
-        // Editar cajero usando modal de admin
-        tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
-          showAdminActionModal(async () => {
-            const modal = document.createElement("div");
-            modal.style.cssText = `
-              position:fixed; top:0; left:0; width:100%; height:100%;
-              display:flex; justify-content:center; align-items:center;
-              background:rgba(0,0,0,0.7); z-index:9999;
-            `;
-            modal.innerHTML = `
-              <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
-                <h2>Editar Cajero ${id}</h2>
-                <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
-                <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
-                <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
-                <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
-                <div style="margin-top:10px;">
-                  <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-                  <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-                </div>
-                <p id="edit-msg" style="color:red; margin-top:5px;"></p>
-              </div>
-            `;
-            document.body.appendChild(modal);
+// Editar cajero usando modal de admin
+tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+  showAdminActionModal(async () => {
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      display:flex; justify-content:center; align-items:center;
+      background:rgba(0,0,0,0.7); z-index:9999;
+    `;
+    modal.innerHTML = `
+      <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
+        <h2>Editar Cajero ${id}</h2>
+        
+        <label for="edit-nro">Número de Cajero (1-99)</label>
+        <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
 
-            const editNro = modal.querySelector("#edit-nro");
-            const editNombre = modal.querySelector("#edit-nombre");
-            const editDni = modal.querySelector("#edit-dni");
-            const editPass = modal.querySelector("#edit-pass");
-            const editAceptar = modal.querySelector("#edit-aceptar");
-            const editCancelar = modal.querySelector("#edit-cancelar");
-            const editMsg = modal.querySelector("#edit-msg");
+        <label for="edit-nombre">Nombre (6-20 letras, puede incluir espacios y ñ)</label>
+        <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
 
-            editCancelar.addEventListener("click", () => modal.remove());
+        <label for="edit-dni">DNI (8 dígitos)</label>
+        <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
 
-            editAceptar.addEventListener("click", async () => {
-              const newNro = String(editNro.value).padStart(2, "0");
-              const newNombre = editNombre.value.trim();
-              const newDni = editDni.value.trim();
-              const newPass = editPass.value.trim();
+        <label for="edit-pass">Contraseña</label>
+        <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
 
-              if (!newNro || !newNombre || !newDni || !newPass) {
-                editMsg.textContent = "Todos los campos son obligatorios";
-                return;
-              }
+        <div style="margin-top:10px;">
+          <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+          <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+        </div>
+        <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+      </div>
+    `;
+    document.body.appendChild(modal);
 
-              if (!/^\d{8}$/.test(newDni)) {
-                editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
-                return;
-              }
+    const editNro = modal.querySelector("#edit-nro");
+    const editNombre = modal.querySelector("#edit-nombre");
+    const editDni = modal.querySelector("#edit-dni");
+    const editPass = modal.querySelector("#edit-pass");
+    const editAceptar = modal.querySelector("#edit-aceptar");
+    const editCancelar = modal.querySelector("#edit-cancelar");
+    const editMsg = modal.querySelector("#edit-msg");
 
-              if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
-                editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
-                return;
-              }
+    editCancelar.addEventListener("click", () => modal.remove());
 
-              if (newNro !== id) {
-                const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
-                if (existingSnap.exists()) {
-                  editMsg.textContent = "❌ Este Nro ya está en uso";
-                  return;
-                }
-                await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
-                await window.remove(window.ref(`/cajeros/${id}`));
-              } else {
-                await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
-              }
+    editAceptar.addEventListener("click", async () => {
+      const newNro = String(editNro.value).padStart(2, "0");
+      const newNombre = editNombre.value.trim();
+      const newDni = editDni.value.trim();
+      const newPass = editPass.value.trim();
 
-              loadCajerosTabla();
-              loadCajeros();
-              modal.remove();
-            });
-          });
-        });
+      if (!newNro || !newNombre || !newDni || !newPass) {
+        editMsg.textContent = "Todos los campos son obligatorios";
+        return;
+      }
+
+      if (!/^\d{8}$/.test(newDni)) {
+        editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
+        return;
+      }
+
+      if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
+        editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
+        return;
+      }
+
+      if (newNro !== id) {
+        const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
+        if (existingSnap.exists()) {
+          editMsg.textContent = "❌ Este Nro ya está en uso";
+          return;
+        }
+        await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
+        await window.remove(window.ref(`/cajeros/${id}`));
+      } else {
+        await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+      }
+
+      loadCajerosTabla();
+      loadCajeros();
+      modal.remove();
+    });
+  });
+});
+
 
         tablaCajeros.appendChild(tr);
       });
