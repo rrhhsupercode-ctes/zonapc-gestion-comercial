@@ -521,13 +521,28 @@ filtroCajero.addEventListener("change", async () => {
 
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
-const historialDia = document.getElementById("historial-dia"); // span para mostrar día
+const historialSeccion = document.getElementById("historial");
+
+// Crear controles de día dinámicos
+const controlesHistorial = document.createElement("div");
+controlesHistorial.style.cssText = `
+  display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
+`;
+controlesHistorial.innerHTML = `
+  <button id="historial-dia-prev">◀</button>
+  <span id="historial-dia" style="min-width:30px; text-align:center; display:inline-block;">01</span>
+  <button id="historial-dia-next">▶</button>
+`;
+historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
+
+const historialDia = document.getElementById("historial-dia");
 const btnDiaPrev = document.getElementById("historial-dia-prev");
 const btnDiaNext = document.getElementById("historial-dia-next");
 
+let historialFechaActual = new Date(); // Fecha usada para filtrar
 let historialRegistros = [];
-let historialFechaActual = new Date(); // fecha usada para filtrar
 
+// Cargar historial desde Firebase
 async function loadHistorial() {
   const snap = await window.get(window.ref("/historial"));
   tablaHistorial.innerHTML = "";
@@ -535,14 +550,15 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
-  // Guardar todos los registros con fecha como objeto
+  // Obtener todos los registros
   Object.entries(snap.val()).forEach(([id, mov]) => {
     historialRegistros.push({ id, ...mov, fechaObj: new Date(mov.fecha) });
   });
 
-  // Ordenar descendente por fecha
+  // Ordenar por fecha descendente
   historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
 
+  // Filtrar según regla del día 15
   const hoy = new Date();
   const diaHoy = hoy.getDate();
   let fechaMin;
@@ -559,10 +575,11 @@ async function loadHistorial() {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
+    // Filtrar después de eliminar
     historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
   }
 
-  // Mostrar día seleccionado por defecto
+  // Mostrar día seleccionado, por defecto hoy
   if (!historialDia.dataset.dia) {
     historialDia.dataset.dia = hoy.getDate();
   }
@@ -570,7 +587,7 @@ async function loadHistorial() {
   mostrarHistorialPorDia(parseInt(historialDia.dataset.dia));
 }
 
-// Mostrar solo registros de un día específico
+// Función para mostrar solo los registros de un día específico
 function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
@@ -596,7 +613,6 @@ function mostrarHistorialPorDia(dia) {
       tablaHistorial.appendChild(tr);
     });
 
-  // Actualizar visual del día
   historialDia.textContent = dia;
   historialDia.dataset.dia = dia;
 }
@@ -609,11 +625,9 @@ btnDiaPrev.addEventListener("click", () => {
 btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   const hoy = new Date();
-  let maxDia = hoy.getDate();
-  mostrarHistorialPorDia(dia < maxDia ? dia + 1 : dia);
+  const maxDia = hoy.getDate();
+  if (dia < maxDia) mostrarHistorialPorDia(dia + 1);
 });
-
-
 
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
