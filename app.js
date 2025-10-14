@@ -359,79 +359,144 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-  // --- MOVIMIENTOS ---
-  const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
-  const filtroCajero = document.getElementById("filtroCajero");
-  const btnTirarZ = document.getElementById("btn-tirar-z");
+// --- MOVIMIENTOS ---
+const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
+const filtroCajero = document.getElementById("filtroCajero");
 
-  async function loadMovimientos() {
-    const snap = await window.get(window.ref("/movimientos"));
-    tablaMovimientos.innerHTML = "";
-    filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
-    if (snap.exists()) {
-      Object.entries(snap.val()).forEach(([id, mov]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${id}</td>
-          <td>${mov.total}</td>
-          <td>${mov.tipo}</td>
-          <td><button data-id="${id}">❌</button></td>
-        `;
-        tr.querySelector("button").addEventListener("click", async () => {
-          if (confirm("¿Eliminar este movimiento?")) {
-            await window.remove(window.ref(`/movimientos/${id}`));
-            loadMovimientos();
-          }
-        });
-        tablaMovimientos.appendChild(tr);
+async function loadMovimientos() {
+  const snap = await window.get(window.ref("/movimientos"));
+  tablaMovimientos.innerHTML = "";
+  filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
 
-        if (!filtroCajero.querySelector(`option[value="${mov.cajero}"]`)) {
-          const opt = document.createElement("option");
-          opt.value = mov.cajero;
-          opt.textContent = mov.cajero;
-          filtroCajero.appendChild(opt);
-        }
-      });
-    }
-  }
+  if (!snap.exists()) return;
 
-  btnTirarZ.addEventListener("click", async () => {
-    if (confirm("Tirar Z eliminará todos los movimientos. ¿Continuar?")) {
-      const snap = await window.get(window.ref("/movimientos"));
-      if (snap.exists()) {
-        Object.keys(snap.val()).forEach(async key => {
-          await window.remove(window.ref(`/movimientos/${key}`));
-        });
+  Object.entries(snap.val()).forEach(([id, mov]) => {
+    const tr = document.createElement("tr");
+    const eliminado = mov.eliminado || false;
+
+    tr.style.backgroundColor = eliminado ? "#ccc" : "";
+    tr.innerHTML = `
+      <td>${id}</td>
+      <td>${mov.total.toFixed(2)}</td>
+      <td>${mov.tipo}</td>
+      <td>
+        <button class="reimprimir" data-id="${id}">🖨</button>
+        <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
+      </td>
+    `;
+
+    // REIMPRIMIR
+    tr.querySelector(".reimprimir").addEventListener("click", () => {
+      mostrarModalTicket(mov);
+    });
+
+    // ELIMINAR
+    tr.querySelector(".eliminar").addEventListener("click", async () => {
+      const pass = prompt("Contraseña de administrador para eliminar ticket:");
+      const confSnap = await window.get(window.ref("/config"));
+      const confVal = confSnap.exists() ? confSnap.val() : {};
+      const passAdmin = confVal.passAdmin || "1918";
+      if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+
+      // Restaurar stock
+      for (const item of mov.items) {
+        const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
+        if (!snapItem.exists()) continue;
+        const data = snapItem.val();
+        if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
+        else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
       }
-      loadMovimientos();
-      alert("✅ Movimientos eliminados");
-    }
-  });
 
-  filtroCajero.addEventListener("change", async () => {
-    const snap = await window.get(window.ref("/movimientos"));
-    tablaMovimientos.innerHTML = "";
-    if (snap.exists()) {
-      Object.entries(snap.val()).forEach(([id, mov]) => {
-        if (filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value) {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${id}</td>
-            <td>${mov.total}</td>
-            <td>${mov.tipo}</td>
-            <td><button data-id="${id}">❌</button></td>
-          `;
-          tr.querySelector("button").addEventListener("click", async () => {
-            if (confirm("¿Eliminar este movimiento?")) {
-              await window.remove(window.ref(`/movimientos/${id}`));
-              loadMovimientos();
-            }
-          });
-          tablaMovimientos.appendChild(tr);
-        }
-      });
+      // Marcar ticket como eliminado
+      await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
+      loadMovimientos();
+    });
+
+    tablaMovimientos.appendChild(tr);
+
+    // Filtro de cajeros
+    if (!filtroCajero.querySelector(`option[value="${mov.cajero}"]`)) {
+      const opt = document.createElement("option");
+      opt.value = mov.cajero;
+      opt.textContent = mov.cajero;
+      filtroCajero.appendChild(opt);
     }
   });
+}
+
+// Modal de solo lectura para reimprimir ticket
+function mostrarModalTicket(mov) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+
+  let itemsHTML = mov.items.map(it => 
+    `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}`
+  ).join("\n==========\n");
+
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; text-align:left; font-family:monospace; max-width:5cm; white-space:pre-line;">
+      ${mov.ticketID}\n${new Date(mov.fecha).toLocaleDateString()} (${new Date(mov.fecha).getHours().toString().padStart(2,'0')}:${new Date(mov.fecha).getMinutes().toString().padStart(2,'0')})\nCajero: ${mov.cajero}\n==========\n
+      ${itemsHTML}\n==========\nTOTAL: $${mov.total.toFixed(2)}\nPago: ${mov.tipo}
+      <div style="text-align:center; margin-top:10px;">
+        <button id="reimprimir-ticket" style="margin-right:5px;">Reimprimir</button>
+        <button id="cancelar-ticket" style="background:red; color:#fff;">Cancelar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector("#cancelar-ticket").addEventListener("click", () => modal.remove());
+  modal.querySelector("#reimprimir-ticket").addEventListener("click", () => {
+    imprimirTicket(mov.ticketID, new Date(mov.fecha).toLocaleString(), mov.cajero, mov.items, mov.total, mov.tipo);
+  });
+}
+
+// FILTRO CAJERO
+filtroCajero.addEventListener("change", async () => {
+  const snap = await window.get(window.ref("/movimientos"));
+  if (!snap.exists()) return;
+  tablaMovimientos.innerHTML = "";
+  Object.entries(snap.val()).forEach(([id, mov]) => {
+    if (filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value) {
+      const tr = document.createElement("tr");
+      const eliminado = mov.eliminado || false;
+      tr.style.backgroundColor = eliminado ? "#ccc" : "";
+      tr.innerHTML = `
+        <td>${id}</td>
+        <td>${mov.total.toFixed(2)}</td>
+        <td>${mov.tipo}</td>
+        <td>
+          <button class="reimprimir" data-id="${id}">🖨</button>
+          <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
+        </td>
+      `;
+      tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
+      tr.querySelector(".eliminar").addEventListener("click", async () => {
+        const pass = prompt("Contraseña de administrador para eliminar ticket:");
+        const confSnap = await window.get(window.ref("/config"));
+        const confVal = confSnap.exists() ? confSnap.val() : {};
+        const passAdmin = confVal.passAdmin || "1918";
+        if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+
+        for (const item of mov.items) {
+          const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
+          if (!snapItem.exists()) continue;
+          const data = snapItem.val();
+          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
+          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
+        }
+        await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
+        loadMovimientos();
+      });
+      tablaMovimientos.appendChild(tr);
+    }
+  });
+});
 
   // --- HISTORIAL ---
   const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
