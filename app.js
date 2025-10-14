@@ -449,13 +449,11 @@ function formatFecha(iso) {
   return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
 
-// Formato precio "$000,00"
+// Formato precio "$0.000.000,00"
 function formatPrecio(num) {
-  const n = Number(num) || 0;
+  const n = parseFloat(num) || 0;
   const partes = n.toFixed(2).split(".");
-  let entero = String(parseInt(partes[0], 10));
-  entero = entero.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  if (entero === "0") entero = "000"; // default para 0
+  const entero = partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return `$${entero},${partes[1]}`;
 }
 
@@ -506,11 +504,6 @@ async function loadStock(filtro = "") {
           display:flex; justify-content:center; align-items:center;
           background:rgba(0,0,0,0.7); z-index:9999;
         `;
-
-        // Valor por defecto seguro para preview
-        const precioEntero = prod.precio ? Math.floor(prod.precio) : 0;
-        const precioDec = prod.precio ? Math.round((prod.precio % 1) * 100) : 0;
-
         modal.innerHTML = `
           <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
             <h2>Editar Stock ${id}</h2>
@@ -527,9 +520,11 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="000" style="width:65%; text-align:center;" value="${precioEntero ? precioEntero : "000"}">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${precioDec.toString().padStart(2,"0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
+                .toString()
+                .padStart(2, "0")}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -554,17 +549,10 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico
-        function actualizarPreview() {
-          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
-          const dec = parseInt(editCentavos.value) || 0;
-          const combinado = entero + dec / 100;
-          preview.textContent = formatPrecio(combinado);
-        }
-
+        // Formateo dinámico del campo de pesos (000.000)
         editPrecio.addEventListener("input", () => {
           let val = editPrecio.value.replace(/\D/g, "");
-          if (!val) val = "0";
+          if (val.length > 7) val = val.slice(0, 7);
           const partes = [];
           while (val.length > 3) {
             partes.unshift(val.slice(-3));
@@ -582,6 +570,13 @@ async function loadStock(filtro = "") {
           editCentavos.value = val.toString().padStart(2, "0");
           actualizarPreview();
         });
+
+        function actualizarPreview() {
+          const entero = parseInt(editPrecio.value.replace(/\./g, "")) || 0;
+          const dec = parseInt(editCentavos.value) || 0;
+          const combinado = entero + dec / 100;
+          preview.textContent = formatPrecio(combinado);
+        }
 
         cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
         cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
@@ -613,15 +608,47 @@ async function loadStock(filtro = "") {
           loadProductos();
           modal.remove();
         });
-
-        // Inicializar preview al abrir
-        actualizarPreview();
       });
     });
 
     tablaStock.appendChild(tr);
   });
 }
+
+// Agregar stock (suma si existe)
+btnAgregarStock.addEventListener("click", async () => {
+  const codigo = stockCodigo.value.trim();
+  const cant = parseInt(stockCantidad.value);
+  if (!codigo || isNaN(cant) || cant <= 0) return;
+
+  const snap = await window.get(window.ref(`/stock/${codigo}`));
+  const fecha = new Date().toISOString();
+
+  if (snap.exists()) {
+    const currentCant = parseInt(snap.val().cant) || 0;
+    const newCant = Math.min(999, currentCant + cant);
+    await window.update(window.ref(`/stock/${codigo}`), { cant: newCant, fecha });
+  } else {
+    await window.set(window.ref(`/stock/${codigo}`), {
+      nombre: "NUEVO",
+      cant: Math.min(999, cant),
+      fecha,
+      precio: 0.0,
+    });
+  }
+
+  loadStock();
+  loadProductos();
+});
+
+// Buscar
+btnBuscarStock.addEventListener("click", () => {
+  const filtro = stockCodigo.value.trim();
+  loadStock(filtro);
+});
+
+// Inicial
+loadStock();
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
