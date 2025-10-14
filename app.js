@@ -552,116 +552,119 @@ async function loadCajerosTabla() {
   loadCajeroSelectOptions();
 
   if (snap.exists()) {
-    Object.entries(snap.val()).forEach(([id, cajero]) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${id}</td>
-        <td>${cajero.nombre}</td>
-        <td>${cajero.dni}</td>
-        <td>
-          <button data-edit-id="${id}">✏️</button>
-          <button data-del-id="${id}">❌</button>
-        </td>
-      `;
-
-      // Botón eliminar
-      tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
-        const confSnap = await window.get(window.ref("/config"));
-        const confVal = confSnap.exists() ? confSnap.val() : {};
-        const passAdmin = confVal.passAdmin || "1918";
-        const masterPass = confVal.masterPass || "1409";
-
-        const pass = prompt("Contraseña de administrador para eliminar cajero:");
-        if (pass === passAdmin || pass === masterPass) {
-          if (confirm("Eliminar cajero?")) {
-            await window.remove(window.ref(`/cajeros/${id}`));
-            loadCajerosTabla();
-            loadCajeros();
-          }
-        } else alert("Contraseña incorrecta");
-      });
-
-      // Botón editar
-      tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
-        const confSnap = await window.get(window.ref("/config"));
-        const confVal = confSnap.exists() ? confSnap.val() : {};
-        const passAdmin = confVal.passAdmin || "1918";
-        const masterPass = confVal.masterPass || "1409";
-
-        // Crear modal
-        const modal = document.createElement("div");
-        modal.style.cssText = `
-          position:fixed; top:0; left:0; width:100%; height:100%;
-          display:flex; justify-content:center; align-items:center;
-          background:rgba(0,0,0,0.7); z-index:9999;
+    // Ordenar por nro de cajero de menor a mayor
+    Object.entries(snap.val())
+      .sort(([idA], [idB]) => Number(idA) - Number(idB))
+      .forEach(([id, cajero]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td>${cajero.nombre}</td>
+          <td>${cajero.dni}</td>
+          <td>
+            <button data-edit-id="${id}">✏️</button>
+            <button data-del-id="${id}">❌</button>
+          </td>
         `;
-        modal.innerHTML = `
-          <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
-            <h2>Editar Cajero ${id}</h2>
-            <input id="edit-pass-admin" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
-            <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
-            <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
-            <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;">
-            <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
-            <div style="margin-top:10px;">
-              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-            </div>
-            <p id="edit-msg" style="color:red; margin-top:5px;"></p>
-          </div>
-        `;
-        document.body.appendChild(modal);
 
-        const editPassAdmin = modal.querySelector("#edit-pass-admin");
-        const editNro = modal.querySelector("#edit-nro");
-        const editNombre = modal.querySelector("#edit-nombre");
-        const editDni = modal.querySelector("#edit-dni");
-        const editPass = modal.querySelector("#edit-pass");
-        const editAceptar = modal.querySelector("#edit-aceptar");
-        const editCancelar = modal.querySelector("#edit-cancelar");
-        const editMsg = modal.querySelector("#edit-msg");
+        // Botón eliminar
+        tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
+          const confSnap = await window.get(window.ref("/config"));
+          const confVal = confSnap.exists() ? confSnap.val() : {};
+          const passAdmin = confVal.passAdmin || "1918";
+          const masterPass = confVal.masterPass || "1409";
 
-        editCancelar.addEventListener("click", () => {
-          modal.remove();
+          const pass = prompt("Contraseña de administrador para eliminar cajero:");
+          if (pass === passAdmin || pass === masterPass) {
+            if (confirm("Eliminar cajero?")) {
+              await window.remove(window.ref(`/cajeros/${id}`));
+              loadCajerosTabla();
+              loadCajeros();
+            }
+          } else alert("Contraseña incorrecta");
         });
 
-        editAceptar.addEventListener("click", async () => {
-          const adminInput = editPassAdmin.value.trim();
-          if (adminInput !== passAdmin && adminInput !== masterPass) {
-            editMsg.textContent = "Contraseña incorrecta";
-            return;
-          }
+        // Botón editar
+        tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
+          const confSnap = await window.get(window.ref("/config"));
+          const confVal = confSnap.exists() ? confSnap.val() : {};
+          const passAdmin = confVal.passAdmin || "1918";
+          const masterPass = confVal.masterPass || "1409";
 
-          const newNro = String(editNro.value).padStart(2, "0");
-          const newNombre = editNombre.value.trim();
-          const newDni = editDni.value.trim();
-          const newPass = editPass.value.trim();
+          // Crear modal
+          const modal = document.createElement("div");
+          modal.style.cssText = `
+            position:fixed; top:0; left:0; width:100%; height:100%;
+            display:flex; justify-content:center; align-items:center;
+            background:rgba(0,0,0,0.7); z-index:9999;
+          `;
+          modal.innerHTML = `
+            <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+              <h2>Editar Cajero ${id}</h2>
+              <input id="edit-pass-admin" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+              <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
+              <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
+              <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;">
+              <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
+              <div style="margin-top:10px;">
+                <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+                <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+              </div>
+              <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+            </div>
+          `;
+          document.body.appendChild(modal);
 
-          if (!newNro || !newNombre || !newDni || !newPass) {
-            editMsg.textContent = "Todos los campos son obligatorios";
-            return;
-          }
+          const editPassAdmin = modal.querySelector("#edit-pass-admin");
+          const editNro = modal.querySelector("#edit-nro");
+          const editNombre = modal.querySelector("#edit-nombre");
+          const editDni = modal.querySelector("#edit-dni");
+          const editPass = modal.querySelector("#edit-pass");
+          const editAceptar = modal.querySelector("#edit-aceptar");
+          const editCancelar = modal.querySelector("#edit-cancelar");
+          const editMsg = modal.querySelector("#edit-msg");
 
-          if (newNro !== id) {
-            const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
-            if (existingSnap.exists()) {
-              editMsg.textContent = "❌ Este Nro ya está en uso";
+          editCancelar.addEventListener("click", () => {
+            modal.remove();
+          });
+
+          editAceptar.addEventListener("click", async () => {
+            const adminInput = editPassAdmin.value.trim();
+            if (adminInput !== passAdmin && adminInput !== masterPass) {
+              editMsg.textContent = "Contraseña incorrecta";
               return;
             }
-            await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
-            await window.remove(window.ref(`/cajeros/${id}`));
-          } else {
-            await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
-          }
 
-          loadCajerosTabla();
-          loadCajeros();
-          modal.remove();
+            const newNro = String(editNro.value).padStart(2, "0");
+            const newNombre = editNombre.value.trim();
+            const newDni = editDni.value.trim();
+            const newPass = editPass.value.trim();
+
+            if (!newNro || !newNombre || !newDni || !newPass) {
+              editMsg.textContent = "Todos los campos son obligatorios";
+              return;
+            }
+
+            if (newNro !== id) {
+              const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
+              if (existingSnap.exists()) {
+                editMsg.textContent = "❌ Este Nro ya está en uso";
+                return;
+              }
+              await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
+              await window.remove(window.ref(`/cajeros/${id}`));
+            } else {
+              await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+            }
+
+            loadCajerosTabla();
+            loadCajeros();
+            modal.remove();
+          });
         });
-      });
 
-      tablaCajeros.appendChild(tr);
-    });
+        tablaCajeros.appendChild(tr);
+      });
   }
 }
 
