@@ -445,24 +445,42 @@ btnTirarZ.addEventListener("click", async () => {
   const passAdmin = confVal.passAdmin || "1918";
   if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
+  // Obtener movimientos
   const snap = await window.get(window.ref("/movimientos"));
   if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
-  const todosMov = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha));
+  const todosMov = Object.entries(snap.val())
+    .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
+    // Filtrar por cajero si no es TODOS
+    .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
+
+  if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
 
   // Crear registro único en HISTORIAL
-  const zID = `TIRAR_Z_${Date.now()}`;
   const fechaZ = new Date();
+  const zID = `TIRAR_Z_${fechaZ.getTime()}`;
+
+  // Calcular subtotales por tipo de pago
+  const totalPorTipoPago = {};
+  let totalGeneral = 0;
+  for (const [, mov] of todosMov) {
+    if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
+    totalPorTipoPago[mov.tipo] += mov.total;
+    totalGeneral += mov.total;
+  }
+
   const registroZ = {
     tipo: "TIRAR Z",
     fecha: fechaZ.toISOString(),
     items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
+    totalPorTipoPago,
+    totalGeneral,
     cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
   };
 
   await window.set(window.ref(`/historial/${zID}`), registroZ);
 
-  // Borrar todos los movimientos
+  // Borrar movimientos de la base de datos
   for (const [id] of todosMov) {
     await window.remove(window.ref(`/movimientos/${id}`));
   }
@@ -474,10 +492,9 @@ btnTirarZ.addEventListener("click", async () => {
   let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
 
   for (const cajero of registroZ.cajeros) {
-    ticketTexto += `\n======== CAJERO: ${cajero} ========\n`;
+    ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
     const movCajero = registroZ.items.filter(m => m.cajero === cajero);
 
-    // Separar por tipo de pago y subtotal
     const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
     for (const tipo of tiposPago) {
       const ventasTipo = movCajero.filter(m => m.tipo === tipo);
@@ -490,9 +507,11 @@ btnTirarZ.addEventListener("click", async () => {
     }
   }
 
+  ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
   ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
-  console.log(ticketTexto); // Para testing
-  // imprimirTicketZ(ticketTexto); <-- función real de impresión en 5cm
+
+  // Reemplazar con la función real de impresión
+  imprimirTicketZ(ticketTexto);
 });
 
 // --- HISTORIAL ---
