@@ -495,6 +495,122 @@ btnTirarZ.addEventListener("click", async () => {
   // imprimirTicketZ(ticketTexto); <-- función real de impresión en 5cm
 });
 
+// --- HISTORIAL ---
+const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
+const historialSeccion = document.getElementById("historial");
+
+// Crear controles de día dinámicos
+const controlesHistorial = document.createElement("div");
+controlesHistorial.style.cssText = `
+  display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
+`;
+controlesHistorial.innerHTML = `
+  <button id="historial-dia-prev">◀</button>
+  <span id="historial-dia" style="min-width:60px; text-align:center; display:inline-block;">
+    ${new Date().getDate().toString().padStart(2,'0')}/
+    ${(new Date().getMonth()+1).toString().padStart(2,'0')}/
+    ${new Date().getFullYear()}
+  </span>
+  <button id="historial-dia-next">▶</button>
+`;
+
+historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
+
+const historialDia = document.getElementById("historial-dia");
+const btnDiaPrev = document.getElementById("historial-dia-prev");
+const btnDiaNext = document.getElementById("historial-dia-next");
+
+let historialRegistros = [];
+let fechaMin, fechaMax;
+
+// Cargar historial desde Firebase
+async function loadHistorial() {
+  const snap = await window.get(window.ref("/historial"));
+  tablaHistorial.innerHTML = "";
+  historialRegistros = [];
+
+  if (!snap.exists()) return;
+
+  // Obtener todos los registros
+  Object.entries(snap.val()).forEach(([id, mov]) => {
+    historialRegistros.push({ id, ...mov, fechaObj: new Date(mov.fecha) });
+  });
+
+  // Ordenar por fecha descendente
+  historialRegistros.sort((a, b) => b.fechaObj - a.fechaObj);
+
+  // Determinar límites de fechas según regla del día 15
+  const hoy = new Date();
+  const diaHoy = hoy.getDate();
+
+  if (diaHoy <= 15) {
+    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+  } else {
+    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    // Eliminar registros anteriores al mes actual
+    for (const mov of historialRegistros) {
+      if (mov.fechaObj < fechaMin) {
+        await window.remove(window.ref(`/historial/${mov.id}`));
+      }
+    }
+    historialRegistros = historialRegistros.filter(mov => mov.fechaObj >= fechaMin);
+  }
+
+  fechaMax = hoy;
+
+  // Por defecto, mostrar último día con registros o hoy
+  let ultimoDia = historialRegistros.length
+    ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate()))
+    : hoy.getDate();
+
+  mostrarHistorialPorDia(ultimoDia);
+}
+
+// Función para mostrar solo los registros de un día específico
+function mostrarHistorialPorDia(dia) {
+  tablaHistorial.innerHTML = "";
+
+  historialRegistros
+    .filter(mov => mov.fechaObj.getDate() === dia)
+    .forEach(mov => {
+      const fechaStr = `${mov.fechaObj.getDate().toString().padStart(2,'0')}/${(mov.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${mov.fechaObj.getFullYear()} (${mov.fechaObj.getHours().toString().padStart(2,'0')}:${mov.fechaObj.getMinutes().toString().padStart(2,'0')})`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${mov.id}</td>
+        <td>${mov.total.toFixed(2)}</td>
+        <td>${mov.tipo}</td>
+        <td>${mov.cajero}</td>
+        <td>${fechaStr}</td>
+        <td><button class="reimprimir" data-id="${mov.id}">🖨</button></td>
+      `;
+
+      tr.querySelector(".reimprimir").addEventListener("click", () => {
+        mostrarModalTicket(mov);
+      });
+
+      tablaHistorial.appendChild(tr);
+    });
+
+  // Mostrar fecha completa en el span
+  historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
+  historialDia.dataset.dia = dia;
+
+  // Activar/desactivar botones según límites
+  btnDiaPrev.disabled = dia <= fechaMin.getDate();
+  btnDiaNext.disabled = dia >= fechaMax.getDate();
+}
+
+// Botones para cambiar día
+btnDiaPrev.addEventListener("click", () => {
+  let dia = parseInt(historialDia.dataset.dia);
+  if (dia > fechaMin.getDate()) mostrarHistorialPorDia(dia - 1);
+});
+btnDiaNext.addEventListener("click", () => {
+  let dia = parseInt(historialDia.dataset.dia);
+  if (dia < fechaMax.getDate()) mostrarHistorialPorDia(dia + 1);
+});
+  
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
 const stockCantidad = document.getElementById("stock-cantidad");
