@@ -774,6 +774,12 @@ async function loadStock(filtro = "") {
           display:flex; justify-content:center; align-items:center;
           background:rgba(0,0,0,0.7); z-index:9999;
         `;
+
+        // Precio inicial separado
+        const enteroInicial = Math.floor(prod.precio);
+        const centavosInicial = Math.round((prod.precio % 1) * 100).toString().padStart(2, "0");
+        const precioInputInicial = enteroInicial.toString().padStart(7, "0");
+
         modal.innerHTML = `
           <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
             <h2>Editar Stock ${id}</h2>
@@ -790,11 +796,9 @@ async function loadStock(filtro = "") {
 
             <label>Precio</label>
             <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${Math.floor(prod.precio)}">
+              <input id="edit-precio" type="text" placeholder="0.000.000" style="width:65%; text-align:center;" value="${precioInputInicial}">
               <span>,</span>
-              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${Math.round((prod.precio % 1) * 100)
-                .toString()
-                .padStart(2, "0")}">
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
             </div>
 
             <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
@@ -819,19 +823,32 @@ async function loadStock(filtro = "") {
         const cantDecr = modal.querySelector("#cant-decr");
         const cantIncr = modal.querySelector("#cant-incr");
 
-        // Formateo dinámico del campo de pesos (000.000)
-        editPrecio.addEventListener("input", () => {
-          let val = editPrecio.value.replace(/\D/g, "");
-          if (val.length > 7) val = val.slice(0, 7);
-          const partes = [];
-          while (val.length > 3) {
-            partes.unshift(val.slice(-3));
-            val = val.slice(0, -3);
+        // Cantidad
+        cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
+        cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
+
+        // Formato dinámico de precio
+        function formatearPrecioModal(inputElement) {
+          let raw = inputElement.value.replace(/\D/g, "");
+          if (raw.length > 7) raw = raw.slice(0, 7);
+          raw = raw.padStart(7, "0");
+
+          let val;
+          switch (raw.length) {
+            case 0: val = "0.000.000"; break;
+            case 1: val = "0.000.00" + raw; break;
+            case 2: val = "0.000.0" + raw; break;
+            case 3: val = "0.000." + raw; break;
+            case 4: val = "0.00" + raw[0] + "." + raw.slice(1); break;
+            case 5: val = "0.0" + raw.slice(0, 2) + "." + raw.slice(2); break;
+            case 6: val = "0." + raw.slice(0, 3) + "." + raw.slice(3); break;
+            case 7: val = raw[0] + "." + raw.slice(1, 4) + "." + raw.slice(4); break;
           }
-          if (val) partes.unshift(val);
-          editPrecio.value = partes.join(".");
+          inputElement.value = val;
           actualizarPreview();
-        });
+        }
+
+        editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
 
         editCentavos.addEventListener("input", () => {
           let val = parseInt(editCentavos.value);
@@ -848,8 +865,6 @@ async function loadStock(filtro = "") {
           preview.textContent = formatPrecio(combinado);
         }
 
-        cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
-        cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
         editCancelar.addEventListener("click", () => modal.remove());
 
         editAceptar.addEventListener("click", async () => {
@@ -919,6 +934,7 @@ btnBuscarStock.addEventListener("click", () => {
 
 // Inicial
 loadStock();
+
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
