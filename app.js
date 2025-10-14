@@ -973,15 +973,45 @@ function showAdminActionModal(actionCallback) {
   });
 }
 
+// Crear mensaje de error debajo del input (solo una vez)
+let msgKg = document.createElement("p");
+msgKg.style.color = "red";
+msgKg.style.margin = "4px 0 0 0";
+msgKg.style.fontSize = "0.9em";
+sueltosKg.parentNode.appendChild(msgKg);
+
 // Función para actualizar KG con decimales y límites 0.000 - 99.000
 function actualizarKg(delta, inputElement) {
   let val = parseFloat(inputElement.value) || 0;
   val = Math.min(99.000, Math.max(0.000, val + delta));
   inputElement.value = val.toFixed(3);
+  msgKg.textContent = ""; // borrar mensaje si estaba
 }
 
-btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg));
+// Botones +
 btnSueltoIncr.addEventListener("click", () => actualizarKg(0.100, sueltosKg));
+// Botones -
+btnSueltoDecr.addEventListener("click", () => actualizarKg(-0.100, sueltosKg));
+
+// Edición manual con validación
+sueltosKg.addEventListener("blur", () => {
+  const raw = sueltosKg.value.replace(",", ".").trim();
+  const val = parseFloat(raw);
+
+  if (isNaN(val) || val < 0 || val > 99) {
+    msgKg.textContent = "KG inválido: ejemplo 1.250 kg";
+    sueltosKg.value = "0.000";
+  } else {
+    sueltosKg.value = val.toFixed(3);
+    msgKg.textContent = ""; // borrar mensaje si es válido
+  }
+});
+
+// Opcional: borrar mensaje al escribir
+sueltosKg.addEventListener("input", () => {
+  msgKg.textContent = "";
+});
+
 
 // Formatea fecha ISO a DD/MM/YYYY (HH:MM)
 function formatFecha(iso) {
