@@ -279,7 +279,7 @@ tbody tr:nth-child(even) {
 }
 
 /* Texto del ticket */
-#texto-ticket {
+.texto-ticket {
   font-size: 9px;   /* tamaño pequeño */
   text-align: center; /* centrado */
   margin: 2px 0;    /* separación mínima */
