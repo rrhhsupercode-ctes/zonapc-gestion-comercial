@@ -322,7 +322,7 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   setTimeout(() => iframe.remove(), 500);
 }
 
-// --- COBRAR ---
+// --- COBRAR (bloque completo, con ALERT preserved) ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -364,17 +364,21 @@ btnCobrar.addEventListener("click", async () => {
 
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-      const total = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
 
-      // Guardar movimientos
+      // total original (sin porcentaje) y total modificado por descuento/recargo
+      const totalOriginal = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
+
+      // Guardar movimientos (usamos totalFinal para reflejar descuento/recargo aplicado)
       await window.set(window.ref(`/movimientos/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
         items: carrito,
-        total,
+        total: totalFinal,
         fecha: fecha.toISOString(),
         tipo: tipoPago,
-        eliminado: false
+        eliminado: false,
+        porcentajeAplicado: porcentajeFinal || 0
       });
 
       // Guardar historial
@@ -382,9 +386,10 @@ btnCobrar.addEventListener("click", async () => {
         ticketID,
         cajero: currentUser.id,
         items: carrito,
-        total,
+        total: totalFinal,
         fecha: fecha.toISOString(),
-        tipo: tipoPago
+        tipo: tipoPago,
+        porcentajeAplicado: porcentajeFinal || 0
       });
 
       // Actualizar config
@@ -400,8 +405,8 @@ btnCobrar.addEventListener("click", async () => {
         }
       }
 
-      // Imprimir ticket
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, total, tipoPago);
+      // Imprimir ticket (se utiliza totalOriginal y porcentajeFinal dentro de imprimirTicket para mostrar detalle)
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalOriginal, tipoPago);
 
       alert("VENTA FINALIZADA");
 
@@ -415,7 +420,6 @@ btnCobrar.addEventListener("click", async () => {
     });
   });
 });
-
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
