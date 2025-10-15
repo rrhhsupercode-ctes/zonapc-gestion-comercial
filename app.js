@@ -124,7 +124,7 @@ const btnAddPrecio = document.getElementById("btn-add-precio");
 
 let carrito = [];
 
-// Cargar productos y sueltos en selects
+// --- Funciones de carga ---
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
   cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
@@ -157,7 +157,29 @@ async function loadProductos() {
   inputKgSuelto.value = "0.100";
 }
 
-// Actualiza tabla de cobro
+async function loadSueltosPrecio() {
+  const sueltosSnap = await window.get(window.ref("/sueltos"));
+  cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
+  if (sueltosSnap.exists()) {
+    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = v.nombre;
+      cobroSueltosPrecio.appendChild(opt);
+    });
+  }
+  inputCodigoPrecio.value = "";
+  inputPrecioSuelto.value = "000";
+}
+
+// --- Inicialización ---
+async function inicializarCobro() {
+  await loadProductos();
+  await loadSueltosPrecio();
+}
+inicializarCobro(); // se ejecuta al cargar la página
+
+// --- Tabla de cobro ---
 function actualizarTabla() {
   tablaCobro.innerHTML = "";
   let total = 0;
@@ -181,8 +203,7 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-
-// Sumar cantidades si ya existe producto en carrito, con control de stock
+// --- Carrito ---
 async function agregarAlCarrito(nuevoItem) {
   const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
@@ -202,7 +223,7 @@ async function agregarAlCarrito(nuevoItem) {
   actualizarTabla();
 }
 
-// AGREGAR PRODUCTO
+// --- Botones AGREGAR ---
 btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
@@ -218,7 +239,6 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
-// AGREGAR SUELTO
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   let cant = parseFloat(inputKgSuelto.value);
@@ -235,7 +255,27 @@ btnAddSuelto.addEventListener("click", async () => {
   inputCodigoSuelto.value = "";
 });
 
-// BOTONES + / - SUELTOS
+btnAddPrecio.addEventListener("click", async () => {
+  let id = cobroSueltosPrecio.value || inputCodigoPrecio.value.trim();
+  let precioIngresado = parseInt(inputPrecioSuelto.value);
+  if (!id || precioIngresado <= 0) return;
+
+  const snap = await window.get(window.ref(`/sueltos/${id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+
+  // Calcular KG basado en el precio ingresado
+  let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
+
+  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+
+  inputPrecioSuelto.value = "000";
+  inputCodigoPrecio.value = "";
+});
+
+// --- Botones + / - sueltos ---
 btnKgMas.addEventListener("click", () => {
   inputKgSuelto.value = (parseFloat(inputKgSuelto.value) + 0.100).toFixed(3);
 });
@@ -270,6 +310,13 @@ btnAddPrecio.addEventListener("click", async () => {
   const snap = await window.get(window.ref(`/sueltos/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
+
+  async function inicializarCobro() {
+  await loadProductos();
+  await loadSueltosPrecio();
+}
+
+inicializarCobro(); // <--- ejecuta la inicialización
 
   // Calcular KG basado en el precio ingresado
   let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
