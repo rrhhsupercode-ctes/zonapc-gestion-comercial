@@ -260,15 +260,15 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     <html>
       <head>
         <style>
-          body { font-family: monospace; max-width:5cm; text-align:left; white-space: pre-line; padding:5px; }
-          .ticket { border:1px solid #000; padding:5px; }
+          body { font-family: monospace; max-width:5cm; text-align:left; white-space: pre-line; padding:1px; }
+          .ticket { border:0px solid #000; padding:1px; }
         </style>
       </head>
       <body>
-        <div class="ticket">
+        <div class="texto-ticket">
           ${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n
           ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
-          \nTOTAL: $${total.toFixed(2)}\nPago: ${tipoPago}
+          \nTOTAL: $${total.toFixed(2)}\nPago en: ${tipoPago}
         </div>
       </body>
     </html>
