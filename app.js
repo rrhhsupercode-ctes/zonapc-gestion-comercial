@@ -155,17 +155,21 @@ async function loadProductos() {
   inputCodigoProducto.value = "";
   inputCodigoSuelto.value = "";
   inputKgSuelto.value = "0.100";
+  inputCodigoPrecio.value = "";
+  inputPrecioSuelto.value = "000";
 }
 
 async function loadSueltosPrecio() {
   const sueltosSnap = await window.get(window.ref("/sueltos"));
   cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-    const opt = document.createElement("option");
-    opt.value = k;
-    opt.textContent = v.nombre;
-    cobroSueltosPrecio.appendChild(opt);
-  });
+  if (sueltosSnap.exists()) {
+    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = v.nombre;
+      cobroSueltosPrecio.appendChild(opt);
+    });
+  }
   inputCodigoPrecio.value = "";
   inputPrecioSuelto.value = "000";
 }
@@ -206,7 +210,7 @@ async function agregarAlCarrito(nuevoItem) {
   const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
-  
+
   const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
   let totalCant = nuevoItem.cant;
   if (idx >= 0) totalCant += carrito[idx].cant;
@@ -281,52 +285,7 @@ btnKgMenos.addEventListener("click", () => {
   inputKgSuelto.value = val.toFixed(3);
 });
 
-
-  // Cargar productos en el select de “por precio”
-async function loadSueltosPrecio() {
-  const sueltosSnap = await window.get(window.ref("/sueltos"));
-  cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = v.nombre;
-      cobroSueltosPrecio.appendChild(opt);
-    });
-  }
-  inputCodigoPrecio.value = "";
-  inputPrecioSuelto.value = "000";
-}
-
-// AGREGAR SUELTO POR PRECIO
-btnAddPrecio.addEventListener("click", async () => {
-  let id = cobroSueltosPrecio.value || inputCodigoPrecio.value.trim();
-  let precioIngresado = parseInt(inputPrecioSuelto.value);
-  if (!id || precioIngresado <= 0) return;
-
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  async function inicializarCobro() {
-  await loadProductos();
-  await loadSueltosPrecio();
-}
-
-inicializarCobro(); // <--- ejecuta la inicialización
-
-  // Calcular KG basado en el precio ingresado
-  let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
-
-  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
-
-  inputPrecioSuelto.value = "000";
-  inputCodigoPrecio.value = "";
-});
-
-// IMPRIMIR TICKET (sin modal)
+// --- IMPRIMIR TICKET ---
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const iframe = document.createElement("iframe");
   iframe.style.position = "absolute";
@@ -340,31 +299,10 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     <html>
       <head>
         <style>
-          body {
-            font-family: monospace;
-            font-size: 13px;
-            max-width: 6cm;
-            white-space: pre-line;
-            margin: 0;
-            padding: 6px;
-          }
-          .titulo {
-            text-align: center;
-            font-weight: bold;
-            border-bottom: 1px dashed #000;
-            margin-bottom: 6px;
-            padding-bottom: 2px;
-          }
-          .bloque {
-            margin-bottom: 8px;
-          }
-          .total {
-            text-align: center;
-            font-weight: bold;
-            font-size: 14px;
-            border-top: 1px dashed #000;
-            padding-top: 4px;
-          }
+          body { font-family: monospace; font-size: 13px; max-width: 6cm; white-space: pre-line; margin:0; padding:6px; }
+          .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
+          .bloque { margin-bottom:8px; }
+          .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
         </style>
       </head>
       <body>
@@ -384,7 +322,7 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   setTimeout(() => iframe.remove(), 500);
 }
 
-// COBRAR
+// --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -428,7 +366,7 @@ btnCobrar.addEventListener("click", async () => {
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
       const total = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
 
-      // Guardar movimientos con ticketID como clave
+      // Guardar movimientos
       await window.set(window.ref(`/movimientos/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -439,7 +377,7 @@ btnCobrar.addEventListener("click", async () => {
         eliminado: false
       });
 
-      // Guardar historial con ticketID como clave
+      // Guardar historial
       await window.set(window.ref(`/historial/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -449,7 +387,7 @@ btnCobrar.addEventListener("click", async () => {
         tipo: tipoPago
       });
 
-      // Actualizar configuración de tickets
+      // Actualizar config
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
       // Actualizar stock
@@ -477,6 +415,7 @@ btnCobrar.addEventListener("click", async () => {
     });
   });
 });
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
