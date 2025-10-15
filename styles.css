@@ -328,12 +328,11 @@ tbody tr:nth-child(even) {
 /*===  Texto BANNER PRINCIPAL  ===*/
 #app-title {
   text-align: center;        /* Centra el texto */
-  font-size: 20px;           /* Tamaño pequeño */
+  font-size: 14px;           /* Tamaño pequeño */
   font-weight: bold;         /* Negrita */
-  letter-spacing: 1px;       /* Espaciado entre letras */
+  letter-spacing: 0px;       /* Espaciado entre letras */
   color: #fff;               /* Color de texto */
-  text-transform: uppercase; /* MAYÚSCULAS */
-  margin: 2px 0;            /* Separación arriba y abajo */
+  margin: 1px 0;            /* Separación arriba y abajo */
 }
 
 /*===  Tamaño de los Emojis  ===*/
