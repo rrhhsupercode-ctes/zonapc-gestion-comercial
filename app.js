@@ -376,20 +376,19 @@ btnCobrar.addEventListener("click", async () => {
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
-const btnTirarZ = document.getElementById("btn-tirar-z"); // botón Tirar Z
+const btnTirarZ = document.getElementById("btn-tirar-z");
 
+// Cargar movimientos
 async function loadMovimientos() {
   const snap = await window.get(window.ref("/movimientos"));
   tablaMovimientos.innerHTML = "";
   filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
   if (!snap.exists()) return;
 
-  const entries = Object.entries(snap.val())
-    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+  const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
   entries.forEach(([id, mov]) => {
     if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
-
     const tr = document.createElement("tr");
     const eliminado = mov.eliminado || false;
 
@@ -404,15 +403,18 @@ async function loadMovimientos() {
       </td>
     `;
 
-    tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
+    // --- REIMPRIMIR ---
+    tr.querySelector(".reimprimir").addEventListener("click", () => {
+      mostrarModalTicket({
+        ...mov,
+        ticketID: id,
+        reimpresion: true
+      });
+    });
 
+    // --- ELIMINAR ---
     tr.querySelector(".eliminar").addEventListener("click", () => {
       showAdminActionModal(async () => {
-        const confSnap = await window.get(window.ref("/config"));
-        const confVal = confSnap.exists() ? confSnap.val() : {};
-        const passAdmin = confVal.passAdmin || "1918";
-
-        // Restaurar stock/sueltos
         for (const item of mov.items) {
           const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
           if (!snapItem.exists()) continue;
@@ -423,8 +425,6 @@ async function loadMovimientos() {
             await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
           }
         }
-
-        // Marcar ticket como eliminado
         await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
         loadMovimientos();
       });
@@ -448,19 +448,17 @@ btnTirarZ.addEventListener("click", () => {
     if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
     const todosMov = Object.entries(snap.val())
-      .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
       .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
 
     if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
 
     const fechaZ = new Date();
-    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
+    const zID = `Z_${fechaZ.getTime()}`;
 
     const totalPorTipoPago = {};
     let totalGeneral = 0;
     for (const [, mov] of todosMov) {
-      if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
-      totalPorTipoPago[mov.tipo] += mov.total;
+      totalPorTipoPago[mov.tipo] = (totalPorTipoPago[mov.tipo] || 0) + mov.total;
       totalGeneral += mov.total;
     }
 
@@ -470,19 +468,17 @@ btnTirarZ.addEventListener("click", () => {
       items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
       totalPorTipoPago,
       totalGeneral,
-      cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
+      cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))],
+      eliminado: false
     };
 
     await window.set(window.ref(`/historial/${zID}`), registroZ);
-
-    for (const [id] of todosMov) {
-      await window.remove(window.ref(`/movimientos/${id}`));
-    }
+    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
 
     loadMovimientos();
-    loadHistorial();
+    if (typeof loadHistorial === "function") loadHistorial();
 
-    let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
+    let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")}\n`;
     for (const cajero of registroZ.cajeros) {
       ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
@@ -491,9 +487,7 @@ btnTirarZ.addEventListener("click", () => {
         const ventasTipo = movCajero.filter(m => m.tipo === tipo);
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
         ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-        ventasTipo.forEach(m => {
-          ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
-        });
+        ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
       }
     }
     ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
@@ -501,11 +495,12 @@ btnTirarZ.addEventListener("click", () => {
 
     if (typeof imprimirTicketZ === "function") {
       imprimirTicketZ(ticketTexto);
-    } else {
-      imprimirTicket(`TIRAR Z\n${ticketTexto}`, new Date().toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
+    } else if (typeof imprimirTicket === "function") {
+      imprimirTicket(ticketTexto, fechaZ.toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
     }
   });
 });
+
 
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
