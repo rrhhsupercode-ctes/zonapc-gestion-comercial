@@ -284,19 +284,20 @@ msgKgCobro.style.margin = "4px 0 0 0";
 msgKgCobro.style.fontSize = "0.9em";
 inputKgSuelto.parentNode.appendChild(msgKgCobro);
 
+// Valor inicial igual que SUELTOS
+inputKgSuelto.value = "0.000";
+
 function formatearKgCobro(inputElement, msgElement, delta = 0) {
-  // Si es incremento/decremento
+  let raw = inputElement.value.replace(/\D/g, "");
+
   if (delta !== 0) {
     let val = parseFloat(inputElement.value) || 0;
-    val = Math.min(99.000, Math.max(0.100, val + delta));
+    val = Math.min(99.000, Math.max(0.000, val + delta));
     inputElement.value = val.toFixed(3);
     if (msgElement) msgElement.textContent = "";
     actualizarPrecioUnitario();
     return;
   }
-
-  // Formateo mientras se escribe
-  let raw = inputElement.value.replace(/\D/g, "");
 
   let val;
   switch (raw.length) {
@@ -304,14 +305,14 @@ function formatearKgCobro(inputElement, msgElement, delta = 0) {
     case 1: val = parseFloat("0.00" + raw); break;
     case 2: val = parseFloat("0.0" + raw); break;
     case 3: val = parseFloat("0." + raw); break;
-    case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+    case 4: val = parseFloat(raw[0] + "." + raw.slice(1, 4)); break;
     case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
     default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
   }
 
-  if (isNaN(val) || val < 0.100 || val > 99) {
+  if (isNaN(val) || val < 0.000 || val > 99) {
     msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-    // NO sobreescribimos el input para que el usuario pueda seguir escribiendo
+    inputElement.value = "0.000"; // restablecemos a 0.000 en error
   } else {
     inputElement.value = val.toFixed(3);
     msgElement.textContent = "";
