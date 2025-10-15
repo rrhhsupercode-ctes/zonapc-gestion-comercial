@@ -590,6 +590,57 @@ async function loadHistorial() {
     tablaHistorial.appendChild(tr);
   }
 }
+
+// MOSTRAR MODAL TICKET
+function mostrarModalTicket(mov) {
+  // Crear modal si no existe
+  let modal = document.getElementById("modalTicket");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "modalTicket";
+    modal.style.position = "fixed";
+    modal.style.top = "0";
+    modal.style.left = "0";
+    modal.style.width = "100%";
+    modal.style.height = "100%";
+    modal.style.background = "rgba(0,0,0,0.6)";
+    modal.style.display = "flex";
+    modal.style.justifyContent = "center";
+    modal.style.alignItems = "center";
+    modal.style.zIndex = "9999";
+    modal.innerHTML = `
+      <div style="background:white; padding:15px; border-radius:10px; width:320px; max-height:90%; overflow:auto; text-align:center; font-family:monospace;">
+        <div id="previewTicket" style="white-space: pre-line; text-align:left; font-size:13px; border:1px dashed #000; padding:10px; margin-bottom:10px;"></div>
+        <hr>
+        <button id="btnReimprimirTicket" style="margin-right:10px; padding:5px 10px;">Reimprimir</button>
+        <button id="btnCerrarTicket" style="padding:5px 10px;">Cancelar</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  }
+
+  const fecha = new Date(mov.fecha).toLocaleDateString("es-AR") + " (" +
+                new Date(mov.fecha).toLocaleTimeString("es-AR", {hour: "2-digit", minute: "2-digit"}) + ")";
+  const textoTicket = `
+${mov.ticketID || "(sin ID)"}\n${fecha}\nCajero: ${mov.cajero}\n==========\n
+${mov.items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant * it.precio).toFixed(2)}\n==========`).join("\n")}
+\nTOTAL: $${mov.total.toFixed(2)}\nPago en: ${mov.tipo}
+  `.trim();
+
+  modal.querySelector("#previewTicket").textContent = textoTicket;
+  modal.style.display = "flex";
+
+  // Eventos de botones
+  const btnCerrar = modal.querySelector("#btnCerrarTicket");
+  const btnReimprimir = modal.querySelector("#btnReimprimirTicket");
+
+  btnCerrar.onclick = () => modal.remove();
+
+  btnReimprimir.onclick = () => {
+    imprimirTicket(mov.ticketID, fecha, mov.cajero, mov.items, mov.total, mov.tipo);
+    modal.remove();
+  };
+}
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
