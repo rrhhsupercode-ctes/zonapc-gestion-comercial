@@ -128,14 +128,13 @@ const btnCobrar = document.getElementById("btn-cobrar");
 const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
 const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
 const inputPrecioSuelto = document.getElementById("input-precio-suelto");
-const btnAddPrecio = document.getElementById("btn-add-precio");
 
-// nuevos inputs (deben existir en el HTML que pegaste)
+// nuevos inputs
 const inputDescuento = document.getElementById("input-descuento");
 const inputRecargo = document.getElementById("input-recargo");
 
 let carrito = [];
-let porcentajeFinal = 0; // recargo - descuento (puede ser negativo => descuento)
+let porcentajeFinal = 0;
 
 // --- Funciones de carga ---
 async function loadProductos() {
@@ -196,15 +195,13 @@ inicializarCobro();
 
 // --- Calcular porcentaje final ---
 function calcularPorcentajeFinal() {
-  // leer valores, forzar 0..100
   const desc = Math.min(Math.max(Number(inputDescuento.value) || 0, 0), 100);
   const rec = Math.min(Math.max(Number(inputRecargo.value) || 0, 0), 100);
 
-  // normalizar en los inputs (por si escribieron fuera de rango)
   inputDescuento.value = String(Math.round(desc));
   inputRecargo.value = String(Math.round(rec));
 
-  porcentajeFinal = rec - desc; // si negativo => descuento neto
+  porcentajeFinal = rec - desc;
   actualizarTabla();
 }
 
@@ -229,10 +226,7 @@ function actualizarTabla() {
     total += item.cant * item.precio;
   });
 
-  // aplicar porcentaje final
   const totalModificado = total * (1 + porcentajeFinal / 100);
-
-  // mostrar en pantalla (total en rojo como pediste)
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
   totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
@@ -280,36 +274,31 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
+// --- UNIFICAR SUELTOS KG / PRECIO ---
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
-  let cant = parseFloat(inputKgSuelto.value);
-  if (!id || cant <= 0) return;
+  if (!id) return alert("Seleccione un producto suelto");
 
   const snap = await window.get(window.ref(`/sueltos/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
 
+  // Determinar cantidad según KG o precio ingresado
+  let cant = parseFloat(inputKgSuelto.value) || 0;
+  const precioIngresado = parseFloat(inputPrecioSuelto.value) || 0;
+
+  if (precioIngresado > 0) {
+    cant = parseFloat((precioIngresado / data.precio).toFixed(3));
+  }
+
+  if (cant <= 0) return alert("Cantidad inválida");
   if (cant > data.kg) return alert("STOCK INSUFICIENTE");
 
   agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+
+  // reset inputs
   inputKgSuelto.value = "0.100";
   inputCodigoSuelto.value = "";
-});
-
-btnAddPrecio.addEventListener("click", async () => {
-  let id = cobroSueltosPrecio.value || inputCodigoPrecio.value.trim();
-  let precioIngresado = parseInt(inputPrecioSuelto.value);
-  if (!id || precioIngresado <= 0) return;
-
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-
-  let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
-  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
-
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
-
   inputPrecioSuelto.value = "000";
   inputCodigoPrecio.value = "";
 });
@@ -323,6 +312,7 @@ btnKgMenos.addEventListener("click", () => {
   if (val < 0.100) val = 0.100;
   inputKgSuelto.value = val.toFixed(3);
 });
+
 
 // --- IMPRIMIR TICKET ---
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
