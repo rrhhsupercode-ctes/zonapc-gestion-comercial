@@ -864,57 +864,59 @@ async function loadStock(filtro = "") {
       </td>
     `;
 
-// Eliminar
-tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
-  await window.remove(window.ref(`/stock/${id}`));
-  loadStock();
-  loadProductos();
-});
+    // Eliminar
+    tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(async () => {
+        await window.remove(window.ref(`/stock/${id}`));
+        loadStock();
+        loadProductos();
+      });
+    });
 
+    // Editar
+    tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(() => {
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+          position:fixed; top:0; left:0; width:100%; height:100%;
+          display:flex; justify-content:center; align-items:center;
+          background:rgba(0,0,0,0.7); z-index:9999;
+        `;
 
-   // Editar
-tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;
-  `;
+        const enteroInicial = Math.floor(prod.precio);
+        const centavosInicial = Math.round((prod.precio - enteroInicial) * 100).toString().padStart(2, "0");
 
-  const enteroInicial = Math.floor(prod.precio);
-  const centavosInicial = Math.round((prod.precio - enteroInicial) * 100).toString().padStart(2, "0");
+        modal.innerHTML = `
+          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
+            <h2>Editar Stock ${id}</h2>
 
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
-      <h2>Editar Stock ${id}</h2>
+            <label>Nombre</label>
+            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
 
-      <label>Nombre</label>
-      <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+            <label>Cantidad (0-999)</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+              <button id="cant-decr" style="width:30%;">-</button>
+              <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
+              <button id="cant-incr" style="width:30%;">+</button>
+            </div>
 
-      <label>Cantidad (0-999)</label>
-      <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
-        <button id="cant-decr" style="width:30%;">-</button>
-        <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
-        <button id="cant-incr" style="width:30%;">+</button>
-      </div>
+            <label>Precio</label>
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+              <input id="edit-precio" type="text" placeholder="" style="width:65%; text-align:center;" value="${enteroInicial}">
+              <span>,</span>
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
+            </div>
 
-      <label>Precio</label>
-      <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-        <input id="edit-precio" type="text" placeholder="" style="width:65%; text-align:center;" value="${enteroInicial}">
-        <span>,</span>
-        <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
-      </div>
+            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
-      <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
-      <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
-
-      <div style="margin-top:10px;">
-        <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-        <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
 
         const editNombre = modal.querySelector("#edit-nombre");
         const editCant = modal.querySelector("#edit-cant");
@@ -1163,58 +1165,59 @@ async function loadSueltos(filtro = "") {
       </td>
     `;
 
-// Eliminar
-tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
-  await window.remove(window.ref(`/sueltos/${id}`));
-  loadSueltos();
-  loadProductos();
-});
+    // Eliminar
+    tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(async () => {
+        await window.remove(window.ref(`/sueltos/${id}`));
+        loadSueltos();
+        loadProductos();
+      });
+    });
 
+    // Editar
+    tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+      showAdminActionModal(() => {
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+          position:fixed; top:0; left:0; width:100%; height:100%;
+          display:flex; justify-content:center; align-items:center;
+          background:rgba(0,0,0,0.7); z-index:9999;
+        `;
+        const enteroInicial = Math.floor(prod.precio);
+        const centavosInicial = Math.round((prod.precio - enteroInicial) * 100).toString().padStart(2, "0");
 
- // Editar
-tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;
-  `;
+        modal.innerHTML = `
+          <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
+            <h2>Editar Suelto ${id}</h2>
 
-  const enteroInicial = Math.floor(prod.precio);
-  const centavosInicial = Math.round((prod.precio - enteroInicial) * 100).toString().padStart(2, "0");
+            <label>Nombre</label>
+            <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
 
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
-      <h2>Editar Suelto ${id}</h2>
+            <label>KG</label>
+            <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
+              <button id="kg-decr" style="width:30%;">-</button>
+              <input id="edit-kg" type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
+              <button id="kg-incr" style="width:30%;">+</button>
+            </div>
+            <p id="edit-kg-msg" style="color:red; min-height:18px; margin-top:2px; font-size:0.9em;"></p>
 
-      <label>Nombre</label>
-      <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
+            <label>Precio</label>
+            <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
+              <input id="edit-precio" type="text" placeholder="" style="width:65%; text-align:center;" value="${enteroInicial}">
+              <span>,</span>
+              <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
+            </div>
 
-      <label>KG</label>
-      <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
-        <button id="kg-decr" style="width:30%;">-</button>
-        <input id="edit-kg" type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:40%; text-align:center;">
-        <button id="kg-incr" style="width:30%;">+</button>
-      </div>
-      <p id="edit-kg-msg" style="color:red; min-height:18px; margin-top:2px; font-size:0.9em;"></p>
+            <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
+            <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
 
-      <label>Precio</label>
-      <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-        <input id="edit-precio" type="text" placeholder="" style="width:65%; text-align:center;" value="${enteroInicial}">
-        <span>,</span>
-        <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
-      </div>
-
-      <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
-      <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
-
-      <div style="margin-top:10px;">
-        <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-        <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
+            <div style="margin-top:10px;">
+              <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+              <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+            </div>
+          </div>
+        `;
+        document.body.appendChild(modal);
 
         const editNombre = modal.querySelector("#edit-nombre");
         const editKg = modal.querySelector("#edit-kg");
@@ -1321,30 +1324,6 @@ btnBuscarSuelto.addEventListener("click", () => {
 
 // Inicial
 loadSueltos();
-
-  // --- BOTÓN HEADER STOCK ---
-const btnHeaderStock = document.getElementById("btn-header-stock");
-const seccionStock = document.getElementById("stock-section");
-seccionStock.classList.add("hidden");
-
-btnHeaderStock.addEventListener("click", () => {
-  showAdminActionModal(() => {
-    seccionStock.classList.remove("hidden");
-    loadStock();
-  });
-});
-
-// --- BOTÓN HEADER SUELTOS ---
-const btnHeaderSueltos = document.getElementById("btn-header-sueltas");
-const seccionSueltos = document.getElementById("sueltos-section");
-seccionSueltos.classList.add("hidden");
-
-btnHeaderSueltos.addEventListener("click", () => {
-  showAdminActionModal(() => {
-    seccionSueltos.classList.remove("hidden");
-    loadSueltos();
-  });
-});
 
 // --- CAJEROS ---
 const cajeroNro = document.getElementById("cajero-nro");
