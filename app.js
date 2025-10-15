@@ -465,7 +465,7 @@ btnTirarZ.addEventListener("click", () => {
     const registroZ = {
       tipo: "TIRAR Z",
       fecha: fechaZ.toISOString(),
-      fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(), // expira mañana
+      fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(),
       items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
       totalPorTipoPago,
       totalGeneral,
@@ -481,20 +481,40 @@ btnTirarZ.addEventListener("click", () => {
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")}\n`;
+    // --- DISEÑO ESTÉTICO DEL TICKET Z ---
+    let ticketTexto = `
+==============================
+          CIERRE Z
+==============================
+Fecha: ${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})
+------------------------------
+`.trim();
+
     for (const cajero of registroZ.cajeros) {
-      ticketTexto += `\n** CAJERO: ${cajero} **\n`;
+      ticketTexto += `\nCAJERO: ${cajero}\n------------------------------`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
       const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
       for (const tipo of tiposPago) {
         const ventasTipo = movCajero.filter(m => m.tipo === tipo);
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-        ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
-        ticketTexto += `\n==========\n`;
+        ticketTexto += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
+        ventasTipo.forEach(m => {
+          ticketTexto += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
+        });
       }
+      ticketTexto += `\n------------------------------`;
     }
-    ticketTexto += `\n** TOTAL GENERAL: $${totalGeneral.toFixed(2)} **\n\nSE CERRO LA CAJA\n`;
+
+    ticketTexto += `
+TOTALES POR TIPO DE PAGO:
+------------------------------
+${Object.entries(totalPorTipoPago).map(([tipo, total]) => `${tipo.padEnd(10)} $${total.toFixed(2)}`).join("\n")}
+------------------------------
+TOTAL GENERAL: $${totalGeneral.toFixed(2)}
+==============================
+       FIN CIERRE Z
+==============================
+`.trim();
 
     if (typeof imprimirTicketZ === "function") {
       imprimirTicketZ(ticketTexto);
