@@ -117,6 +117,10 @@ const btnKgMenos = document.getElementById("btn-decr-kg");
 const tablaCobro = document.getElementById("tabla-cobro").querySelector("tbody");
 const totalDiv = document.getElementById("total-div");
 const btnCobrar = document.getElementById("btn-cobrar");
+const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
+const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
+const inputPrecioSuelto = document.getElementById("input-precio-suelto");
+const btnAddPrecio = document.getElementById("btn-add-precio");
 
 let carrito = [];
 
@@ -239,6 +243,43 @@ btnKgMenos.addEventListener("click", () => {
   let val = parseFloat(inputKgSuelto.value) - 0.100;
   if (val < 0.100) val = 0.100;
   inputKgSuelto.value = val.toFixed(3);
+});
+
+  // Cargar productos en el select de “por precio”
+async function loadSueltosPrecio() {
+  const sueltosSnap = await window.get(window.ref("/sueltos"));
+  cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
+  if (sueltosSnap.exists()) {
+    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+      const opt = document.createElement("option");
+      opt.value = k;
+      opt.textContent = v.nombre;
+      cobroSueltosPrecio.appendChild(opt);
+    });
+  }
+  inputCodigoPrecio.value = "";
+  inputPrecioSuelto.value = "000";
+}
+
+// AGREGAR SUELTO POR PRECIO
+btnAddPrecio.addEventListener("click", async () => {
+  let id = cobroSueltosPrecio.value || inputCodigoPrecio.value.trim();
+  let precioIngresado = parseInt(inputPrecioSuelto.value);
+  if (!id || precioIngresado <= 0) return;
+
+  const snap = await window.get(window.ref(`/sueltos/${id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+
+  // Calcular KG basado en el precio ingresado
+  let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
+
+  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+
+  inputPrecioSuelto.value = "000";
+  inputCodigoPrecio.value = "";
 });
 
 // IMPRIMIR TICKET (sin modal)
