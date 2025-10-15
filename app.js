@@ -166,15 +166,9 @@ function actualizarTabla() {
       <td>${(item.cant * item.precio).toFixed(2)}</td>
       <td><button data-idx="${idx}">❌</button></td>
     `;
-    tr.querySelector("button").addEventListener("click", async () => {
-      const pass = prompt("Contraseña de administrador para eliminar item:");
-      const snap = await window.get(window.ref("/config"));
-      const val = snap.exists() ? snap.val() : {};
-      const passAdmin = val.passAdmin || "1918";
-      if (pass === passAdmin || pass === val.masterPass) {
-        carrito.splice(idx, 1);
-        actualizarTabla();
-      } else alert("Contraseña incorrecta");
+    tr.querySelector("button").addEventListener("click", () => {
+      carrito.splice(idx, 1);
+      actualizarTabla();
     });
     tablaCobro.appendChild(tr);
     total += item.cant * item.precio;
@@ -182,6 +176,7 @@ function actualizarTabla() {
   totalDiv.textContent = `TOTAL: $${total.toFixed(2)}`;
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
+
 
 // Sumar cantidades si ya existe producto en carrito, con control de stock
 async function agregarAlCarrito(nuevoItem) {
