@@ -398,133 +398,7 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-// --- MOVIMIENTOS ---
-const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
-const filtroCajero = document.getElementById("filtroCajero");
-const btnTirarZ = document.getElementById("btn-tirar-z");
-
-// Cargar movimientos
-async function loadMovimientos() {
-  const snap = await window.get(window.ref("/movimientos"));
-  tablaMovimientos.innerHTML = "";
-  filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
-  if (!snap.exists()) return;
-
-  const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
-
-  entries.forEach(([id, mov]) => {
-    if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
-    const tr = document.createElement("tr");
-    const eliminado = mov.eliminado || false;
-
-    tr.style.backgroundColor = eliminado ? "#ccc" : "";
-    tr.innerHTML = `
-      <td>${id}</td>
-      <td>${mov.total.toFixed(2)}</td>
-      <td>${mov.tipo}</td>
-      <td>
-        <button class="reimprimir" data-id="${id}" ${eliminado ? "disabled" : ""}>🖨</button>
-        <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
-      </td>
-    `;
-
-    // --- REIMPRIMIR MOVIMIENTO ---
-    tr.querySelector(".reimprimir").addEventListener("click", () => {
-      const fechaFormateada = `${new Date(mov.fecha).toLocaleDateString()} (${new Date(mov.fecha).getHours().toString().padStart(2,"0")}:${new Date(mov.fecha).getMinutes().toString().padStart(2,"0")})`;
-
-      let cuerpo = '';
-      mov.items.forEach(it => {
-        cuerpo += `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio*it.cant).toFixed(2)}\n--------------------------------\n`;
-      });
-
-      cuerpo += `TOTAL: $${mov.total.toFixed(2)}\n--------------------------------\n`;
-      cuerpo += `VENTA - Cajero: ${mov.cajero}\n--------------------------------\n`;
-
-      // --- IMPRIMIR ESTÉTICO ---
-      const iframe = document.createElement("iframe");
-      iframe.style.position = "absolute";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentWindow.document;
-      doc.open();
-      doc.write(`
-        <html>
-          <head>
-            <style>
-              body {
-                font-family: monospace;
-                font-size: 13px;
-                max-width: 6cm;
-                white-space: pre-line;
-                margin: 0;
-                padding: 6px;
-              }
-              .titulo {
-                text-align: center;
-                font-weight: bold;
-                border-bottom: 1px dashed #000;
-                margin-bottom: 6px;
-                padding-bottom: 2px;
-              }
-              .bloque {
-                margin-bottom: 8px;
-              }
-              .total {
-                text-align: center;
-                font-weight: bold;
-                font-size: 14px;
-                border-top: 1px dashed #000;
-                padding-top: 4px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="titulo">*** VENTA ***</div>
-            <div class="bloque">${fechaFormateada}</div>
-            <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
-            <div class="total">TOTAL: $${mov.total.toFixed(2)}</div>
-          </body>
-        </html>
-      `);
-      doc.close();
-
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => iframe.remove(), 500);
-    });
-
-    // --- ELIMINAR MOVIMIENTO ---
-    tr.querySelector(".eliminar").addEventListener("click", () => {
-      showAdminActionModal(async () => {
-        for (const item of mov.items) {
-          const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-          if (!snapItem.exists()) continue;
-          const data = snapItem.val();
-          if (item.tipo === "stock") {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
-          } else {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
-          }
-        }
-        await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
-        loadMovimientos();
-      });
-    });
-
-    tablaMovimientos.appendChild(tr);
-
-    if (!filtroCajero.querySelector(`option[value="${mov.cajero}"]`)) {
-      const opt = document.createElement("option");
-      opt.value = mov.cajero;
-      opt.textContent = mov.cajero;
-      filtroCajero.appendChild(opt);
-    }
-  });
-}
-
-  // --- TIRAR Z ---
+// --- TIRAR Z ---
 btnTirarZ.addEventListener("click", () => {
   showAdminActionModal(async () => {
     const snap = await window.get(window.ref("/movimientos"));
@@ -556,68 +430,66 @@ btnTirarZ.addEventListener("click", () => {
       eliminado: false
     };
 
+    // Guarda en historial y respaldo
     await window.set(window.ref(`/historial/${zID}`), registroZ);
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
-    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
+    // Elimina movimientos
+    for (const [id] of todosMov) {
+      await window.remove(window.ref(`/movimientos/${id}`));
+    }
 
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- IMPRIMIR CIERRE Z ---
-    const fechaFormateada = `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
+    // --- Formateo estético del ticket Z ---
+    let cuerpo = "";
 
-    let cuerpo = '';
     for (const cajero of registroZ.cajeros) {
-      cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
+      cuerpo += `\nCAJERO: ${cajero}\n------------------------------`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
       const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
       for (const tipo of tiposPago) {
         const ventasTipo = movCajero.filter(m => m.tipo === tipo);
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
+        cuerpo += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
         ventasTipo.forEach(m => {
-          cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
+          cuerpo += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
         });
-        cuerpo += `--------------------------------\n`;
       }
-      cuerpo += `\n`;
+      cuerpo += `\n------------------------------`;
     }
 
-    cuerpo += `TOTAL GENERAL: $${totalGeneral.toFixed(2)}\n--------------------------------\n`;
-    cuerpo += `CIERRE COMPLETO - ${registroZ.cajeros.length} CAJEROS\n`;
-    cuerpo += `--------------------------------\nFIN DEL REPORTE Z\n`;
+    let ticketHTML = `
+==============================
+           CIERRE Z
+==============================
+Fecha: ${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})
+------------------------------
+${cuerpo}
+TOTALES POR TIPO DE PAGO:
+------------------------------
+${Object.entries(totalPorTipoPago).map(([tipo, total]) => `${tipo.padEnd(10)} $${total.toFixed(2)}`).join("\n")}
+------------------------------
+TOTAL GENERAL: $${totalGeneral.toFixed(2)}
+==============================
+       FIN CIERRE Z
+==============================
+`;
 
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "absolute";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentWindow.document;
-    doc.open();
-    doc.write(`
-      <html>
-        <head>
-          <style>
-            body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
-            .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
-            .bloque { margin-bottom:8px; }
-            .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
-          </style>
-        </head>
-        <body>
-          <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
-          <div class="bloque">${fechaFormateada}</div>
-          <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
-          <div class="total">TOTAL: $${totalGeneral.toFixed(2)}</div>
-        </body>
-      </html>
-    `);
-    doc.close();
-    iframe.contentWindow.focus();
-    iframe.contentWindow.print();
-    setTimeout(() => iframe.remove(), 500);
+    // --- Imprimir usando la misma función que los tickets normales ---
+    if (typeof imprimirTicket === "function") {
+      imprimirTicket(
+        zID,
+        `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`,
+        "Z",
+        [],
+        totalGeneral,
+        "CIERRE Z"
+      );
+    } else {
+      alert("Error: la función imprimirTicket no está definida.");
+    }
   });
 });
 
