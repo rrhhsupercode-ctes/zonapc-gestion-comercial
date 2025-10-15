@@ -330,70 +330,79 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
   const iframe = document.createElement("iframe");
-  iframe.style.position = "absolute";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  document.body.appendChild(iframe);
+iframe.style.position = "absolute";
+iframe.style.width = "0";
+iframe.style.height = "0";
+document.body.appendChild(iframe);
 
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(`
-    <html>
-      <head>
-        <style>
-          body {
-            font-family: monospace;
-            font-size: 11px;
-            max-width: 5cm;
-            white-space: pre-line;
-            margin: 0;
-            padding: 1px;
-          }
-          .titulo {
-            text-align:center;
-            font-weight:bold;
-            border-bottom:1px dashed #000;
-            margin-bottom:1px;
-            padding-bottom:1px;
-          }
-          .subtitulo {
-            text-align:center;
-            margin-bottom:1px;
-          }
-          .info {
-            font-size:11px;
-            margin-bottom:1px;
-          }
-          .items {
-            white-space: pre-line;
-            margin-bottom:4px;
-          }
-          .total {
-            text-align:center;
-            font-weight:bold;
-            font-size:12px;
-            border-top:1px dashed #000;
-            padding-top:2px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="titulo">*** TICKET ***</div>
-        <div class="subtitulo">${ticketID}</div>
-        <div class="info">Fecha: ${fecha}</div>
-        <div class="info">Cajero: ${cajeroID}</div>
-        <div class="info">Pago: ${tipoPago}</div>
-        <div class="items">
-          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio*it.cant).toFixed(2)}`).join("\n")}
-        </div>
-        <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
-      </body>
-    </html>
-  `);
-  doc.close();
-  iframe.contentWindow.focus();
-  iframe.contentWindow.print();
-  setTimeout(() => iframe.remove(), 500);
+const doc = iframe.contentWindow.document;
+doc.open();
+doc.write(`
+<html>
+  <head>
+    <style>
+      body {
+        font-family: monospace;
+        font-size: 11px;
+        max-width: 5cm;
+        white-space: pre-line;
+        margin: 0;
+        padding: 2px;
+      }
+      .titulo {
+        text-align:center;
+        font-weight:bold;
+        border-bottom:1px dashed #000;
+        margin: 0 0 2px 0;
+        padding: 0 0 1px 0;
+      }
+      .subtitulo {
+        text-align:center;
+        margin: 0 0 2px 0;
+        padding: 0;
+      }
+      .info {
+        font-size:11px;
+        margin: 0 0 2px 0;
+        padding: 0;
+      }
+      .items {
+        font-size:11px;
+        margin: 0 0 2px 0;
+        padding: 0;
+      }
+      .item-line {
+        border-bottom: 1px dotted #000; /* separación sutil entre items */
+        margin: 2px 0;
+        padding: 2px 0;
+      }
+      .total {
+        text-align:center;
+        font-weight:bold;
+        font-size:12px;
+        border-top:1px dashed #000;
+        margin-top:2px;
+        padding-top:2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="titulo">*** TICKET ***</div>
+    <div class="subtitulo">${ticketID}</div>
+    <div class="info">Fecha: ${fecha}</div>
+    <div class="info">Cajero: ${cajeroID}</div>
+    <div class="info">Pago: ${tipoPago}</div>
+    <div class="items">
+      ${items.map(it => `<div class="item-line">${it.nombre} $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio*it.cant).toFixed(2)}</div>`).join("")}
+    </div>
+    <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
+  </body>
+</html>
+`);
+doc.close();
+iframe.contentWindow.focus();
+iframe.contentWindow.print();
+setTimeout(() => iframe.remove(), 500);
 }
 
 // --- COBRAR ---
