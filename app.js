@@ -403,7 +403,6 @@ async function loadMovimientos() {
       </td>
     `;
 
-    // --- REIMPRIMIR ---
     tr.querySelector(".reimprimir").addEventListener("click", () => {
       if (typeof mostrarModalTicket === "function") {
         mostrarModalTicket({
@@ -414,7 +413,6 @@ async function loadMovimientos() {
       }
     });
 
-    // --- ELIMINAR ---
     tr.querySelector(".eliminar").addEventListener("click", () => {
       showAdminActionModal(async () => {
         for (const item of mov.items) {
@@ -467,6 +465,7 @@ btnTirarZ.addEventListener("click", () => {
     const registroZ = {
       tipo: "TIRAR Z",
       fecha: fechaZ.toISOString(),
+      fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(), // expira mañana
       items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
       totalPorTipoPago,
       totalGeneral,
@@ -475,8 +474,6 @@ btnTirarZ.addEventListener("click", () => {
     };
 
     await window.set(window.ref(`/historial/${zID}`), registroZ);
-
-    // Guardar respaldo previo (por si se revierte)
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
     for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
@@ -496,8 +493,7 @@ btnTirarZ.addEventListener("click", () => {
         ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
       }
     }
-    ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
-    ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
+    ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n\nFIN TIRAR Z\n`;
 
     if (typeof imprimirTicketZ === "function") {
       imprimirTicketZ(ticketTexto);
@@ -516,46 +512,60 @@ async function loadHistorial() {
   const snap = await window.get(window.ref("/historial"));
   if (!snap.exists()) return;
 
+  const hoy = new Date();
   const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
   for (const [id, mov] of entries) {
+    const expirada = mov.fechaExpira && new Date(mov.fechaExpira) < hoy;
     const tr = document.createElement("tr");
+    tr.style.backgroundColor = expirada ? "#eee" : mov.eliminado ? "#ccc" : "";
+
+    let botones = "";
+    if (mov.tipo === "TIRAR Z") {
+      if (!expirada && !mov.eliminado) {
+        botones = `
+          <button class="reimprimir" data-id="${id}">🖨</button>
+          <button class="eliminar-z">❌</button>`;
+      }
+    } else {
+      botones = `<button class="reimprimir" data-id="${id}">🖨</button>`;
+    }
+
     tr.innerHTML = `
       <td>${id}</td>
       <td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
       <td>${mov.tipo}</td>
       <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
       <td>${new Date(mov.fecha).toLocaleString()}</td>
-      <td>
-        <button class="reimprimir" data-id="${id}">🖨</button>
-        ${mov.tipo === "TIRAR Z" ? `<button class="eliminar-z" ${mov.eliminado ? "disabled" : ""}>❌</button>` : ""}
-      </td>
+      <td>${botones}</td>
     `;
 
     // --- REIMPRIMIR ---
-    tr.querySelector(".reimprimir").addEventListener("click", async () => {
-      if (mov.tipo === "TIRAR Z") {
-        const registro = mov;
-        let ticketTexto = `*** REIMPRESIÓN TIRAR Z ***\n${new Date(registro.fecha).toLocaleString()}\n`;
-        for (const cajero of registro.cajeros) {
-          ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
-          const movCajero = registro.items.filter(i => i.cajero === cajero);
-          const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-          for (const tipo of tiposPago) {
-            const ventasTipo = movCajero.filter(m => m.tipo === tipo);
-            const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-            ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-            ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
+    const btnReimprimir = tr.querySelector(".reimprimir");
+    if (btnReimprimir) {
+      btnReimprimir.addEventListener("click", () => {
+        if (mov.tipo === "TIRAR Z") {
+          let ticketTexto = `*** REIMPRESIÓN TIRAR Z ***\n${new Date(mov.fecha).toLocaleString()}\n`;
+          for (const cajero of mov.cajeros) {
+            ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+            const movCajero = mov.items.filter(i => i.cajero === cajero);
+            const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+            for (const tipo of tiposPago) {
+              const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+              const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+              ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+              ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
+            }
           }
+          ticketTexto += `\n========== TOTAL GENERAL: $${mov.totalGeneral.toFixed(2)} ==========\n\nFIN REIMPRESIÓN\n`;
+          if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
+        } else {
+          if (typeof mostrarModalTicket === "function") mostrarModalTicket(mov);
         }
-        ticketTexto += `\n========== TOTAL GENERAL: $${registro.totalGeneral.toFixed(2)} ==========\n\nFIN REIMPRESIÓN\n`;
-        if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
-      } else {
-        if (typeof mostrarModalTicket === "function") mostrarModalTicket(mov);
-      }
-    });
+      });
+    }
 
-    // --- ELIMINAR TIRAR Z ---
+    // --- ELIMINAR Z ---
     const btnEliminarZ = tr.querySelector(".eliminar-z");
     if (btnEliminarZ) {
       btnEliminarZ.addEventListener("click", async () => {
@@ -572,11 +582,14 @@ async function loadHistorial() {
       });
     }
 
-    if (mov.eliminado) tr.style.backgroundColor = "#ccc";
+    // --- ELIMINAR AUTOMÁTICO DE RESPALDO Z VENCIDO ---
+    if (expirada) {
+      await window.remove(window.ref(`/respaldoZ/${id}`));
+    }
+
     tablaHistorial.appendChild(tr);
   }
 }
-
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
