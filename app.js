@@ -1606,6 +1606,37 @@ function showAdminActionModal(onSuccess) {
   adminActionCancelBtn.onclick = () => { adminActionModal.style.display = "none"; };
 }
 
+  // --- HEADER STOCK & SUELTOS CON CONTRASEÑA ---
+document.querySelectorAll("button.nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const section = btn.dataset.section;
+    if (section === "stock" || section === "sueltos") {
+      requireAdminForSection(() => {
+        // Mostrar sección y ocultar las demás
+        document.querySelectorAll("main > section").forEach(sec => {
+          sec.classList.add("hidden");
+        });
+        document.getElementById(section).classList.remove("hidden");
+
+        // Cargar datos según la sección
+        if (section === "stock") loadStock();
+        if (section === "sueltos") loadSueltos();
+      });
+    } else {
+      // Secciones normales sin contraseña
+      document.querySelectorAll("main > section").forEach(sec => {
+        sec.classList.add("hidden");
+      });
+      document.getElementById(section).classList.remove("hidden");
+    }
+  });
+});
+
+// Función wrapper que pide contraseña y ejecuta callback si es correcta
+function requireAdminForSection(callback) {
+  showAdminActionModal(callback);
+}
+
 
   // --- Inicialización ---
   (async () => {
