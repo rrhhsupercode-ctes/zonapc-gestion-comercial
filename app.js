@@ -373,6 +373,66 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
+// --- MODAL TICKET (MOVIMIENTOS / HISTORIAL) ---
+function mostrarModalTicket(mov) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background: rgba(0,0,0,0.7); z-index:9999;
+  `;
+
+  const fecha = mov.fecha ? new Date(mov.fecha) : new Date();
+  const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${
+    (fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${
+    fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
+
+  const ticketTexto = `
+${mov.ticketID}
+${fechaStr}
+Cajero: ${mov.cajero || ''}
+==========
+${(mov.items || []).map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
+TOTAL: $${mov.total.toFixed(2)}
+Pago: ${mov.tipo}
+`;
+
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; width:350px; max-height:80%; overflow:auto; text-align:center;">
+      <pre id="ticket-pre" style="text-align:left; white-space:pre-wrap; word-wrap:break-word;">${ticketTexto}</pre>
+      <div style="margin-top:10px;">
+        <button id="modal-reimprimir" style="margin-right:5px;">Reimprimir</button>
+        <button id="modal-cerrar" style="background:red; color:#fff;">Cerrar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Botones
+  const btnCerrar = modal.querySelector("#modal-cerrar");
+  const btnReimprimir = modal.querySelector("#modal-reimprimir");
+
+  btnCerrar.addEventListener("click", () => modal.remove());
+
+  btnReimprimir.addEventListener("click", () => {
+    if (typeof imprimirTicket === "function") {
+      imprimirTicket(
+        mov.ticketID,
+        fechaStr,
+        mov.cajero || '',
+        mov.items || [],
+        mov.total || 0,
+        mov.tipo || ''
+      );
+    } else {
+      console.log("Función imprimirTicket no definida");
+    }
+    modal.remove();
+  });
+}
+
+
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
@@ -404,8 +464,16 @@ async function loadMovimientos() {
       </td>
     `;
 
-    tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
+    // REIMPRIMIR
+    tr.querySelector(".reimprimir").addEventListener("click", () => {
+      mostrarModalTicket({
+        ...mov,
+        ticketID: id,
+        reimpresion: true
+      });
+    });
 
+    // ELIMINAR
     tr.querySelector(".eliminar").addEventListener("click", () => {
       showAdminActionModal(async () => {
         const confSnap = await window.get(window.ref("/config"));
@@ -441,78 +509,10 @@ async function loadMovimientos() {
   });
 }
 
-// --- TIRAR Z ---
-btnTirarZ.addEventListener("click", () => {
-  showAdminActionModal(async () => {
-    const snap = await window.get(window.ref("/movimientos"));
-    if (!snap.exists()) return alert("No hay movimientos para tirar Z");
-
-    const todosMov = Object.entries(snap.val())
-      .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
-      .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
-
-    if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
-
-    const fechaZ = new Date();
-    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
-
-    const totalPorTipoPago = {};
-    let totalGeneral = 0;
-    for (const [, mov] of todosMov) {
-      if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
-      totalPorTipoPago[mov.tipo] += mov.total;
-      totalGeneral += mov.total;
-    }
-
-    const registroZ = {
-      tipo: "TIRAR Z",
-      fecha: fechaZ.toISOString(),
-      items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
-      totalPorTipoPago,
-      totalGeneral,
-      cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
-    };
-
-    await window.set(window.ref(`/historial/${zID}`), registroZ);
-
-    for (const [id] of todosMov) {
-      await window.remove(window.ref(`/movimientos/${id}`));
-    }
-
-    loadMovimientos();
-    loadHistorial();
-
-    let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
-    for (const cajero of registroZ.cajeros) {
-      ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
-      const movCajero = registroZ.items.filter(m => m.cajero === cajero);
-      const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-      for (const tipo of tiposPago) {
-        const ventasTipo = movCajero.filter(m => m.tipo === tipo);
-        const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-        ventasTipo.forEach(m => {
-          ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
-        });
-      }
-    }
-    ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
-    ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
-
-    if (typeof imprimirTicketZ === "function") {
-      imprimirTicketZ(ticketTexto);
-    } else {
-      imprimirTicket(`TIRAR Z\n${ticketTexto}`, new Date().toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
-    }
-  });
-});
-
-
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
-// Crear controles de día dinámicos (se insertan antes de la tabla)
 const controlesHistorial = document.createElement("div");
 controlesHistorial.style.cssText = `
   display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
@@ -568,9 +568,7 @@ async function loadHistorial() {
   }
 
   fechaMax = hoy;
-
   let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
-
   mostrarHistorialPorDia(ultimoDia);
 }
 
@@ -628,36 +626,35 @@ function mostrarHistorialPorDia(dia) {
           ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
           if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
         } else {
-          mostrarModalTicket(mov);
+          mostrarModalTicket({
+            ...mov,
+            ticketID: mov.id,
+            reimpresion: true
+          });
         }
       });
 
-// --- ELIMINAR TIRAR Z ---
-const btnEliminarZ = tr.querySelector(".eliminar-z");
-if (btnEliminarZ) {
-  btnEliminarZ.addEventListener("click", () => {
-    showAdminActionModal(async () => {
-      // restaurar movimientos
-      for (const reg of mov.items || []) {
-        await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+      // --- ELIMINAR TIRAR Z ---
+      const btnEliminarZ = tr.querySelector(".eliminar-z");
+      if (btnEliminarZ) {
+        btnEliminarZ.addEventListener("click", () => {
+          showAdminActionModal(async () => {
+            for (const reg of mov.items || []) {
+              await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+            }
+            await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
+            tr.style.backgroundColor = "#ccc";
+            btnEliminarZ.disabled = true;
+            const btnReimprimir = tr.querySelector(".reimprimir");
+            if (btnReimprimir) {
+              btnReimprimir.disabled = true;
+              btnReimprimir.style.opacity = "0.5";
+              btnReimprimir.style.pointerEvents = "none";
+            }
+            loadMovimientos();
+          });
+        });
       }
-      // marcar eliminado
-      await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-      tr.style.backgroundColor = "#ccc";
-
-      // deshabilitar ambos botones
-      btnEliminarZ.disabled = true;
-      const btnReimprimir = tr.querySelector(".reimprimir");
-      if (btnReimprimir) {
-        btnReimprimir.disabled = true;
-        btnReimprimir.style.opacity = "0.5";
-        btnReimprimir.style.pointerEvents = "none";
-      }
-
-      loadMovimientos();
-    });
-  });
-}
 
       tablaHistorial.appendChild(tr);
     });
