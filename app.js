@@ -551,49 +551,79 @@ async function loadMovimientos() {
       </td>
     `;
 
-    // --- REIMPRIMIR MOVIMIENTO ---
-    tr.querySelector(".reimprimir").addEventListener("click", () => {
-      const fechaFormateada = `${fechaObj.toLocaleDateString()} (${horaStr})`;
+// --- REIMPRIMIR MOVIMIENTO ---
+tr.querySelector(".reimprimir").addEventListener("click", () => {
+  const fechaObj = new Date(mov.fecha);
+  const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()}`;
+  const horaStr = `${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')}`;
+  const fechaFormateada = `${fechaStr} (${horaStr})`;
 
-      let cuerpo = '';
-      mov.items.forEach(it => {
-        cuerpo += `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio*it.cant).toFixed(2)}\n--------------------------------\n`;
-      });
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  document.body.appendChild(iframe);
 
-      cuerpo += `TOTAL: $${mov.total.toFixed(2)}\n--------------------------------\n`;
-      cuerpo += `VENTA - Cajero: ${mov.cajero}\n--------------------------------\n`;
-
-      const iframe = document.createElement("iframe");
-      iframe.style.position = "absolute";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentWindow.document;
-      doc.open();
-      doc.write(`
-        <html>
-          <head>
-            <style>
-              body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
-              .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
-              .bloque { margin-bottom:8px; }
-              .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
-            </style>
-          </head>
-          <body>
-            <div class="titulo">*** VENTA ***</div>
-            <div class="bloque">${fechaFormateada}</div>
-            <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
-            <div class="total">TOTAL: $${mov.total.toFixed(2)}</div>
-          </body>
-        </html>
-      `);
-      doc.close();
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(()=>iframe.remove(),500);
-    });
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html>
+      <head>
+        <style>
+          body {
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 6cm;
+            white-space: pre-line;
+            margin: 0;
+            padding: 4px;
+          }
+          .titulo {
+            text-align:center;
+            font-weight:bold;
+            border-bottom:1px dashed #000;
+            margin-bottom:4px;
+            padding-bottom:2px;
+          }
+          .subtitulo {
+            text-align:center;
+            margin-bottom:4px;
+          }
+          .info {
+            font-size:11px;
+            margin-bottom:4px;
+          }
+          .items {
+            white-space: pre-line;
+            margin-bottom:4px;
+          }
+          .total {
+            text-align:center;
+            font-weight:bold;
+            font-size:12px;
+            border-top:1px dashed #000;
+            padding-top:2px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="titulo">*** VENTA ***</div>
+        <div class="subtitulo">ID: ${mov.ticketID || "N/A"}</div>
+        <div class="info">Fecha: ${fechaFormateada}</div>
+        <div class="info">Cajero: ${mov.cajero}</div>
+        <div class="info">Pago: ${mov.tipo}</div>
+        <div class="items">
+          ${mov.items.map(it => `${it.nombre} $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio*it.cant).toFixed(2)}`).join("\n")}
+        </div>
+        <div class="total">TOTAL: $${mov.total.toFixed(2)}</div>
+      </body>
+    </html>
+  `);
+  doc.close();
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+  setTimeout(()=>iframe.remove(),500);
+});
 
     // --- ELIMINAR MOVIMIENTO ---
     tr.querySelector(".eliminar").addEventListener("click", () => {
@@ -823,8 +853,12 @@ async function loadHistorial() {
           setTimeout(() => iframe.remove(), 500);
 
         } else {
-          // Para ventas normales
-          imprimirTicket(mov.ticketID, new Date(mov.fecha).toLocaleString(), mov.cajero, mov.items, mov.total, mov.tipo);
+                // Para ventas normales
+                const fechaObj = new Date(mov.fecha);
+                const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()} (${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')})`;
+
+                imprimirTicket(mov.ticketID, fechaStr, mov.cajero, mov.items, mov.total, mov.tipo);
+
         }
       });
     }
