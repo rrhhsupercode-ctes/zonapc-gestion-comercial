@@ -524,6 +524,103 @@ async function loadMovimientos() {
   });
 }
 
+  // --- TIRAR Z ---
+btnTirarZ.addEventListener("click", () => {
+  showAdminActionModal(async () => {
+    const snap = await window.get(window.ref("/movimientos"));
+    if (!snap.exists()) return alert("No hay movimientos para tirar Z");
+
+    const todosMov = Object.entries(snap.val())
+      .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
+
+    if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
+
+    const fechaZ = new Date();
+    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
+
+    const totalPorTipoPago = {};
+    let totalGeneral = 0;
+    for (const [, mov] of todosMov) {
+      totalPorTipoPago[mov.tipo] = (totalPorTipoPago[mov.tipo] || 0) + mov.total;
+      totalGeneral += mov.total;
+    }
+
+    const registroZ = {
+      tipo: "TIRAR Z",
+      fecha: fechaZ.toISOString(),
+      fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(),
+      items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
+      totalPorTipoPago,
+      totalGeneral,
+      cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))],
+      eliminado: false
+    };
+
+    await window.set(window.ref(`/historial/${zID}`), registroZ);
+    await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
+
+    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
+
+    loadMovimientos();
+    if (typeof loadHistorial === "function") loadHistorial();
+
+    // --- IMPRIMIR CIERRE Z ---
+    const fechaFormateada = `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
+
+    let cuerpo = '';
+    for (const cajero of registroZ.cajeros) {
+      cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
+      const movCajero = registroZ.items.filter(m => m.cajero === cajero);
+      const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+      for (const tipo of tiposPago) {
+        const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+        const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+        cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
+        ventasTipo.forEach(m => {
+          cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
+        });
+        cuerpo += `--------------------------------\n`;
+      }
+      cuerpo += `\n`;
+    }
+
+    cuerpo += `TOTAL GENERAL: $${totalGeneral.toFixed(2)}\n--------------------------------\n`;
+    cuerpo += `CIERRE COMPLETO - ${registroZ.cajeros.length} CAJEROS\n`;
+    cuerpo += `--------------------------------\nFIN DEL REPORTE Z\n`;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "absolute";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <style>
+            body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
+            .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
+            .bloque { margin-bottom:8px; }
+            .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
+          </style>
+        </head>
+        <body>
+          <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
+          <div class="bloque">${fechaFormateada}</div>
+          <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
+          <div class="total">TOTAL: $${totalGeneral.toFixed(2)}</div>
+        </body>
+      </html>
+    `);
+    doc.close();
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 500);
+  });
+});
+
 // --- HISTORIAL ---
 async function loadHistorial() {
   const tablaHistorial = document.querySelector("#tabla-historial tbody");
