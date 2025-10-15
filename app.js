@@ -657,7 +657,8 @@ if (btnEliminarZ) {
     });
   });
 }
-
+    }); // <-- cierra el forEach de historialRegistros
+} // <-- cierra mostrarHistorialPorDia(dia)
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
