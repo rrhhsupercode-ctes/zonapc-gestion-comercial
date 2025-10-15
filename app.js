@@ -326,7 +326,6 @@ btnKgMenos.addEventListener("click", () => {
 
 // --- IMPRIMIR TICKET ---
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-  // total que llega aquí ya debe ser el total final (con porcentaje aplicado) si quien llama lo manda así
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
@@ -342,20 +341,52 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     <html>
       <head>
         <style>
-          body { font-family: monospace; font-size: 13px; max-width: 6cm; white-space: pre-line; margin:0; padding:6px; }
-          .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
-          .bloque { margin-bottom:8px; }
-          .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
+          body {
+            font-family: monospace;
+            font-size: 11px;
+            max-width: 5cm;
+            white-space: pre-line;
+            margin: 0;
+            padding: 1px;
+          }
+          .titulo {
+            text-align:center;
+            font-weight:bold;
+            border-bottom:1px dashed #000;
+            margin-bottom:1px;
+            padding-bottom:1px;
+          }
+          .subtitulo {
+            text-align:center;
+            margin-bottom:1px;
+          }
+          .info {
+            font-size:11px;
+            margin-bottom:1px;
+          }
+          .items {
+            white-space: pre-line;
+            margin-bottom:4px;
+          }
+          .total {
+            text-align:center;
+            font-weight:bold;
+            font-size:12px;
+            border-top:1px dashed #000;
+            padding-top:2px;
+          }
         </style>
       </head>
       <body>
-        <div class="titulo">*** VENTA ***</div>
-        <div class="bloque">${fecha}</div>
-        <div class="bloque" style="white-space: pre-line;">
-          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n--------------------------------`).join("\n")}
-          \nTOTAL: $${total.toFixed(2)}${porcentajeTexto}\nPago en: ${tipoPago}
+        <div class="titulo">*** TICKET ***</div>
+        <div class="subtitulo">${ticketID}</div>
+        <div class="info">Fecha: ${fecha}</div>
+        <div class="info">Cajero: ${cajeroID}</div>
+        <div class="info">Pago: ${tipoPago}</div>
+        <div class="items">
+          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio*it.cant).toFixed(2)}`).join("\n")}
         </div>
-        <div class="total">TOTAL: $${total.toFixed(2)}</div>
+        <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
       </body>
     </html>
   `);
