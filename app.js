@@ -97,8 +97,11 @@ btnLogin.addEventListener("click", async () => {
   if (userSnap.exists() && userSnap.val().pass === password) {
     currentUser = { id: userId, ...userSnap.val() };
 
-    // --- Actualizar título con nombre del cajero ---
-    document.title = `${currentUser.nombre} (${currentUser.id})`;
+    // --- Actualizar título visible con nombre del cajero ---
+    const appTitle = document.getElementById("app-title");
+    if (appTitle) {
+      appTitle.textContent = `${currentUser.nombre} (${currentUser.id})`;
+    }
 
     loginModal.classList.add("hidden");
     cobroControles.classList.remove("hidden");
