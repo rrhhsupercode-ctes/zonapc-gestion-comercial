@@ -483,7 +483,7 @@ btnTirarZ.addEventListener("click", () => {
 
     let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")}\n`;
     for (const cajero of registroZ.cajeros) {
-      ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+      ticketTexto += `\n** CAJERO: ${cajero} **\n`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
       const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
       for (const tipo of tiposPago) {
@@ -491,9 +491,10 @@ btnTirarZ.addEventListener("click", () => {
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
         ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
         ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
+        ticketTexto += `\n==========\n`;
       }
     }
-    ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n\nFIN TIRAR Z\n`;
+    ticketTexto += `\n** TOTAL GENERAL: $${totalGeneral.toFixed(2)} **\n\nSE CERRO LA CAJA\n`;
 
     if (typeof imprimirTicketZ === "function") {
       imprimirTicketZ(ticketTexto);
@@ -547,7 +548,7 @@ async function loadHistorial() {
         if (mov.tipo === "TIRAR Z") {
           let ticketTexto = `*** REIMPRESIÓN TIRAR Z ***\n${new Date(mov.fecha).toLocaleString()}\n`;
           for (const cajero of mov.cajeros) {
-            ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+            ticketTexto += `\n** CAJERO: ${cajero} **\n`;
             const movCajero = mov.items.filter(i => i.cajero === cajero);
             const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
             for (const tipo of tiposPago) {
@@ -557,7 +558,7 @@ async function loadHistorial() {
               ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
             }
           }
-          ticketTexto += `\n========== TOTAL GENERAL: $${mov.totalGeneral.toFixed(2)} ==========\n\nFIN REIMPRESIÓN\n`;
+          ticketTexto += `\n** TOTAL GENERAL: $${mov.totalGeneral.toFixed(2)} **\n\nFIN REIMPRESIÓN\n`;
           if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
         } else {
           if (typeof mostrarModalTicket === "function") mostrarModalTicket(mov);
