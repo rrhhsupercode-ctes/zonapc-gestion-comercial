@@ -125,9 +125,9 @@ const btnKgMenos = document.getElementById("btn-decr-kg");
 const tablaCobro = document.getElementById("tabla-cobro").querySelector("tbody");
 const totalDiv = document.getElementById("total-div");
 const btnCobrar = document.getElementById("btn-cobrar");
-const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
-const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
 const inputPrecioSuelto = document.getElementById("input-precio-suelto");
+const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
+const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
 
 // nuevos inputs
 const inputDescuento = document.getElementById("input-descuento");
@@ -135,6 +135,7 @@ const inputRecargo = document.getElementById("input-recargo");
 
 let carrito = [];
 let porcentajeFinal = 0;
+let precioUnitarioActual = 0; // para actualizar KG <-> Precio
 
 // --- Funciones de carga ---
 async function loadProductos() {
@@ -171,25 +172,9 @@ async function loadProductos() {
   inputPrecioSuelto.value = "000";
 }
 
-async function loadSueltosPrecio() {
-  const sueltosSnap = await window.get(window.ref("/sueltos"));
-  cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = v.nombre;
-      cobroSueltosPrecio.appendChild(opt);
-    });
-  }
-  inputCodigoPrecio.value = "";
-  inputPrecioSuelto.value = "000";
-}
-
 // --- Inicialización ---
 async function inicializarCobro() {
   await loadProductos();
-  await loadSueltosPrecio();
 }
 inicializarCobro();
 
@@ -274,7 +259,30 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
-// --- UNIFICAR SUELTOS KG / PRECIO ---
+// --- SUELTOS UNIFICADOS KG <-> PRECIO ---
+async function actualizarPrecioUnitario() {
+  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
+  if (!id) return;
+  const snap = await window.get(window.ref(`/sueltos/${id}`));
+  if (!snap.exists()) return;
+  precioUnitarioActual = snap.val().precio;
+
+  // actualizar precio segun KG actual
+  inputPrecioSuelto.value = (parseFloat(inputKgSuelto.value) * precioUnitarioActual).toFixed(2);
+}
+
+async function actualizarKgSegunPrecio() {
+  if (!precioUnitarioActual) return;
+  let precio = parseFloat(inputPrecioSuelto.value) || 0;
+  inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
+}
+
+inputKgSuelto.addEventListener("input", actualizarPrecioUnitario);
+inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
+cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
+inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
+
+// --- Botón agregar suelto unificado ---
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
@@ -283,14 +291,7 @@ btnAddSuelto.addEventListener("click", async () => {
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
 
-  // Determinar cantidad según KG o precio ingresado
   let cant = parseFloat(inputKgSuelto.value) || 0;
-  const precioIngresado = parseFloat(inputPrecioSuelto.value) || 0;
-
-  if (precioIngresado > 0) {
-    cant = parseFloat((precioIngresado / data.precio).toFixed(3));
-  }
-
   if (cant <= 0) return alert("Cantidad inválida");
   if (cant > data.kg) return alert("STOCK INSUFICIENTE");
 
@@ -298,9 +299,8 @@ btnAddSuelto.addEventListener("click", async () => {
 
   // reset inputs
   inputKgSuelto.value = "0.100";
-  inputCodigoSuelto.value = "";
   inputPrecioSuelto.value = "000";
-  inputCodigoPrecio.value = "";
+  inputCodigoSuelto.value = "";
 });
 
 // --- Botones + / - sueltos ---
