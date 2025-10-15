@@ -343,46 +343,46 @@ doc.write(`
     <style>
       body {
         font-family: monospace;
-        font-size: 11px;
+        font-size: 10px;
         max-width: 5cm;
         white-space: pre-line;
         margin: 0;
-        padding: 2px;
+        padding: 1px;
       }
       .titulo {
         text-align:center;
         font-weight:bold;
         border-bottom:1px dashed #000;
-        margin: 0 0 2px 0;
+        margin: 0 0 1px 0;
         padding: 0 0 1px 0;
       }
       .subtitulo {
         text-align:center;
-        margin: 0 0 2px 0;
+        margin: 0 0 1px 0;
         padding: 0;
       }
       .info {
-        font-size:11px;
-        margin: 0 0 2px 0;
+        font-size:10px;
+        margin: 0 0 1px 0;
         padding: 0;
       }
       .items {
-        font-size:11px;
+        font-size:10px;
         margin: 0 0 2px 0;
         padding: 0;
       }
       .item-line {
         border-bottom: 1px dotted #000; /* separación sutil entre items */
-        margin: 2px 0;
-        padding: 2px 0;
+        margin: 1px 0;
+        padding: 1px 0;
       }
       .total {
         text-align:center;
         font-weight:bold;
         font-size:12px;
         border-top:1px dashed #000;
-        margin-top:2px;
-        padding-top:2px;
+        margin-top:1px;
+        padding-top:1px;
       }
     </style>
   </head>
