@@ -246,7 +246,7 @@ btnKgMenos.addEventListener("click", () => {
   inputKgSuelto.value = val.toFixed(3);
 });
 
-// IMPRIMIR TICKET
+// IMPRIMIR TICKET (sin modal)
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const iframe = document.createElement("iframe");
   iframe.style.position = "absolute";
@@ -260,23 +260,48 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     <html>
       <head>
         <style>
-          body { font-family: monospace; max-width:5cm; text-align:left; white-space: pre-line; padding:1px; }
-          .ticket { border:0px solid #000; padding:1px; }
+          body {
+            font-family: monospace;
+            font-size: 13px;
+            max-width: 6cm;
+            white-space: pre-line;
+            margin: 0;
+            padding: 6px;
+          }
+          .titulo {
+            text-align: center;
+            font-weight: bold;
+            border-bottom: 1px dashed #000;
+            margin-bottom: 6px;
+            padding-bottom: 2px;
+          }
+          .bloque {
+            margin-bottom: 8px;
+          }
+          .total {
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+            border-top: 1px dashed #000;
+            padding-top: 4px;
+          }
         </style>
       </head>
       <body>
-        <div class="texto-ticket">
-          ${ticketID}\n${fecha}\nCajero: ${cajeroID}\n==========\n
-          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
+        <div class="titulo">*** VENTA ***</div>
+        <div class="bloque">${fecha}</div>
+        <div class="bloque" style="white-space: pre-line;">
+          ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n--------------------------------`).join("\n")}
           \nTOTAL: $${total.toFixed(2)}\nPago en: ${tipoPago}
         </div>
+        <div class="total">TOTAL: $${total.toFixed(2)}</div>
       </body>
     </html>
   `);
   doc.close();
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
-  setTimeout(()=>iframe.remove(),500);
+  setTimeout(() => iframe.remove(), 500);
 }
 
 // COBRAR
