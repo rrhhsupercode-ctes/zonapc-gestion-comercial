@@ -398,6 +398,36 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
+// --- MOVIMIENTOS ---
+const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
+const filtroCajero = document.getElementById("filtroCajero");
+const btnTirarZ = document.getElementById("btn-tirar-z");
+
+// Cargar movimientos
+async function loadMovimientos() {
+  const snap = await window.get(window.ref("/movimientos"));
+  tablaMovimientos.innerHTML = "";
+  filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
+  if (!snap.exists()) return;
+
+  const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+
+  entries.forEach(([id, mov]) => {
+    if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
+    const tr = document.createElement("tr");
+    const eliminado = mov.eliminado || false;
+
+    tr.style.backgroundColor = eliminado ? "#ccc" : "";
+    tr.innerHTML = `
+      <td>${id}</td>
+      <td>${mov.total.toFixed(2)}</td>
+      <td>${mov.tipo}</td>
+      <td>
+        <button class="reimprimir" data-id="${id}" ${eliminado ? "disabled" : ""}>🖨</button>
+        <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
+      </td>
+    `;
+  
 // --- TIRAR Z ---
 btnTirarZ.addEventListener("click", () => {
   showAdminActionModal(async () => {
