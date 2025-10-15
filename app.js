@@ -473,39 +473,43 @@ btnTirarZ.addEventListener("click", () => {
       eliminado: false
     };
 
+    // Guarda en historial y respaldo
     await window.set(window.ref(`/historial/${zID}`), registroZ);
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
-    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
+    // Elimina movimientos
+    for (const [id] of todosMov) {
+      await window.remove(window.ref(`/movimientos/${id}`));
+    }
 
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- DISEÑO ESTÉTICO DEL TICKET Z ---
-    let ticketTexto = `
-==============================
-          CIERRE Z
-==============================
-Fecha: ${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})
-------------------------------
-`.trim();
+    // --- Formateo estético del ticket Z ---
+    let cuerpo = "";
 
     for (const cajero of registroZ.cajeros) {
-      ticketTexto += `\nCAJERO: ${cajero}\n------------------------------`;
+      cuerpo += `\nCAJERO: ${cajero}\n------------------------------`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
       const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
       for (const tipo of tiposPago) {
         const ventasTipo = movCajero.filter(m => m.tipo === tipo);
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        ticketTexto += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
+        cuerpo += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
         ventasTipo.forEach(m => {
-          ticketTexto += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
+          cuerpo += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
         });
       }
-      ticketTexto += `\n------------------------------`;
+      cuerpo += `\n------------------------------`;
     }
 
-    ticketTexto += `
+    let ticketHTML = `
+==============================
+           CIERRE Z
+==============================
+Fecha: ${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})
+------------------------------
+${cuerpo}
 TOTALES POR TIPO DE PAGO:
 ------------------------------
 ${Object.entries(totalPorTipoPago).map(([tipo, total]) => `${tipo.padEnd(10)} $${total.toFixed(2)}`).join("\n")}
@@ -514,12 +518,20 @@ TOTAL GENERAL: $${totalGeneral.toFixed(2)}
 ==============================
        FIN CIERRE Z
 ==============================
-`.trim();
+`;
 
-    if (typeof imprimirTicketZ === "function") {
-      imprimirTicketZ(ticketTexto);
-    } else if (typeof imprimirTicket === "function") {
-      imprimirTicket(ticketTexto, fechaZ.toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
+    // --- Imprimir usando la misma función que los tickets normales ---
+    if (typeof imprimirTicket === "function") {
+      imprimirTicket(
+        zID,
+        `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`,
+        "Z",
+        [],
+        totalGeneral,
+        "CIERRE Z"
+      );
+    } else {
+      alert("Error: la función imprimirTicket no está definida.");
     }
   });
 });
