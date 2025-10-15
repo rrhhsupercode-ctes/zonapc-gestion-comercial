@@ -1606,37 +1606,81 @@ function showAdminActionModal(onSuccess) {
   adminActionCancelBtn.onclick = () => { adminActionModal.style.display = "none"; };
 }
 
-  // --- HEADER STOCK & SUELTOS CON CONTRASEÑA ---
+// --- MODAL ADMIN HEADER ---
+const adminHeaderModal = document.createElement("div");
+adminHeaderModal.style.cssText = `
+  position: fixed; top:0; left:0; width:100%; height:100%;
+  display: none; justify-content:center; align-items:center;
+  background: rgba(0,0,0,0.7); z-index:9999;
+`;
+adminHeaderModal.innerHTML = `
+  <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+    <h2>Contraseña Administrador</h2>
+    <input id="admin-header-pass" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
+    <div style="margin-top:10px;">
+      <button id="admin-header-aceptar" style="margin-right:5px;">Aceptar</button>
+      <button id="admin-header-cancelar" style="background:red; color:#fff;">Cancelar</button>
+    </div>
+    <p id="admin-header-msg" style="color:red; margin-top:5px;"></p>
+  </div>
+`;
+document.body.appendChild(adminHeaderModal);
+
+const adminHeaderPassInput = adminHeaderModal.querySelector("#admin-header-pass");
+const adminHeaderPassMsg = adminHeaderModal.querySelector("#admin-header-msg");
+const adminHeaderAceptarBtn = adminHeaderModal.querySelector("#admin-header-aceptar");
+const adminHeaderCancelarBtn = adminHeaderModal.querySelector("#admin-header-cancelar");
+
+// Función que bloquea la sección hasta introducir la contraseña correcta
+function requireAdminHeader(callback) {
+  adminHeaderPassInput.value = "";
+  adminHeaderPassMsg.textContent = "";
+  adminHeaderModal.style.display = "flex";
+
+  function validar() {
+    window.get(window.ref("/config")).then(snap => {
+      const val = snap.exists() ? snap.val() : {};
+      const passAdmin = val.passAdmin || "1918";
+      const masterPass = val.masterPass || "1409";
+      if (adminHeaderPassInput.value.trim() === passAdmin || adminHeaderPassInput.value.trim() === masterPass) {
+        adminHeaderModal.style.display = "none";
+        callback();
+      } else {
+        adminHeaderPassMsg.textContent = "Contraseña incorrecta";
+      }
+    });
+  }
+
+  adminHeaderAceptarBtn.onclick = validar;
+  adminHeaderPassInput.onkeyup = e => { if (e.key === "Enter") validar(); };
+
+  // CANCELAR: abrir automáticamente la sección de cobro
+  adminHeaderCancelarBtn.onclick = () => {
+    adminHeaderModal.style.display = "none";
+    document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+    document.getElementById("cobro").classList.remove("hidden");
+  };
+}
+
+// --- HEADER STOCK & SUELTOS ---
 document.querySelectorAll("button.nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const section = btn.dataset.section;
-    if (section === "stock" || section === "sueltos") {
-      requireAdminForSection(() => {
-        // Mostrar sección y ocultar las demás
-        document.querySelectorAll("main > section").forEach(sec => {
-          sec.classList.add("hidden");
-        });
-        document.getElementById(section).classList.remove("hidden");
 
-        // Cargar datos según la sección
+    if (section === "stock" || section === "sueltos") {
+      requireAdminHeader(() => {
+        document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+        document.getElementById(section).classList.remove("hidden");
         if (section === "stock") loadStock();
         if (section === "sueltos") loadSueltos();
       });
     } else {
-      // Secciones normales sin contraseña
-      document.querySelectorAll("main > section").forEach(sec => {
-        sec.classList.add("hidden");
-      });
+      // Secciones normales
+      document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
       document.getElementById(section).classList.remove("hidden");
     }
   });
 });
-
-// Función wrapper que pide contraseña y ejecuta callback si es correcta
-function requireAdminForSection(callback) {
-  showAdminActionModal(callback);
-}
-
 
   // --- Inicialización ---
   (async () => {
