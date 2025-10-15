@@ -373,6 +373,69 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
+// --- MODAL TICKET (MOVIMIENTOS / HISTORIAL) ---
+function mostrarModalTicket(mov) {
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background: rgba(0,0,0,0.7); z-index:9999;
+  `;
+
+  // Texto del ticket
+  let ticketTexto = `*** TICKET ${mov.reimpresion ? '(REIMPRESION)' : ''} ***\n`;
+  ticketTexto += mov.fecha ? `${new Date(mov.fecha).toLocaleString()}\n` : '';
+  ticketTexto += `ID: ${mov.ticketID || mov.id}\n`;
+  ticketTexto += `Cajero: ${mov.cajero || ''}\n`;
+  ticketTexto += `Tipo: ${mov.tipo}\n`;
+  ticketTexto += `Total: $${(mov.total || mov.totalGeneral || 0).toFixed(2)}\n`;
+  ticketTexto += `--------------------------\n`;
+
+  (mov.items || []).forEach(item => {
+    if (item.tipo === "stock") {
+      ticketTexto += `${item.id} | ${item.cant} | $${item.precio?.toFixed(2) || '0.00'}\n`;
+    } else {
+      ticketTexto += `${item.id} | ${item.cant.toFixed(3)}kg | $${item.precio?.toFixed(2) || '0.00'}\n`;
+    }
+  });
+  ticketTexto += `--------------------------\n`;
+
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; width:350px; max-height:80%; overflow:auto; text-align:center;">
+      <pre id="ticket-pre" style="text-align:left; white-space:pre-wrap; word-wrap:break-word;">${ticketTexto}</pre>
+      <div style="margin-top:10px;">
+        <button id="modal-reimprimir" style="margin-right:5px;">Reimprimir</button>
+        <button id="modal-cerrar" style="background:red; color:#fff;">Cerrar</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Botones
+  const btnCerrar = modal.querySelector("#modal-cerrar");
+  const btnReimprimir = modal.querySelector("#modal-reimprimir");
+
+  btnCerrar.addEventListener("click", () => modal.remove());
+
+  btnReimprimir.addEventListener("click", () => {
+    if (mov.tipo === "TIRAR Z" || mov.reimpresion) {
+      if (typeof imprimirTicketZ === "function") {
+        imprimirTicketZ(ticketTexto);
+      } else {
+        console.log("Función imprimirTicketZ no definida");
+      }
+    } else {
+      if (typeof imprimirTicket === "function") {
+        imprimirTicket(ticketTexto, mov.fecha || new Date().toISOString(), mov.tipo || '', mov.items || [], mov.total || 0, mov.tipo || '');
+      } else {
+        console.log("Función imprimirTicket no definida");
+      }
+    }
+    modal.remove();
+  });
+}
+
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
@@ -568,6 +631,7 @@ function mostrarHistorialPorDia(dia) {
         } else {
           mostrarModalTicket({
             ...mov,
+            ticketID: mov.id,
             reimpresion: true
           });
         }
@@ -613,6 +677,7 @@ btnDiaNext.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (!isNaN(dia) && (!fechaMax || dia < fechaMax.getDate())) mostrarHistorialPorDia(dia + 1);
 });
+
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
