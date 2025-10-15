@@ -504,11 +504,16 @@ async function loadMovimientos() {
     const tr = document.createElement("tr");
     const eliminado = mov.eliminado || false;
 
+    const fechaObj = new Date(mov.fecha);
+    const horaStr = `${fechaObj.getHours().toString().padStart(2,"0")}:${fechaObj.getMinutes().toString().padStart(2,"0")}`;
+
     tr.style.backgroundColor = eliminado ? "#ccc" : "";
     tr.innerHTML = `
       <td>${id}</td>
       <td>${mov.total.toFixed(2)}</td>
       <td>${mov.tipo}</td>
+      <td>${mov.cajero}</td>
+      <td>${horaStr}</td>
       <td>
         <button class="reimprimir" data-id="${id}" ${eliminado ? "disabled" : ""}>🖨</button>
         <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
@@ -517,7 +522,7 @@ async function loadMovimientos() {
 
     // --- REIMPRIMIR MOVIMIENTO ---
     tr.querySelector(".reimprimir").addEventListener("click", () => {
-      const fechaFormateada = `${new Date(mov.fecha).toLocaleDateString()} (${new Date(mov.fecha).getHours().toString().padStart(2,"0")}:${new Date(mov.fecha).getMinutes().toString().padStart(2,"0")})`;
+      const fechaFormateada = `${fechaObj.toLocaleDateString()} (${horaStr})`;
 
       let cuerpo = '';
       mov.items.forEach(it => {
