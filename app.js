@@ -473,66 +473,101 @@ btnTirarZ.addEventListener("click", () => {
       eliminado: false
     };
 
-    // Guarda en historial y respaldo
     await window.set(window.ref(`/historial/${zID}`), registroZ);
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
-    // Elimina movimientos
-    for (const [id] of todosMov) {
-      await window.remove(window.ref(`/movimientos/${id}`));
-    }
+    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
 
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- Formateo estético del ticket Z ---
-    let cuerpo = "";
+    // --- NUEVO DISEÑO DE TICKET Z ---
+    const fechaFormateada = `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2, "0")}:${fechaZ.getMinutes().toString().padStart(2, "0")})`;
+
+    let cuerpo = `
+*** CIERRE DE CAJA (Z) ***
+${fechaFormateada}
+
+`;
 
     for (const cajero of registroZ.cajeros) {
-      cuerpo += `\nCAJERO: ${cajero}\n------------------------------`;
+      cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
       const movCajero = registroZ.items.filter(m => m.cajero === cajero);
       const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
       for (const tipo of tiposPago) {
         const ventasTipo = movCajero.filter(m => m.tipo === tipo);
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        cuerpo += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
+        cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
         ventasTipo.forEach(m => {
-          cuerpo += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
+          cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
         });
+        cuerpo += `--------------------------------\n`;
       }
-      cuerpo += `\n------------------------------`;
+      cuerpo += `\n`;
     }
 
-    let ticketHTML = `
-==============================
-           CIERRE Z
-==============================
-Fecha: ${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})
-------------------------------
-${cuerpo}
-TOTALES POR TIPO DE PAGO:
-------------------------------
-${Object.entries(totalPorTipoPago).map(([tipo, total]) => `${tipo.padEnd(10)} $${total.toFixed(2)}`).join("\n")}
-------------------------------
-TOTAL GENERAL: $${totalGeneral.toFixed(2)}
-==============================
-       FIN CIERRE Z
-==============================
-`;
+    cuerpo += `TOTAL GENERAL: $${totalGeneral.toFixed(2)}\n--------------------------------\n`;
+    cuerpo += `CIERRE COMPLETO - ${registroZ.cajeros.length} CAJEROS\n`;
+    cuerpo += `--------------------------------\n`;
+    cuerpo += `FIN DEL REPORTE Z\n`;
 
-    // --- Imprimir usando la misma función que los tickets normales ---
-    if (typeof imprimirTicket === "function") {
-      imprimirTicket(
-        zID,
-        `${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`,
-        "Z",
-        [],
-        totalGeneral,
-        "CIERRE Z"
-      );
-    } else {
-      alert("Error: la función imprimirTicket no está definida.");
-    }
+    // --- IMPRESIÓN VISUAL BONITA ---
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "absolute";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: monospace;
+              font-size: 13px;
+              max-width: 6cm;
+              white-space: pre-line;
+              margin: 0;
+              padding: 6px;
+            }
+            .titulo {
+              text-align: center;
+              font-weight: bold;
+              border-bottom: 1px dashed #000;
+              margin-bottom: 6px;
+              padding-bottom: 2px;
+            }
+            .bloque {
+              margin-bottom: 8px;
+            }
+            .linea {
+              border-bottom: 1px dashed #000;
+              margin: 4px 0;
+            }
+            .total {
+              text-align: center;
+              font-weight: bold;
+              font-size: 14px;
+              border-top: 1px dashed #000;
+              padding-top: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
+          <div class="bloque">${fechaFormateada}</div>
+          <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
+          <div class="total">TOTAL: $${totalGeneral.toFixed(2)}</div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => iframe.remove(), 500);
   });
 });
 
