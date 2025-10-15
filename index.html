@@ -59,7 +59,7 @@
   </header>
 
   <main>
-    <!-- COBRAR -->
+<!-- COBRAR -->
 <section id="cobro">
   <div id="login-modal">
     <h2>👥Cajero(a)👥</h2>
@@ -81,11 +81,14 @@
       <button id="btn-add-product">OK</button>
     </div>
 
-    <!-- FILA SUELTOS (por KG) -->
+    <!-- FILA SUELTOS (KG + Precio) -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
       <button id="btn-decr-kg" style="width:30px;">-</button>
       <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
       <button id="btn-incr-kg" style="width:30px;">+</button>
+
+      <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="5">
+      <span>,00</span>
 
       <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
       <select id="cobro-sueltos" style="flex:2;">
@@ -94,19 +97,7 @@
       <button id="btn-add-suelto">OK</button>
     </div>
 
-    <!-- FILA SUELTOS (por precio) -->
-<div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-  <input id="input-precio-suelto" type="text" value="000" style="width:60px; text-align:right;" maxlength="5">
-  <span>,00</span>
-
-  <input id="cobro-codigo-precio" placeholder="Código producto" style="flex:1;">
-  <select id="cobro-sueltos-precio" style="flex:2;">
-    <option value="">Elija un Item (Sueltos)</option>
-  </select>
-  <button id="btn-add-precio">OK</button>
-</div>
-
-        <!-- FILA DESCUENTO / RECARGO -->
+    <!-- FILA DESCUENTO / RECARGO -->
     <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
       <div style="text-align:center;">
         <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
