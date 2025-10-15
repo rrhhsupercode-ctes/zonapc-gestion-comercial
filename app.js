@@ -716,11 +716,19 @@ async function loadHistorial() {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
-      <td>${mov.tipo}</td>
-      <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
-      <td>${new Date(mov.fecha).toLocaleString()}</td>
-      <td>${botones}</td>
+<td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
+<td>${mov.tipo}</td>
+<td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
+<td>${(() => {
+  const fechaObj = new Date(mov.fecha);
+  const dia = fechaObj.getDate().toString().padStart(2, "0");
+  const mes = (fechaObj.getMonth() + 1).toString().padStart(2, "0");
+  const anio = fechaObj.getFullYear();
+  const horas = fechaObj.getHours().toString().padStart(2, "0");
+  const minutos = fechaObj.getMinutes().toString().padStart(2, "0");
+  return `${dia}/${mes}/${anio} (${horas}:${minutos})`;
+})()}</td>
+<td>${botones}</td>
     `;
 
     // --- REIMPRIMIR DESDE HISTORIAL ---
