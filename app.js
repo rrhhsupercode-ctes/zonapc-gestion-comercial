@@ -322,7 +322,7 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   setTimeout(() => iframe.remove(), 500);
 }
 
-// --- COBRAR (bloque completo, con ALERT preserved) ---
+// --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -346,6 +346,7 @@ btnCobrar.addEventListener("click", async () => {
     </div>
   `;
   document.body.appendChild(modal);
+
   document.getElementById("cancelar-pago").addEventListener("click", () => modal.remove());
 
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
@@ -365,11 +366,11 @@ btnCobrar.addEventListener("click", async () => {
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
 
-      // total original (sin porcentaje) y total modificado por descuento/recargo
-      const totalOriginal = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
+      // --- total original y con descuento/recargo ---
+      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
       const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
 
-      // Guardar movimientos (usamos totalFinal para reflejar descuento/recargo aplicado)
+      // --- guardar movimientos ---
       await window.set(window.ref(`/movimientos/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -381,7 +382,7 @@ btnCobrar.addEventListener("click", async () => {
         porcentajeAplicado: porcentajeFinal || 0
       });
 
-      // Guardar historial
+      // --- guardar historial ---
       await window.set(window.ref(`/historial/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -392,24 +393,32 @@ btnCobrar.addEventListener("click", async () => {
         porcentajeAplicado: porcentajeFinal || 0
       });
 
-      // Actualizar config
-      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
+      // --- actualizar config ---
+      await window.update(window.ref("/config"), {
+        ultimoTicketID: ultimoID,
+        ultimoTicketFecha: fechaHoy
+      });
 
-      // Actualizar stock
+      // --- actualizar stock ---
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (snapItem.exists()) {
           const data = snapItem.val();
-          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
-          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
+          if (item.tipo === "stock") {
+            await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
+          } else {
+            await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
+          }
         }
       }
 
-      // Imprimir ticket (se utiliza totalOriginal y porcentajeFinal dentro de imprimirTicket para mostrar detalle)
+      // --- imprimir ticket ---
       imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalOriginal, tipoPago);
 
+      // --- ALERT ---
       alert("VENTA FINALIZADA");
 
+      // --- limpiar ---
       carrito = [];
       actualizarTabla();
       loadStock();
