@@ -373,70 +373,47 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-// --- MODAL TICKET (MOVIMIENTOS / HISTORIAL) ---
-function mostrarModalTicket(mov) {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position: fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background: rgba(0,0,0,0.7); z-index:9999;
-  `;
-
-  const fecha = mov.fecha ? new Date(mov.fecha) : new Date();
-  const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${
-    (fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${
-    fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-
-  const ticketTexto = `
-${mov.ticketID}
-${fechaStr}
-Cajero: ${mov.cajero || ''}
-==========
-${(mov.items || []).map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
-TOTAL: $${mov.total.toFixed(2)}
-Pago: ${mov.tipo}
-`;
-
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; width:350px; max-height:80%; overflow:auto; text-align:center;">
-      <pre id="ticket-pre" style="text-align:left; white-space:pre-wrap; word-wrap:break-word;">${ticketTexto}</pre>
-      <div style="margin-top:10px;">
-        <button id="modal-reimprimir" style="margin-right:5px;">Reimprimir</button>
-        <button id="modal-cerrar" style="background:red; color:#fff;">Cerrar</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  // Botones
-  const btnCerrar = modal.querySelector("#modal-cerrar");
-  const btnReimprimir = modal.querySelector("#modal-reimprimir");
-
-  btnCerrar.addEventListener("click", () => modal.remove());
-
-  btnReimprimir.addEventListener("click", () => {
-    if (typeof imprimirTicket === "function") {
-      imprimirTicket(
-        mov.ticketID,
-        fechaStr,
-        mov.cajero || '',
-        mov.items || [],
-        mov.total || 0,
-        mov.tipo || ''
-      );
-    } else {
-      console.log("Función imprimirTicket no definida");
-    }
-    modal.remove();
-  });
-}
-
-
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
 const btnTirarZ = document.getElementById("btn-tirar-z"); // botón Tirar Z
+
+// Helper: mostrar modal para pedir contraseña de administrador (devuelve la contraseña introducida o null)
+function pedirPasswordAdminModal() {
+  return new Promise((resolve) => {
+    // Crear modal
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      display:flex; justify-content:center; align-items:center;
+      background:rgba(0,0,0,0.7); z-index:10000;
+    `;
+    modal.innerHTML = `
+      <div style="background:#fff; padding:20px; border-radius:10px; text-align:center; min-width:260px;">
+        <h3>🔒 Confirmación Administrador</h3>
+        <input id="__admin-check-pass" type="password" placeholder="Contraseña" style="width:100%; margin:8px 0; padding:6px;">
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+          <button id="__admin-check-ok">OK</button>
+          <button id="__admin-check-cancel" style="background:red; color:#fff;">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector("#__admin-check-pass");
+    const ok = modal.querySelector("#__admin-check-ok");
+    const cancel = modal.querySelector("#__admin-check-cancel");
+
+    function cleanup(val) {
+      modal.remove();
+      resolve(val);
+    }
+
+    ok.addEventListener("click", () => cleanup(input.value.trim()));
+    cancel.addEventListener("click", () => cleanup(null));
+    input.addEventListener("keyup", (e) => { if (e.key === "Enter") cleanup(input.value.trim()); });
+  });
+}
 
 async function loadMovimientos() {
   const snap = await window.get(window.ref("/movimientos"));
@@ -444,10 +421,12 @@ async function loadMovimientos() {
   filtroCajero.innerHTML = '<option value="TODOS">TODOS</option>';
   if (!snap.exists()) return;
 
+  // Ordenar por fecha descendente (más reciente arriba)
   const entries = Object.entries(snap.val())
     .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
   entries.forEach(([id, mov]) => {
+    // Si hay filtro de cajero activo, respetarlo
     if (filtroCajero.value !== "TODOS" && mov.cajero !== filtroCajero.value) return;
 
     const tr = document.createElement("tr");
@@ -459,47 +438,40 @@ async function loadMovimientos() {
       <td>${mov.total.toFixed(2)}</td>
       <td>${mov.tipo}</td>
       <td>
-        <button class="reimprimir" data-id="${id}" ${eliminado ? "disabled" : ""}>🖨</button>
+        <button class="reimprimir" data-id="${id}">🖨</button>
         <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
       </td>
     `;
 
-    // REIMPRIMIR
-    tr.querySelector(".reimprimir").addEventListener("click", () => {
-      mostrarModalTicket({
-        ...mov,
-        ticketID: id,
-        reimpresion: true
-      });
-    });
+    // REIMPRIMIR -> abre modal de solo lectura y permite imprimir
+    tr.querySelector(".reimprimir").addEventListener("click", () => mostrarModalTicket(mov));
 
-    // ELIMINAR
-    tr.querySelector(".eliminar").addEventListener("click", () => {
-      showAdminActionModal(async () => {
-        const confSnap = await window.get(window.ref("/config"));
-        const confVal = confSnap.exists() ? confSnap.val() : {};
-        const passAdmin = confVal.passAdmin || "1918";
+    // ELIMINAR -> pide contraseña por modal y restaura stock/sueltos al eliminar individual
+    tr.querySelector(".eliminar").addEventListener("click", async () => {
+      const pass = await pedirPasswordAdminModal();
+      if (pass === null) return; // canceló
+      const confSnap = await window.get(window.ref("/config"));
+      const confVal = confSnap.exists() ? confSnap.val() : {};
+      const passAdmin = confVal.passAdmin || "1918";
+      if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
 
-        // Restaurar stock/sueltos
-        for (const item of mov.items) {
-          const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-          if (!snapItem.exists()) continue;
-          const data = snapItem.val();
-          if (item.tipo === "stock") {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
-          } else {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
-          }
-        }
+      // Restaurar stock/sueltos
+      for (const item of mov.items) {
+        const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
+        if (!snapItem.exists()) continue;
+        const data = snapItem.val();
+        if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
+        else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
+      }
 
-        // Marcar ticket como eliminado
-        await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
-        loadMovimientos();
-      });
+      // Marcar ticket como eliminado
+      await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
+      loadMovimientos();
     });
 
     tablaMovimientos.appendChild(tr);
 
+    // Mantener lista de cajeros en filtro
     if (!filtroCajero.querySelector(`option[value="${mov.cajero}"]`)) {
       const opt = document.createElement("option");
       opt.value = mov.cajero;
@@ -509,10 +481,93 @@ async function loadMovimientos() {
   });
 }
 
+// --- Tirar Z ---
+// Requiere modal admin (no prompt), genera registro único en /historial, borra solo /movimientos (filtrados por cajero) y NO restaura stock
+btnTirarZ.addEventListener("click", async () => {
+  const pass = await pedirPasswordAdminModal();
+  if (pass === null) return; // cancelado
+  const confSnap = await window.get(window.ref("/config"));
+  const confVal = confSnap.exists() ? confSnap.val() : {};
+  const passAdmin = confVal.passAdmin || "1918";
+  if (pass !== passAdmin && pass !== confVal.masterPass) return alert("Contraseña incorrecta");
+
+  // Obtener movimientos
+  const snap = await window.get(window.ref("/movimientos"));
+  if (!snap.exists()) return alert("No hay movimientos para tirar Z");
+
+  // Ordenar asc por fecha para enumerar bien en Z
+  const todosMov = Object.entries(snap.val())
+    .sort(([, a], [, b]) => new Date(a.fecha) - new Date(b.fecha))
+    .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
+
+  if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
+
+  const fechaZ = new Date();
+  const zID = `TIRAR_Z_${fechaZ.getTime()}`;
+
+  // Calcular subtotales por tipo de pago y total general
+  const totalPorTipoPago = {};
+  let totalGeneral = 0;
+  for (const [, mov] of todosMov) {
+    if (!totalPorTipoPago[mov.tipo]) totalPorTipoPago[mov.tipo] = 0;
+    totalPorTipoPago[mov.tipo] += mov.total;
+    totalGeneral += mov.total;
+  }
+
+  const registroZ = {
+    tipo: "TIRAR Z",
+    fecha: fechaZ.toISOString(),
+    items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
+    totalPorTipoPago,
+    totalGeneral,
+    cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))]
+  };
+
+  // Guardar Z en historial (registro único)
+  await window.set(window.ref(`/historial/${zID}`), registroZ);
+
+  // Borrar movimientos (NO restaurar stock)
+  for (const [id] of todosMov) {
+    await window.remove(window.ref(`/movimientos/${id}`));
+  }
+
+  // Recargar vistas
+  loadMovimientos();
+  loadHistorial();
+
+  // Generar texto del ticket Tirar Z (separado por cajero y tipo de pago, con "==========")
+  let ticketTexto = `*** TIRAR Z ***\n${fechaZ.toLocaleDateString()} ${fechaZ.getHours().toString().padStart(2,'0')}:${fechaZ.getMinutes().toString().padStart(2,'0')}\n`;
+  for (const cajero of registroZ.cajeros) {
+    ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+    const movCajero = registroZ.items.filter(m => m.cajero === cajero);
+    const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+    for (const tipo of tiposPago) {
+      const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+      const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+      ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+      ventasTipo.forEach(m => {
+        ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`;
+      });
+    }
+  }
+  ticketTexto += `\n========== TOTAL GENERAL: $${totalGeneral.toFixed(2)} ==========\n`;
+  ticketTexto += `\n========== FIN TIRAR Z ==========\n`;
+
+  // Imprimir Z (usa tu función de impresión 5cm)
+  if (typeof imprimirTicketZ === "function") {
+    imprimirTicketZ(ticketTexto);
+  } else {
+    // Si no existe, fallback a imprimirTicket dentro de un iframe (formato simple)
+    imprimirTicket(`TIRAR Z\n${ticketTexto}`, new Date().toLocaleString(), "Z", [], totalGeneral, "TIRAR Z");
+  }
+});
+
+
 // --- HISTORIAL ---
 const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
 const historialSeccion = document.getElementById("historial");
 
+// Crear controles de día dinámicos (se insertan antes de la tabla)
 const controlesHistorial = document.createElement("div");
 controlesHistorial.style.cssText = `
   display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
@@ -542,16 +597,19 @@ async function loadHistorial() {
 
   if (!snap.exists()) return;
 
+  // Obtener todos los registros y convertir fecha
   Object.entries(snap.val()).forEach(([id, mov]) => {
     historialRegistros.push({ id, ...mov, fechaObj: mov.fecha ? new Date(mov.fecha) : null });
   });
 
+  // Ordenar por fecha descendente
   historialRegistros.sort((a, b) => {
     if (!a.fechaObj) return 1;
     if (!b.fechaObj) return -1;
     return b.fechaObj - a.fechaObj;
   });
 
+  // Determinar límites según regla del día 15 (mantener registros del mes anterior + primeros 15 días; luego borrar mes anterior)
   const hoy = new Date();
   const diaHoy = hoy.getDate();
 
@@ -559,19 +617,25 @@ async function loadHistorial() {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
   } else {
     fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    // Borrar registros anteriores al mes actual (solo en /historial)
     for (const mov of historialRegistros) {
       if (mov.fechaObj && mov.fechaObj < fechaMin) {
         await window.remove(window.ref(`/historial/${mov.id}`));
       }
     }
+    // Refrescar lista local después de eliminación
     historialRegistros = historialRegistros.filter(mov => mov.fechaObj && mov.fechaObj >= fechaMin);
   }
 
   fechaMax = hoy;
+
+  // Por defecto mostrar último día con registros oppure hoy
   let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
+
   mostrarHistorialPorDia(ultimoDia);
 }
 
+// Función para mostrar solo los registros de un día específico
 function mostrarHistorialPorDia(dia) {
   tablaHistorial.innerHTML = "";
 
@@ -583,32 +647,20 @@ function mostrarHistorialPorDia(dia) {
         : "";
 
       const tr = document.createElement("tr");
-      const hoy = new Date();
-      const esMismoDia = mov.fechaObj &&
-        mov.fechaObj.getFullYear() === hoy.getFullYear() &&
-        mov.fechaObj.getMonth() === hoy.getMonth() &&
-        mov.fechaObj.getDate() === hoy.getDate();
-
-      const puedeEliminar = mov.tipo === "TIRAR Z" && esMismoDia && !mov.eliminado;
-
       tr.innerHTML = `
         <td>${mov.id}</td>
-        <td>${(typeof mov.totalGeneral === "number") ? mov.totalGeneral.toFixed(2) : (mov.total || "")}</td>
+        <td>${(typeof mov.total === "number") ? mov.total.toFixed(2) : (mov.total || "")}</td>
         <td>${mov.tipo}</td>
-        <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
+        <td>${mov.cajero || ""}</td>
         <td>${fechaStr}</td>
-        <td>
-          <button class="reimprimir" data-id="${mov.id}">🖨</button>
-          ${mov.tipo === "TIRAR Z" ? `<button class="eliminar-z" ${puedeEliminar ? "" : "disabled"}>❌</button>` : ""}
-        </td>
+        <td><button class="reimprimir" data-id="${mov.id}">🖨</button></td>
       `;
 
-      if (mov.eliminado) tr.style.backgroundColor = "#ccc";
-
-      // --- REIMPRIMIR ---
+      // Si es un registro TIRAR Z, la reimpresión debe imprimir el ticket Z; si es venta normal, abrir modal de ticket
       tr.querySelector(".reimprimir").addEventListener("click", () => {
         if (mov.tipo === "TIRAR Z") {
-          const registro = mov;
+          // reconstruir texto Z y llamar imprimirTicketZ
+          const registro = mov; // contiene items y totalPorTipoPago
           let ticketTexto = `*** TIRAR Z (REIMPRESION) ***\n${registro.fechaObj ? registro.fechaObj.toLocaleDateString() : ""} ${registro.fechaObj ? registro.fechaObj.getHours().toString().padStart(2,'0')+':'+registro.fechaObj.getMinutes().toString().padStart(2,'0') : ""}\n`;
           const cajeros = registro.cajeros || [...new Set((registro.items||[]).map(it => it.cajero))];
           for (const cajero of cajeros) {
@@ -625,47 +677,25 @@ function mostrarHistorialPorDia(dia) {
           ticketTexto += `\n========== TOTAL GENERAL: $${(registro.totalGeneral||0).toFixed(2)} ==========\n`;
           ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
           if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
+          else imprimirTicket(ticketTexto, new Date().toLocaleString(), "Z", [], (registro.totalGeneral||0), "TIRAR Z");
         } else {
-          mostrarModalTicket({
-            ...mov,
-            ticketID: mov.id,
-            reimpresion: true
-          });
+          mostrarModalTicket(mov);
         }
       });
-
-      // --- ELIMINAR TIRAR Z ---
-      const btnEliminarZ = tr.querySelector(".eliminar-z");
-      if (btnEliminarZ) {
-        btnEliminarZ.addEventListener("click", () => {
-          showAdminActionModal(async () => {
-            for (const reg of mov.items || []) {
-              await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
-            }
-            await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-            tr.style.backgroundColor = "#ccc";
-            btnEliminarZ.disabled = true;
-            const btnReimprimir = tr.querySelector(".reimprimir");
-            if (btnReimprimir) {
-              btnReimprimir.disabled = true;
-              btnReimprimir.style.opacity = "0.5";
-              btnReimprimir.style.pointerEvents = "none";
-            }
-            loadMovimientos();
-          });
-        });
-      }
 
       tablaHistorial.appendChild(tr);
     });
 
+  // Mostrar fecha completa en el span (dd/mm/yyyy)
   historialDia.textContent = `${dia.toString().padStart(2,'0')}/${(fechaMax.getMonth()+1).toString().padStart(2,'0')}/${fechaMax.getFullYear()}`;
   historialDia.dataset.dia = dia;
 
+  // Activar/desactivar botones según límites (si fechaMin no tiene día, no bloquear)
   btnDiaPrev.disabled = fechaMin ? (dia <= fechaMin.getDate()) : false;
   btnDiaNext.disabled = fechaMax ? (dia >= fechaMax.getDate()) : false;
 }
 
+// Botones para cambiar día
 btnDiaPrev.addEventListener("click", () => {
   let dia = parseInt(historialDia.dataset.dia);
   if (!isNaN(dia) && (!fechaMin || dia > fechaMin.getDate())) mostrarHistorialPorDia(dia - 1);
