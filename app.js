@@ -382,23 +382,20 @@ function mostrarModalTicket(mov) {
     background: rgba(0,0,0,0.7); z-index:9999;
   `;
 
-  // Texto del ticket
-  let ticketTexto = `*** TICKET ${mov.reimpresion ? '(REIMPRESION)' : ''} ***\n`;
-  ticketTexto += mov.fecha ? `${new Date(mov.fecha).toLocaleString()}\n` : '';
-  ticketTexto += `ID: ${mov.ticketID || mov.id}\n`;
-  ticketTexto += `Cajero: ${mov.cajero || ''}\n`;
-  ticketTexto += `Tipo: ${mov.tipo}\n`;
-  ticketTexto += `Total: $${(mov.total || mov.totalGeneral || 0).toFixed(2)}\n`;
-  ticketTexto += `--------------------------\n`;
+  const fecha = mov.fecha ? new Date(mov.fecha) : new Date();
+  const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${
+    (fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${
+    fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
 
-  (mov.items || []).forEach(item => {
-    if (item.tipo === "stock") {
-      ticketTexto += `${item.id} | ${item.cant} | $${item.precio?.toFixed(2) || '0.00'}\n`;
-    } else {
-      ticketTexto += `${item.id} | ${item.cant.toFixed(3)}kg | $${item.precio?.toFixed(2) || '0.00'}\n`;
-    }
-  });
-  ticketTexto += `--------------------------\n`;
+  const ticketTexto = `
+${mov.ticketID}
+${fechaStr}
+Cajero: ${mov.cajero || ''}
+==========
+${(mov.items || []).map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n==========`).join("\n")}
+TOTAL: $${mov.total.toFixed(2)}
+Pago: ${mov.tipo}
+`;
 
   modal.innerHTML = `
     <div style="background:#fff; padding:20px; border-radius:10px; width:350px; max-height:80%; overflow:auto; text-align:center;">
@@ -419,22 +416,22 @@ function mostrarModalTicket(mov) {
   btnCerrar.addEventListener("click", () => modal.remove());
 
   btnReimprimir.addEventListener("click", () => {
-    if (mov.tipo === "TIRAR Z" || mov.reimpresion) {
-      if (typeof imprimirTicketZ === "function") {
-        imprimirTicketZ(ticketTexto);
-      } else {
-        console.log("Función imprimirTicketZ no definida");
-      }
+    if (typeof imprimirTicket === "function") {
+      imprimirTicket(
+        mov.ticketID,
+        fechaStr,
+        mov.cajero || '',
+        mov.items || [],
+        mov.total || 0,
+        mov.tipo || ''
+      );
     } else {
-      if (typeof imprimirTicket === "function") {
-        imprimirTicket(ticketTexto, mov.fecha || new Date().toISOString(), mov.tipo || '', mov.items || [], mov.total || 0, mov.tipo || '');
-      } else {
-        console.log("Función imprimirTicket no definida");
-      }
+      console.log("Función imprimirTicket no definida");
     }
     modal.remove();
   });
 }
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
