@@ -160,14 +160,12 @@ async function loadProductos() {
 async function loadSueltosPrecio() {
   const sueltosSnap = await window.get(window.ref("/sueltos"));
   cobroSueltosPrecio.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = v.nombre;
-      cobroSueltosPrecio.appendChild(opt);
-    });
-  }
+  if (sueltosSnap.exists()) Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+    const opt = document.createElement("option");
+    opt.value = k;
+    opt.textContent = v.nombre;
+    cobroSueltosPrecio.appendChild(opt);
+  });
   inputCodigoPrecio.value = "";
   inputPrecioSuelto.value = "000";
 }
@@ -177,7 +175,7 @@ async function inicializarCobro() {
   await loadProductos();
   await loadSueltosPrecio();
 }
-inicializarCobro(); // se ejecuta al cargar la página
+inicializarCobro();
 
 // --- Tabla de cobro ---
 function actualizarTabla() {
@@ -264,9 +262,7 @@ btnAddPrecio.addEventListener("click", async () => {
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
 
-  // Calcular KG basado en el precio ingresado
   let cant = parseFloat((precioIngresado / data.precio).toFixed(3));
-
   if (cant > data.kg) return alert("STOCK INSUFICIENTE");
 
   agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
@@ -284,6 +280,7 @@ btnKgMenos.addEventListener("click", () => {
   if (val < 0.100) val = 0.100;
   inputKgSuelto.value = val.toFixed(3);
 });
+
 
   // Cargar productos en el select de “por precio”
 async function loadSueltosPrecio() {
