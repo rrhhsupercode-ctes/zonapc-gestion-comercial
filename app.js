@@ -90,18 +90,19 @@
 
 btnLogin.addEventListener("click", async () => {
   loginMsg.textContent = "";
-  const userId = loginUsuario.value;
-  const password = loginPass.value;
+  const userId = loginUsuario.value.trim();
+  const password = loginPass.value.trim();
   const userSnap = await window.get(window.ref(`/cajeros/${userId}`));
-  
+
   if (userSnap.exists() && userSnap.val().pass === password) {
     currentUser = { id: userId, ...userSnap.val() };
-    loginModal.classList.add("hidden");
-    cobroControles.classList.remove("hidden");
-    showSection("cobro");
 
     // --- Actualizar título con nombre del cajero ---
     document.title = `${currentUser.nombre} (${currentUser.id})`;
+
+    loginModal.classList.add("hidden");
+    cobroControles.classList.remove("hidden");
+    showSection("cobro");
   } else {
     loginMsg.textContent = "Contraseña incorrecta";
   }
