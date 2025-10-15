@@ -285,8 +285,7 @@ msgKgCobro.style.fontSize = "0.9em";
 inputKgSuelto.parentNode.appendChild(msgKgCobro);
 
 function formatearKgCobro(inputElement, msgElement, delta = 0) {
-  let raw = inputElement.value.replace(/\D/g, "");
-
+  // Si es incremento/decremento
   if (delta !== 0) {
     let val = parseFloat(inputElement.value) || 0;
     val = Math.min(99.000, Math.max(0.100, val + delta));
@@ -295,6 +294,9 @@ function formatearKgCobro(inputElement, msgElement, delta = 0) {
     actualizarPrecioUnitario();
     return;
   }
+
+  // Formateo mientras se escribe
+  let raw = inputElement.value.replace(/\D/g, "");
 
   let val;
   switch (raw.length) {
@@ -309,7 +311,7 @@ function formatearKgCobro(inputElement, msgElement, delta = 0) {
 
   if (isNaN(val) || val < 0.100 || val > 99) {
     msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-    inputElement.value = "0.100";
+    // NO sobreescribimos el input para que el usuario pueda seguir escribiendo
   } else {
     inputElement.value = val.toFixed(3);
     msgElement.textContent = "";
