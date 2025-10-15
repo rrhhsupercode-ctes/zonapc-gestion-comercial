@@ -277,7 +277,56 @@ async function actualizarKgSegunPrecio() {
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
-inputKgSuelto.addEventListener("input", actualizarPrecioUnitario);
+// --- NUEVO FORMATEO KG FANTÁSTICO ---
+const msgKgCobro = document.createElement("p");
+msgKgCobro.style.color = "red";
+msgKgCobro.style.margin = "4px 0 0 0";
+msgKgCobro.style.fontSize = "0.9em";
+inputKgSuelto.parentNode.appendChild(msgKgCobro);
+
+function formatearKgCobro(inputElement, msgElement, delta = 0) {
+  let raw = inputElement.value.replace(/\D/g, "");
+
+  if (delta !== 0) {
+    let val = parseFloat(inputElement.value) || 0;
+    val = Math.min(99.000, Math.max(0.100, val + delta));
+    inputElement.value = val.toFixed(3);
+    if (msgElement) msgElement.textContent = "";
+    actualizarPrecioUnitario();
+    return;
+  }
+
+  let val;
+  switch (raw.length) {
+    case 0: val = 0.000; break;
+    case 1: val = parseFloat("0.00" + raw); break;
+    case 2: val = parseFloat("0.0" + raw); break;
+    case 3: val = parseFloat("0." + raw); break;
+    case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+    case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+    default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+  }
+
+  if (isNaN(val) || val < 0.100 || val > 99) {
+    msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
+    inputElement.value = "0.100";
+  } else {
+    inputElement.value = val.toFixed(3);
+    msgElement.textContent = "";
+  }
+
+  actualizarPrecioUnitario();
+}
+
+// --- Botones + / - sueltos con formateo ---
+btnKgMas.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, 0.100));
+btnKgMenos.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, -0.100));
+
+// --- Edición manual KG ---
+inputKgSuelto.addEventListener("input", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
+inputKgSuelto.addEventListener("blur", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
+
+// --- Escuchar cambios precio / selección sueltos ---
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
@@ -302,17 +351,6 @@ btnAddSuelto.addEventListener("click", async () => {
   inputPrecioSuelto.value = "000";
   inputCodigoSuelto.value = "";
 });
-
-// --- Botones + / - sueltos ---
-btnKgMas.addEventListener("click", () => {
-  inputKgSuelto.value = (parseFloat(inputKgSuelto.value) + 0.100).toFixed(3);
-});
-btnKgMenos.addEventListener("click", () => {
-  let val = parseFloat(inputKgSuelto.value) - 0.100;
-  if (val < 0.100) val = 0.100;
-  inputKgSuelto.value = val.toFixed(3);
-});
-
 
 // --- IMPRIMIR TICKET ---
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
