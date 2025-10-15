@@ -405,11 +405,13 @@ async function loadMovimientos() {
 
     // --- REIMPRIMIR ---
     tr.querySelector(".reimprimir").addEventListener("click", () => {
-      mostrarModalTicket({
-        ...mov,
-        ticketID: id,
-        reimpresion: true
-      });
+      if (typeof mostrarModalTicket === "function") {
+        mostrarModalTicket({
+          ...mov,
+          ticketID: id,
+          reimpresion: true
+        });
+      }
     });
 
     // --- ELIMINAR ---
@@ -453,7 +455,7 @@ btnTirarZ.addEventListener("click", () => {
     if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
 
     const fechaZ = new Date();
-    const zID = `Z_${fechaZ.getTime()}`;
+    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
 
     const totalPorTipoPago = {};
     let totalGeneral = 0;
@@ -473,6 +475,10 @@ btnTirarZ.addEventListener("click", () => {
     };
 
     await window.set(window.ref(`/historial/${zID}`), registroZ);
+
+    // Guardar respaldo previo (por si se revierte)
+    await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
+
     for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
 
     loadMovimientos();
@@ -501,159 +507,76 @@ btnTirarZ.addEventListener("click", () => {
   });
 });
 
-
 // --- HISTORIAL ---
-const tablaHistorial = document.getElementById("tabla-historial").querySelector("tbody");
-const historialSeccion = document.getElementById("historial");
-
-// Crear controles de día dinámicos (se insertan antes de la tabla)
-const controlesHistorial = document.createElement("div");
-controlesHistorial.style.cssText = `
-  display:flex; justify-content:center; align-items:center; gap:10px; margin-bottom:10px;
-`;
-controlesHistorial.innerHTML = `
-  <button id="historial-dia-prev">◀</button>
-  <span id="historial-dia" style="min-width:60px; text-align:center; display:inline-block;">
-    ${new Date().getDate().toString().padStart(2,'0')}/
-    ${(new Date().getMonth()+1).toString().padStart(2,'0')}/
-    ${new Date().getFullYear()}
-  </span>
-  <button id="historial-dia-next">▶</button>
-`;
-historialSeccion.insertBefore(controlesHistorial, historialSeccion.querySelector("table"));
-
-const historialDia = document.getElementById("historial-dia");
-const btnDiaPrev = document.getElementById("historial-dia-prev");
-const btnDiaNext = document.getElementById("historial-dia-next");
-
-let historialRegistros = [];
-let fechaMin, fechaMax;
-
 async function loadHistorial() {
-  const snap = await window.get(window.ref("/historial"));
+  const tablaHistorial = document.querySelector("#tabla-historial tbody");
+  if (!tablaHistorial) return;
   tablaHistorial.innerHTML = "";
-  historialRegistros = [];
 
+  const snap = await window.get(window.ref("/historial"));
   if (!snap.exists()) return;
 
-  Object.entries(snap.val()).forEach(([id, mov]) => {
-    historialRegistros.push({ id, ...mov, fechaObj: mov.fecha ? new Date(mov.fecha) : null });
-  });
+  const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
-  historialRegistros.sort((a, b) => {
-    if (!a.fechaObj) return 1;
-    if (!b.fechaObj) return -1;
-    return b.fechaObj - a.fechaObj;
-  });
+  for (const [id, mov] of entries) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${id}</td>
+      <td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
+      <td>${mov.tipo}</td>
+      <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
+      <td>${new Date(mov.fecha).toLocaleString()}</td>
+      <td>
+        <button class="reimprimir" data-id="${id}">🖨</button>
+        ${mov.tipo === "TIRAR Z" ? `<button class="eliminar-z" ${mov.eliminado ? "disabled" : ""}>❌</button>` : ""}
+      </td>
+    `;
 
-  const hoy = new Date();
-  const diaHoy = hoy.getDate();
-
-  if (diaHoy <= 15) {
-    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-  } else {
-    fechaMin = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    for (const mov of historialRegistros) {
-      if (mov.fechaObj && mov.fechaObj < fechaMin) {
-        await window.remove(window.ref(`/historial/${mov.id}`));
-      }
-    }
-    historialRegistros = historialRegistros.filter(mov => mov.fechaObj && mov.fechaObj >= fechaMin);
-  }
-
-  fechaMax = hoy;
-
-  let ultimoDia = historialRegistros.length ? Math.max(...historialRegistros.map(m => m.fechaObj.getDate())) : hoy.getDate();
-
-  mostrarHistorialPorDia(ultimoDia);
-}
-
-function mostrarHistorialPorDia(dia) {
-  tablaHistorial.innerHTML = "";
-
-  historialRegistros
-    .filter(mov => mov.fechaObj && mov.fechaObj.getDate() === dia)
-    .forEach(mov => {
-      const fechaStr = mov.fechaObj
-        ? `${mov.fechaObj.getDate().toString().padStart(2,'0')}/${(mov.fechaObj.getMonth()+1).toString().padStart(2,'0')}/${mov.fechaObj.getFullYear()} (${mov.fechaObj.getHours().toString().padStart(2,'0')}:${mov.fechaObj.getMinutes().toString().padStart(2,'0')})`
-        : "";
-
-      const tr = document.createElement("tr");
-      const hoy = new Date();
-      const esMismoDia = mov.fechaObj &&
-        mov.fechaObj.getFullYear() === hoy.getFullYear() &&
-        mov.fechaObj.getMonth() === hoy.getMonth() &&
-        mov.fechaObj.getDate() === hoy.getDate();
-
-      const puedeEliminar = mov.tipo === "TIRAR Z" && esMismoDia && !mov.eliminado;
-
-      tr.innerHTML = `
-        <td>${mov.id}</td>
-        <td>${(typeof mov.totalGeneral === "number") ? mov.totalGeneral.toFixed(2) : (mov.total || "")}</td>
-        <td>${mov.tipo}</td>
-        <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
-        <td>${fechaStr}</td>
-        <td>
-          <button class="reimprimir" data-id="${mov.id}">🖨</button>
-          ${mov.tipo === "TIRAR Z" ? `<button class="eliminar-z" ${puedeEliminar ? "" : "disabled"}>❌</button>` : ""}
-        </td>
-      `;
-
-      if (mov.eliminado) tr.style.backgroundColor = "#ccc";
-
-      // --- REIMPRIMIR ---
-      tr.querySelector(".reimprimir").addEventListener("click", () => {
-        if (mov.tipo === "TIRAR Z") {
-          const registro = mov;
-          let ticketTexto = `*** TIRAR Z (REIMPRESION) ***\n${registro.fechaObj ? registro.fechaObj.toLocaleDateString() : ""} ${registro.fechaObj ? registro.fechaObj.getHours().toString().padStart(2,'0')+':'+registro.fechaObj.getMinutes().toString().padStart(2,'0') : ""}\n`;
-          const cajeros = registro.cajeros || [...new Set((registro.items||[]).map(it => it.cajero))];
-          for (const cajero of cajeros) {
-            ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
-            const movCajero = (registro.items || []).filter(i => i.cajero === cajero);
-            const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-            for (const tipo of tiposPago) {
-              const ventasTipo = movCajero.filter(m => m.tipo === tipo);
-              const subtotal = ventasTipo.reduce((acc,m) => acc + (m.total||0), 0);
-              ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
-              ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${(m.total||0).toFixed(2)}\n`);
-            }
+    // --- REIMPRIMIR ---
+    tr.querySelector(".reimprimir").addEventListener("click", async () => {
+      if (mov.tipo === "TIRAR Z") {
+        const registro = mov;
+        let ticketTexto = `*** REIMPRESIÓN TIRAR Z ***\n${new Date(registro.fecha).toLocaleString()}\n`;
+        for (const cajero of registro.cajeros) {
+          ticketTexto += `\n========== CAJERO: ${cajero} ==========\n`;
+          const movCajero = registro.items.filter(i => i.cajero === cajero);
+          const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
+          for (const tipo of tiposPago) {
+            const ventasTipo = movCajero.filter(m => m.tipo === tipo);
+            const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+            ticketTexto += `\n-- ${tipo} (Subtotal: $${subtotal.toFixed(2)}) --\n`;
+            ventasTipo.forEach(m => ticketTexto += `${m.ticketID}  $${m.total.toFixed(2)}\n`);
           }
-          ticketTexto += `\n========== TOTAL GENERAL: $${(registro.totalGeneral||0).toFixed(2)} ==========\n`;
-          ticketTexto += `\n========== FIN REIMPRESION TIRAR Z ==========\n`;
-          if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
-        } else {
-          mostrarModalTicket(mov);
         }
-      });
-
-      // --- ELIMINAR TIRAR Z ---
-const btnEliminarZ = tr.querySelector(".eliminar-z");
-if (btnEliminarZ) {
-  btnEliminarZ.addEventListener("click", () => {
-    showAdminActionModal(async () => {
-      // restaurar movimientos
-      for (const reg of mov.items || []) {
-        await window.set(window.ref(`/movimientos/${reg.ticketID}`), reg);
+        ticketTexto += `\n========== TOTAL GENERAL: $${registro.totalGeneral.toFixed(2)} ==========\n\nFIN REIMPRESIÓN\n`;
+        if (typeof imprimirTicketZ === "function") imprimirTicketZ(ticketTexto);
+      } else {
+        if (typeof mostrarModalTicket === "function") mostrarModalTicket(mov);
       }
-      // marcar eliminado
-      await window.update(window.ref(`/historial/${mov.id}`), { eliminado: true });
-      tr.style.backgroundColor = "#ccc";
-
-      // deshabilitar ambos botones
-      btnEliminarZ.disabled = true;
-      const btnReimprimir = tr.querySelector(".reimprimir");
-      if (btnReimprimir) {
-        btnReimprimir.disabled = true;
-        btnReimprimir.style.opacity = "0.5";
-        btnReimprimir.style.pointerEvents = "none";
-      }
-
-      loadMovimientos();
     });
-  });
+
+    // --- ELIMINAR TIRAR Z ---
+    const btnEliminarZ = tr.querySelector(".eliminar-z");
+    if (btnEliminarZ) {
+      btnEliminarZ.addEventListener("click", async () => {
+        showAdminActionModal(async () => {
+          const respaldoSnap = await window.get(window.ref(`/respaldoZ/${id}`));
+          if (respaldoSnap.exists()) {
+            await window.set(window.ref("/movimientos"), respaldoSnap.val());
+          }
+          await window.update(window.ref(`/historial/${id}`), { eliminado: true });
+          await window.remove(window.ref(`/respaldoZ/${id}`));
+          loadMovimientos();
+          loadHistorial();
+        });
+      });
+    }
+
+    if (mov.eliminado) tr.style.backgroundColor = "#ccc";
+    tablaHistorial.appendChild(tr);
+  }
 }
-    }); // <-- cierra el forEach de historialRegistros
-} // <-- cierra mostrarHistorialPorDia(dia)
+
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
