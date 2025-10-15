@@ -122,7 +122,12 @@ const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
 const inputPrecioSuelto = document.getElementById("input-precio-suelto");
 const btnAddPrecio = document.getElementById("btn-add-precio");
 
+// nuevos inputs (deben existir en el HTML que pegaste)
+const inputDescuento = document.getElementById("input-descuento");
+const inputRecargo = document.getElementById("input-recargo");
+
 let carrito = [];
+let porcentajeFinal = 0; // recargo - descuento (puede ser negativo => descuento)
 
 // --- Funciones de carga ---
 async function loadProductos() {
@@ -181,6 +186,20 @@ async function inicializarCobro() {
 }
 inicializarCobro();
 
+// --- Calcular porcentaje final ---
+function calcularPorcentajeFinal() {
+  // leer valores, forzar 0..100
+  const desc = Math.min(Math.max(Number(inputDescuento.value) || 0, 0), 100);
+  const rec = Math.min(Math.max(Number(inputRecargo.value) || 0, 0), 100);
+
+  // normalizar en los inputs (por si escribieron fuera de rango)
+  inputDescuento.value = String(Math.round(desc));
+  inputRecargo.value = String(Math.round(rec));
+
+  porcentajeFinal = rec - desc; // si negativo => descuento neto
+  actualizarTabla();
+}
+
 // --- Tabla de cobro ---
 function actualizarTabla() {
   tablaCobro.innerHTML = "";
@@ -201,9 +220,21 @@ function actualizarTabla() {
     tablaCobro.appendChild(tr);
     total += item.cant * item.precio;
   });
-  totalDiv.textContent = `TOTAL: $${total.toFixed(2)}`;
+
+  // aplicar porcentaje final
+  const totalModificado = total * (1 + porcentajeFinal / 100);
+
+  // mostrar en pantalla (total en rojo como pediste)
+  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+  const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
+  totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
+
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
+
+// --- Escuchar cambios en descuento / recargo ---
+if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
+if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
 
 // --- Carrito ---
 async function agregarAlCarrito(nuevoItem) {
@@ -287,6 +318,10 @@ btnKgMenos.addEventListener("click", () => {
 
 // --- IMPRIMIR TICKET ---
 function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  // total que llega aquí ya debe ser el total final (con porcentaje aplicado) si quien llama lo manda así
+  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+  const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
   const iframe = document.createElement("iframe");
   iframe.style.position = "absolute";
   iframe.style.width = "0";
@@ -310,7 +345,7 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
         <div class="bloque">${fecha}</div>
         <div class="bloque" style="white-space: pre-line;">
           ${items.map(it => `${it.nombre} $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.cant*it.precio).toFixed(2)}\n--------------------------------`).join("\n")}
-          \nTOTAL: $${total.toFixed(2)}\nPago en: ${tipoPago}
+          \nTOTAL: $${total.toFixed(2)}${porcentajeTexto}\nPago en: ${tipoPago}
         </div>
         <div class="total">TOTAL: $${total.toFixed(2)}</div>
       </body>
@@ -366,11 +401,11 @@ btnCobrar.addEventListener("click", async () => {
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
 
-      // --- total original y con descuento/recargo ---
+      // total original y total final (aplicando porcentajeFinal)
       const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
       const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
 
-      // --- guardar movimientos ---
+      // Guardar movimientos (totalFinal y porcentaje aplicado)
       await window.set(window.ref(`/movimientos/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -382,7 +417,7 @@ btnCobrar.addEventListener("click", async () => {
         porcentajeAplicado: porcentajeFinal || 0
       });
 
-      // --- guardar historial ---
+      // Guardar historial (totalFinal)
       await window.set(window.ref(`/historial/${ticketID}`), {
         ticketID,
         cajero: currentUser.id,
@@ -393,13 +428,13 @@ btnCobrar.addEventListener("click", async () => {
         porcentajeAplicado: porcentajeFinal || 0
       });
 
-      // --- actualizar config ---
+      // Actualizar config
       await window.update(window.ref("/config"), {
         ultimoTicketID: ultimoID,
         ultimoTicketFecha: fechaHoy
       });
 
-      // --- actualizar stock ---
+      // Actualizar stock
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (snapItem.exists()) {
@@ -412,19 +447,20 @@ btnCobrar.addEventListener("click", async () => {
         }
       }
 
-      // --- imprimir ticket ---
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalOriginal, tipoPago);
+      // Imprimir ticket: le pasamos el totalFinal para que imprima ya el valor con porcentaje aplicado
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
 
-      // --- ALERT ---
+      // ALERT original (preservado)
       alert("VENTA FINALIZADA");
 
-      // --- limpiar ---
+      // Limpiar y refrescar todo
       carrito = [];
       actualizarTabla();
-      loadStock();
-      loadSueltos();
-      loadMovimientos();
-      loadHistorial();
+      // intentos de recarga de listas (si tus funciones existen): no toco sus nombres
+      try { loadStock(); } catch (e) {}
+      try { loadSueltos(); } catch (e) {}
+      try { loadMovimientos(); } catch (e) {}
+      try { loadHistorial(); } catch (e) {}
       modal.remove();
     });
   });
