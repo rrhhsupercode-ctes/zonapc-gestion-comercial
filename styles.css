@@ -399,3 +399,12 @@ blockquote {
   color: #333;
   font-size:12px;
 }
+
+/* === FUENTE COMPATIBLE PARA IMPRESIÓN === */
+@media print {
+  body, .ticket-container, .ticket-item, .ticket-total, .ticket-header, .ticket-subheader {
+    font-family: "DejaVu Sans Mono", "Lucida Console", "Courier New", monospace !important;
+    font-variant-ligatures: none !important;
+  }
+}
+
