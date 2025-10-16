@@ -245,17 +245,80 @@ tbody tr:nth-child(even) {
 
 /* === IMPRESIÓN TICKET === */
 @media print {
-  body * {
-    visibility: hidden;
+  /* Todo el ticket tendrá un ancho máximo de 5cm */
+  body {
+    font-family: monospace !important;
+    font-size: 10px !important;
+    color: #000 !important;
+    width: 5cm !important;
+    margin: 0 !important;
+    padding: 3px !important;
+    line-height: 1.2 !important;
   }
-  .print-area, .print-area * {
-    visibility: visible;
+
+  /* Contenedor principal del ticket */
+  .ticket-container {
+    width: 100% !important;
+    max-width: 5cm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
   }
-  .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 5cm;
+
+  /* Cabecera */
+  .ticket-header {
+    text-align: center !important;
+    font-weight: bold !important;
+    margin-bottom: 4px !important;
+  }
+
+  .ticket-subheader {
+    text-align: center !important;
+    font-weight: normal !important;
+    margin-bottom: 2px !important;
+  }
+
+  .ticket-info {
+    text-align: left !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Items */
+  .ticket-items {
+    text-align: left !important;
+    margin: 2px 0 !important;
+    line-height: 1.2 !important;
+  }
+
+  .ticket-item {
+    text-align: left !important;
+    border-bottom: 0.5px solid #000 !important;
+    padding: 1px 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    word-wrap: break-word !important;
+  }
+
+  /* Total */
+  .ticket-total {
+    text-align: center !important;
+    font-weight: bold !important;
+    font-size: 12px !important;
+    margin-top: 4px !important;
+    padding-top: 2px !important;
+    border-top: 0.5px solid #000 !important;
+  }
+
+  /* Espacio final */
+  .ticket-footer-space {
+    height: 20px !important;
+  }
+
+  /* Forzar que todo el ticket se imprima */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 }
 
@@ -268,28 +331,6 @@ tbody tr:nth-child(even) {
 
 #tabla-historial th {
   background: #ffeaa7;
-}
-
-/* HR del ticket */
-#hr-ticket {
-  width: 4.8cm;   /* ancho fijo de 4.8 cm */
-  border: none;
-  border-top: 1px solid #000; /* línea simple */
-  margin: 6px auto; /* centrado horizontal */
-}
-
-/* Texto del ticket */
-.texto-ticket {
-  font-size: 9px;   /* tamaño pequeño */
-  text-align: center; /* centrado */
-  margin: 2px 0;    /* separación mínima */
-}
-
-/* Texto del ticket en modal */
-#texto-ticket-modal {
-  font-size: 15px;  /* tamaño mayor */
-  text-align: center;
-  margin: 8px 0;
 }
 
 /*  =====  Botones de paginado de HISTORIAL  =====  */
