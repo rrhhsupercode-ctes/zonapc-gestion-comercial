@@ -1,19 +1,9 @@
-/* === CONFIGURACIÓN GLOBAL UTF-8 Y FUENTE === */
-@charset "UTF-8";
-
-html, body, input, select, textarea, button, option {
-  font-family: "DejaVu Sans", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", sans-serif;
-  font-variant-ligatures: none;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 /* === RESET === */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: inherit;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 body {
@@ -257,7 +247,7 @@ tbody tr:nth-child(even) {
 @media print {
   /* Todo el ticket tendrá un ancho máximo de 5cm */
   body {
-    font-family: "DejaVu Sans Mono", "Lucida Console", "Courier New", monospace !important;
+    font-family: monospace !important;
     font-size: 10px !important;
     color: #000 !important;
     width: 5cm !important;
@@ -266,6 +256,7 @@ tbody tr:nth-child(even) {
     line-height: 1.2 !important;
   }
 
+  /* Contenedor principal del ticket */
   .ticket-container {
     width: 100% !important;
     max-width: 5cm !important;
@@ -273,6 +264,7 @@ tbody tr:nth-child(even) {
     padding: 0 !important;
   }
 
+  /* Cabecera */
   .ticket-header {
     text-align: center !important;
     font-weight: bold !important;
@@ -294,6 +286,7 @@ tbody tr:nth-child(even) {
     padding: 0 !important;
   }
 
+  /* Items */
   .ticket-items {
     text-align: left !important;
     margin: 2px 0 !important;
@@ -309,6 +302,7 @@ tbody tr:nth-child(even) {
     word-wrap: break-word !important;
   }
 
+  /* Total */
   .ticket-total {
     text-align: center !important;
     font-weight: bold !important;
@@ -318,15 +312,18 @@ tbody tr:nth-child(even) {
     border-top: 0.5px solid #000 !important;
   }
 
+  /* Espacio final */
   .ticket-footer-space {
     height: 10px !important;
   }
 
+  /* Forzar que todo el ticket se imprima correctamente */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 }
+
 
 /* === HISTORIAL === */
 #historial-info {
@@ -340,14 +337,16 @@ tbody tr:nth-child(even) {
 }
 
 /*  =====  Botones de paginado de HISTORIAL  =====  */
+/* Contenedor de los botones y label del historial */
 #historial-paginador {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0;
+  justify-content: center;   /* centra horizontalmente */
+  align-items: center;       /* alinea verticalmente */
+  gap: 10px;                 /* espacio entre botones y label */
+  margin: 10px 0;            /* separación arriba y abajo */
 }
 
+/* Botones prev / next */
 #historial-paginador button {
   background-color: #007bff;
   color: white;
@@ -362,28 +361,29 @@ tbody tr:nth-child(even) {
   background-color: #0056b3;
 }
 
+/* Texto del día */
 #hist-dia-label {
   font-weight: bold;
   font-size: 14px;
-  min-width: 120px;
+  min-width: 120px;   /* evita que se muevan los botones si el texto cambia */
   text-align: center;
 }
 
 /*===  Texto BANNER PRINCIPAL  ===*/
 #app-title {
-  text-align: center;
-  font-size: 14px;
-  font-weight: bold;
-  letter-spacing: 0px;
-  color: #fff;
-  margin: 1px 0;
+  text-align: center;        /* Centra el texto */
+  font-size: 14px;           /* Tamaño pequeño */
+  font-weight: bold;         /* Negrita */
+  letter-spacing: 0px;       /* Espaciado entre letras */
+  color: #fff;               /* Color de texto */
+  margin: 1px 0;            /* Separación arriba y abajo */
 }
 
 /*===  Tamaño de los Emojis  ===*/
 .emoji {
   display: inline-block;
   font-size: 24px;
-  margin: 0 0.5rem 0 0;
+  margin: 0 0.5rem 0 0; /* ajusta separación si hace falta */
   vertical-align: middle;
 }
 
@@ -397,5 +397,5 @@ blockquote {
   font-style: italic;
   border-radius: 6px;
   color: #333;
-  font-size: 12px;
+  font-size:12px;
 }
