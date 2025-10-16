@@ -376,9 +376,9 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   }
 
   const contenido = `
-🏪 ${shopName.toUpperCase()}
-📌 ${shopLocation}
-💼 ${shopCuit}
+${shopName.toUpperCase()}
+${shopLocation}
+CUIT: ${shopCuit}
 ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
