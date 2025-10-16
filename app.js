@@ -375,6 +375,8 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
     console.error("Error al cargar configuración de tienda:", e);
   }
 
+  const iva = total * 0.21; // IVA 21%
+
   const contenido = `
 ${shopName.toUpperCase()}
 ${shopLocation}
@@ -390,9 +392,12 @@ ${items.map(it => `  ${it.nombre}
   ====================`).join("\n")}
 
 TOTAL: $${total.toFixed(2)}${porcentajeTexto}
+Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA ${formatPrecio(iva)})
+Correspondiente a impuestos a nivel nacional
 ====================
 `;
 
+  // --- IMPRIMIR EN IFRAME ---
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.width = "0";
@@ -433,10 +438,10 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 100); // permanente 100ms
+  setTimeout(() => iframe.remove(), 2000); // dejar 2s antes de remover
 }
 
-  // --- COBRAR ---
+// --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
@@ -463,19 +468,16 @@ btnCobrar.addEventListener("click", async () => {
 
   const allButtons = modal.querySelectorAll("button");
 
-  // --- Función para deshabilitar todos los botones ---
-  function disableButtons() {
-    allButtons.forEach(btn => btn.disabled = true);
-  }
+  function disableButtons() { allButtons.forEach(b => b.disabled = true); }
 
   document.getElementById("cancelar-pago").addEventListener("click", () => {
-    disableButtons(); // deshabilitar todos al presionar cancelar
+    disableButtons();
     modal.remove();
   });
 
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
     btn.addEventListener("click", async () => {
-      disableButtons(); // deshabilitar todos los botones al presionar cualquiera
+      disableButtons();
 
       const tipoPago = btn.dataset.pay;
       const fechaHoy = new Date().toISOString().split("T")[0];
@@ -492,59 +494,39 @@ btnCobrar.addEventListener("click", async () => {
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
 
-      // --- total original y con descuento/recargo ---
-      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
-      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
+      const totalOriginal = carrito.reduce((a,b) => a+b.cant*b.precio,0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
 
-      // --- guardar movimientos ---
       await window.set(window.ref(`/movimientos/${ticketID}`), {
-        ticketID,
-        cajero: currentUser.id,
-        items: carrito,
-        total: totalFinal,
-        fecha: fecha.toISOString(),
-        tipo: tipoPago,
-        eliminado: false,
-        porcentajeAplicado: porcentajeFinal || 0
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        eliminado: false, porcentajeAplicado: porcentajeFinal||0
       });
 
-      // --- guardar historial ---
       await window.set(window.ref(`/historial/${ticketID}`), {
-        ticketID,
-        cajero: currentUser.id,
-        items: carrito,
-        total: totalFinal,
-        fecha: fecha.toISOString(),
-        tipo: tipoPago,
-        porcentajeAplicado: porcentajeFinal || 0
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        porcentajeAplicado: porcentajeFinal||0
       });
 
-      // --- actualizar config ---
-      await window.update(window.ref("/config"), {
-        ultimoTicketID: ultimoID,
-        ultimoTicketFecha: fechaHoy
-      });
+      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
-      // --- actualizar stock ---
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (snapItem.exists()) {
           const data = snapItem.val();
-          if (item.tipo === "stock") {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
-          } else {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
-          }
+          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
+          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
         }
       }
 
-      // --- imprimir ticket ---
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
-
-      // --- ALERT ---
+      // --- ALERTA INMEDIATA ---
       alert("VENTA FINALIZADA");
 
-      // --- limpiar ---
+      // --- IMPRIMIR TICKET ---
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
+
+      // --- LIMPIAR ---
       carrito = [];
       actualizarTabla();
       loadStock();
