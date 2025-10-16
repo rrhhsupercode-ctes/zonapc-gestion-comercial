@@ -391,16 +391,16 @@ ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
 Pago: ${tipoPago}
-====================
+=========================
 
 ${items.map(it => `  ${it.nombre}
   $${formatPrecioSimple(it.precio)} (x${it.cant}) = $${formatPrecioSimple(it.precio * it.cant)}
-  ====================`).join("\n")}
+  =========================`).join("\n")}
 
 TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
-<span style="font-size:8px;">Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA $${formatPrecioSimple(iva)})</span>
+<span style="font-size:8px;">========================= Regimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA $${formatPrecioSimple(iva)})</span>
 <span style="font-size:8px;">Correspondiente a impuestos a nivel nacional</span>
-====================
+=========================
 `;
 
   // --- IMPRIMIR EN IFRAME ---
