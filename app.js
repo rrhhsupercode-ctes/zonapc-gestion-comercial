@@ -371,6 +371,23 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
     console.error("Error al cargar nombre de tienda:", e);
   }
 
+  const contenido = `
+${shopName.toUpperCase()}
+${ticketID}
+Fecha: ${fecha}
+Cajero: ${cajeroID}
+Pago: ${tipoPago}
+==========  
+
+${items.map(it => `
+  ${it.nombre}
+  $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
+  ==========`).join("\n")}
+
+TOTAL: $${total.toFixed(2)}${porcentajeTexto}
+==========
+`;
+
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.width = "0";
@@ -381,84 +398,31 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const doc = iframe.contentWindow.document;
   doc.open();
   doc.write(`
-  <html>
-    <head>
-      <style>
-        @page { size: auto; margin: 0; }
-        body {
-          font-family: monospace;
-          font-size: 10px;
-          width: 5cm;
-          margin: 0;
-          padding: 3px;
-          color: #000;
-          line-height: 1.3;
-        }
-
-        .ticket-container {
-          width: 100%;
-          page-break-inside: avoid;
-        }
-
-        .ticket-header {
-          text-align: center;
-          font-weight: bold;
-          border-bottom: 1px solid #000;
-          margin-bottom: 4px;
-          padding-bottom: 2px;
-        }
-
-        .ticket-subheader { text-align: center; margin-bottom: 2px; }
-        .ticket-info { text-align: left; font-size: 10px; margin-bottom: 2px; }
-
-        .ticket-items { text-align: left; margin-bottom: 2px; }
-        .ticket-item {
-          display: block;
-          border-top: 1px solid #000;
-          padding: 2px 0;
-          margin: 0;
-          word-wrap: break-word;
-        }
-
-        .ticket-total {
-          text-align: center;
-          font-weight: bold;
-          font-size: 12px;
-          border-top: 1px solid #000;
-          padding-top: 3px;
-          margin-top: 4px;
-        }
-
-        .ticket-footer-space { height: 10px; }
-
-        * {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="ticket-container">
-        <div class="ticket-header">${shopName.toUpperCase()}</div>
-        <div class="ticket-subheader">${ticketID}</div>
-        <div class="ticket-info">Fecha: ${fecha}</div>
-        <div class="ticket-info">Cajero: ${cajeroID}</div>
-        <div class="ticket-info">Pago: ${tipoPago}</div>
-
-        <div class="ticket-items">
-          ${items.map(it => `
-            <div class="ticket-item">
-              ${it.nombre}<br>
-              $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
-            </div>
-          `).join("")}
-        </div>
-
-        <div class="ticket-total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
-        <div class="ticket-footer-space"></div>
-      </div>
-    </body>
-  </html>
+<html>
+  <head>
+    <style>
+      @page { size: auto; margin: 0; }
+      body {
+        font-family: monospace;
+        font-size: 10px;
+        width: 5cm;
+        margin: 0;
+        padding: 3px;
+        white-space: pre;
+        line-height: 1.4;  /* mayor espacio vertical */
+        text-align: center;
+      }
+      /* Separadores centrados */
+      body span.sep {
+        display: block;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+${contenido}
+  </body>
+</html>
   `);
   doc.close();
 
