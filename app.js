@@ -361,18 +361,21 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
   let shopName = "TICKET";
+  let shopLocation = "Sucursal Nueva";
   try {
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
       shopName = val.shopName || "TICKET";
+      shopLocation = val.shopLocation || "Sucursal Nueva";
     }
   } catch (e) {
-    console.error("Error al cargar nombre de tienda:", e);
+    console.error("Error al cargar nombre/ubicación de tienda:", e);
   }
 
   const contenido = `
 ${shopName.toUpperCase()}
+${shopLocation}
 ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
@@ -411,7 +414,6 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
         line-height: 1.4;
         text-align: center;
       }
-      /* Centramos los separadores */
       body span.sep {
         display: block;
         text-align: center;
@@ -1635,49 +1637,52 @@ loadCajeroSelectOptions();
 
 
   // --- CONFIG ---
-  const configNombre = document.getElementById("config-nombre");
-  const configPassActual = document.getElementById("config-pass-actual");
-  const configPassNueva = document.getElementById("config-pass-nueva");
-  const guardarConfig = document.getElementById("guardar-config");
-  const configMsg = document.getElementById("config-msg");
-  const masterPassInput = document.getElementById("master-pass");
-  const btnRestaurar = document.getElementById("btn-restaurar");
+const configNombre = document.getElementById("config-nombre");
+const configUbicacion = document.getElementById("config-ubicacion"); // nuevo input
+const configPassActual = document.getElementById("config-pass-actual");
+const configPassNueva = document.getElementById("config-pass-nueva");
+const guardarConfig = document.getElementById("guardar-config");
+const configMsg = document.getElementById("config-msg");
+const masterPassInput = document.getElementById("master-pass");
+const btnRestaurar = document.getElementById("btn-restaurar");
 
-  async function loadConfig() {
-    const snap = await window.get(window.ref("/config"));
-    if (snap.exists()) {
-      const val = snap.val();
-      configNombre.value = val.shopName || "";
-    }
-  }
-
-  guardarConfig.addEventListener("click", async () => {
-    const snap = await window.get(window.ref("/config"));
-    if (!snap.exists()) return;
+async function loadConfig() {
+  const snap = await window.get(window.ref("/config"));
+  if (snap.exists()) {
     const val = snap.val();
-    if (configPassActual.value !== val.passAdmin) {
-      configMsg.textContent = "Contraseña incorrecta";
-      return;
-    }
-    await window.update(window.ref("/config"), {
-      shopName: configNombre.value,
-      passAdmin: configPassNueva.value || val.passAdmin
-    });
-    configMsg.textContent = "✅ Configuración guardada";
-    configPassActual.value = configPassNueva.value = "";
-  });
+    configNombre.value = val.shopName || "";
+    configUbicacion.value = val.shopLocation || "Sucursal Nueva"; // valor por defecto
+  }
+}
 
-  btnRestaurar.addEventListener("click", async () => {
-    const snap = await window.get(window.ref("/config"));
-    if (!snap.exists()) return;
-    if (masterPassInput.value === snap.val().masterPass) {
-      await window.update(window.ref("/config"), { passAdmin: snap.val().masterPass });
-      alert("✅ Contraseña restaurada al maestro");
-      masterPassInput.value = "";
-    } else {
-      alert("❌ Contraseña maestra incorrecta");
-    }
+guardarConfig.addEventListener("click", async () => {
+  const snap = await window.get(window.ref("/config"));
+  if (!snap.exists()) return;
+  const val = snap.val();
+  if (configPassActual.value !== val.passAdmin) {
+    configMsg.textContent = "Contraseña incorrecta";
+    return;
+  }
+  await window.update(window.ref("/config"), {
+    shopName: configNombre.value,
+    shopLocation: configUbicacion.value || "Sucursal Nueva",
+    passAdmin: configPassNueva.value || val.passAdmin
   });
+  configMsg.textContent = "✅ Configuración guardada";
+  configPassActual.value = configPassNueva.value = "";
+});
+
+btnRestaurar.addEventListener("click", async () => {
+  const snap = await window.get(window.ref("/config"));
+  if (!snap.exists()) return;
+  if (masterPassInput.value === snap.val().masterPass) {
+    await window.update(window.ref("/config"), { passAdmin: snap.val().masterPass });
+    alert("✅ Contraseña restaurada al maestro");
+    masterPassInput.value = "";
+  } else {
+    alert("❌ Contraseña maestra incorrecta");
+  }
+});
 
   // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
 const adminActionModal = document.createElement("div");
