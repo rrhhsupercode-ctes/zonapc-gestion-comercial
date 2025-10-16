@@ -360,12 +360,12 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
-  let shopName = "ZONAPC";
+  let shopName = "TICKET";
   try {
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
-      shopName = val.shopName || "ZONAPC";
+      shopName = val.shopName || "TICKET";
     }
   } catch (e) {
     console.error("Error al cargar nombre de tienda:", e);
@@ -377,10 +377,9 @@ ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
 Pago: ${tipoPago}
-==========  
+==========
 
-${items.map(it => `
-  ${it.nombre}
+${items.map(it => `  ${it.nombre}
   $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
   ==========`).join("\n")}
 
@@ -407,12 +406,12 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
         font-size: 10px;
         width: 5cm;
         margin: 0;
-        padding: 3px;
-        white-space: pre;
-        line-height: 1.4;  /* mayor espacio vertical */
+        padding: 4px;
+        white-space: pre-wrap;
+        line-height: 1.4;
         text-align: center;
       }
-      /* Separadores centrados */
+      /* Centramos los separadores */
       body span.sep {
         display: block;
         text-align: center;
@@ -429,7 +428,7 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 100); // permanente: 100ms
+  setTimeout(() => iframe.remove(), 100); // permanente 100ms
 }
 
   // --- COBRAR ---
