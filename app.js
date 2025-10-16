@@ -361,12 +361,12 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
   // Obtener nombre de tienda desde /config
-  let shopName = "TICKET";
+  let shopName = "ZONAPC";
   try {
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
-      shopName = val.shopName || "TICKET";
+      shopName = val.shopName || "ZONAPC";
     }
   } catch (e) {
     console.error("Error al cargar nombre de tienda:", e);
@@ -396,6 +396,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
           margin: 0;
           padding: 4px;
           white-space: pre-wrap;
+          color: #000;
         }
         .header-box {
           border: 1px solid #000;
@@ -405,7 +406,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
         .titulo {
           text-align: center;
           font-weight: bold;
-          border-bottom: 1px dashed #000;
+          border-bottom: 1px solid #000;
           margin-bottom: 4px;
           padding-bottom: 2px;
         }
@@ -420,7 +421,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
         }
         #hr-ticket {
           border: none;
-          border-top: 1px dashed #000;
+          border-top: 1px solid #000;
           margin: 6px 0;
         }
         .items {
@@ -430,14 +431,15 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
         }
         .item-line {
           text-align: left;
-          border-bottom: 1px dotted #000;
+          border-bottom: 1px solid #000;
           padding: 2px 0;
+          word-wrap: break-word;
         }
         .total {
           text-align: center;
           font-weight: bold;
           font-size: 12px;
-          border-top: 1px dashed #000;
+          border-top: 1px solid #000;
           margin-top: 6px;
           padding-top: 4px;
         }
