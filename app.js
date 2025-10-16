@@ -403,21 +403,22 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
   const doc = iframe.contentWindow.document;
   doc.open();
   doc.write(`
-<!DOCTYPE html>
-<html lang="es">
+<html>
   <head>
-    <meta charset="UTF-8">
-    <title>Ticket</title>
     <style>
       @page { size: auto; margin: 0; }
       body {
-        font-family: "DejaVu Sans Mono", "Lucida Console", monospace;
+        font-family: monospace;
         font-size: 10px;
         width: 5cm;
         margin: 0;
         padding: 4px;
         white-space: pre-wrap;
         line-height: 1.4;
+        text-align: center;
+      }
+      body span.sep {
+        display: block;
         text-align: center;
       }
     </style>
@@ -432,7 +433,7 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 100);
+  setTimeout(() => iframe.remove(), 100); // permanente 100ms
 }
 
   // --- COBRAR ---
