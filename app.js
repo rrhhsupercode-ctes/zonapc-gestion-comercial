@@ -366,7 +366,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
-      shopName = val.shopName || "ZONAPC";
+      shopName = val.shopName || "Ticket";
     }
   } catch (e) {
     console.error("Error al cargar nombre de tienda:", e);
@@ -385,10 +385,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   <html>
     <head>
       <style>
-        @page {
-          size: auto;
-          margin: 0;
-        }
+        @page { size: auto; margin: 0; }
         body {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
@@ -399,79 +396,59 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
           padding: 3px;
           color: #000;
         }
+        .ticket-container { width: 100%; }
+
         .header-box {
           border: 1px solid #000;
           padding: 2px 3px;
-          margin-bottom: 4px;
           line-height: 1.1;
+          margin-bottom: 2px;
         }
-        .titulo {
-          text-align: center;
-          font-weight: bold;
-          border-bottom: 0.5px solid #000;
-          margin: 0 0 2px 0;
-          padding-bottom: 1px;
-        }
-        .subtitulo {
-          text-align: center;
-          margin: 0 0 2px 0;
-        }
-        .info {
-          text-align: left;
-          font-size: 10px;
-          margin: 0;
-          padding: 0;
-        }
-        #hr-ticket {
-          border: none;
-          border-top: 0.5px solid #000;
-          margin: 4px 0;
-        }
-        .items {
-          text-align: left;
-          margin: 2px 0;
-          line-height: 1.2;
-        }
+        .titulo { text-align: center; font-weight: bold; border-bottom: 0.5px solid #000; margin-bottom: 2px; }
+        .subtitulo { text-align: center; margin-bottom: 2px; }
+        .info { text-align: left; font-size: 10px; }
+
+        .items { text-align: left; line-height: 1.2; }
         .item-line {
-          text-align: left;
+          display: block;
           border-bottom: 0.5px solid #000;
           padding: 1px 0;
           margin: 0;
           word-wrap: break-word;
-          display: block;
         }
+
         .total {
           text-align: center;
           font-weight: bold;
           font-size: 12px;
           border-top: 0.5px solid #000;
-          margin-top: 4px;
           padding-top: 2px;
+          margin: 2px 0 0 0;
         }
-        .footer-space {
-          height: 20px;
-        }
+
+        .footer-space { height: 10px; }
       </style>
     </head>
     <body>
-      <div class="header-box">
-        <div class="titulo">*** ${shopName.toUpperCase()} ***</div>
-        <div class="subtitulo">${ticketID}</div>
-        <div class="info">Fecha: ${fecha}</div>
-        <div class="info">Cajero: ${cajeroID}</div>
-        <div class="info">Pago: ${tipoPago}</div>
+      <div class="ticket-container">
+        <div class="header-box">
+          <div class="titulo">*** ${shopName.toUpperCase()} ***</div>
+          <div class="subtitulo">${ticketID}</div>
+          <div class="info">Fecha: ${fecha}</div>
+          <div class="info">Cajero: ${cajeroID}</div>
+          <div class="info">Pago: ${tipoPago}</div>
+        </div>
+        <div class="items">
+          ${items.map(it => `
+            <div class="item-line">
+              ${it.nombre}<br>
+              $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
+            </div>
+          `).join("")}
+        </div>
+        <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
+        <div class="footer-space"></div>
       </div>
-      <hr id="hr-ticket">
-      <div class="items">
-        ${items.map(it => `
-          <div class="item-line">
-            ${it.nombre}<br>
-            $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
-          </div>
-        `).join("")}
-      </div>
-      <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
-      <div class="footer-space"></div>
     </body>
   </html>
   `);
@@ -480,8 +457,9 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 2000);
+  setTimeout(() => iframe.remove(), 100); // permanente: 100ms
 }
+
 
   // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
