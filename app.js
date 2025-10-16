@@ -403,8 +403,10 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
   const doc = iframe.contentWindow.document;
   doc.open();
   doc.write(`
-<html>
+<!DOCTYPE html>
+<html lang="es">
   <head>
+    <meta charset="UTF-8">
     <style>
       @page { size: auto; margin: 0; }
       body {
@@ -421,6 +423,10 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
         display: block;
         text-align: center;
       }
+      #hr-ticket {
+        border: none;
+        border-top: 1px dashed #000;
+      }
     </style>
   </head>
   <body>
@@ -433,8 +439,9 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 100); // permanente 100ms
+  setTimeout(() => iframe.remove(), 100); // fijo 100ms
 }
+
 
   // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
