@@ -378,6 +378,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const iva = total * 0.21; // IVA 21%
 
   const contenido = `
+*** CONSUMIDOR FINAL ***
 ${shopName.toUpperCase()}
 ${shopLocation}
 CUIT: ${shopCuit}
@@ -392,8 +393,8 @@ ${items.map(it => `  ${it.nombre}
   ====================`).join("\n")}
 
 TOTAL: $${total.toFixed(2)}${porcentajeTexto}
-Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA ${formatPrecio(iva)})
-Correspondiente a impuestos a nivel nacional
+<span style="font-size:8px;">Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA ${formatPrecio(iva)})</span>
+<span style="font-size:8px;">Correspondiente a impuestos a nivel nacional</span>
 ====================
 `;
 
@@ -426,6 +427,7 @@ Correspondiente a impuestos a nivel nacional
         display: block;
         text-align: center;
       }
+      span { display:block; text-align:center; }
     </style>
   </head>
   <body>
@@ -438,8 +440,9 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 2000); // dejar 2s antes de remover
+  setTimeout(() => iframe.remove(), 100); // dejar 0.1s antes de remover
 }
+
 
 // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
