@@ -539,7 +539,7 @@ btnCobrar.addEventListener("click", async () => {
       }
 
       // --- imprimir ticket ---
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalOriginal, tipoPago);
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
 
       // --- ALERT ---
       alert("VENTA FINALIZADA");
