@@ -377,14 +377,14 @@ ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
 Pago: ${tipoPago}
-==========
+====================
 
 ${items.map(it => `  ${it.nombre}
-  $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
-  ==========`).join("\n")}
+  $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio * it.cant).toFixed(2)}
+  ====================`).join("\n")}
 
 TOTAL: $${total.toFixed(2)}${porcentajeTexto}
-==========
+====================
 `;
 
   const iframe = document.createElement("iframe");
