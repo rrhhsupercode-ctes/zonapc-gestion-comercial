@@ -361,80 +361,99 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
   const iframe = document.createElement("iframe");
-iframe.style.position = "absolute";
-iframe.style.width = "0";
-iframe.style.height = "0";
-document.body.appendChild(iframe);
+  iframe.style.position = "fixed";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
 
-const doc = iframe.contentWindow.document;
-doc.open();
-doc.write(`
-<html>
-  <head>
-    <style>
-      body {
-        font-family: monospace;
-        font-size: 10px;
-        max-width: 5cm;
-        white-space: pre-line;
-        margin: 0;
-        padding: 1px;
-      }
-      .titulo {
-        text-align:center;
-        font-weight:bold;
-        border-bottom:1px dashed #000;
-        margin: 0 0 1px 0;
-        padding: 0 0 1px 0;
-      }
-      .subtitulo {
-        text-align:center;
-        margin: 0 0 1px 0;
-        padding: 0;
-      }
-      .info {
-        font-size:10px;
-        margin: 0 0 1px 0;
-        padding: 0;
-      }
-      .items {
-        font-size:10px;
-        margin: 0 0 2px 0;
-        padding: 0;
-      }
-      .item-line {
-        border-bottom: 1px dotted #000; /* separación sutil entre items */
-        margin: 1px 0;
-        padding: 1px 0;
-      }
-      .total {
-        text-align:center;
-        font-weight:bold;
-        font-size:12px;
-        border-top:1px dashed #000;
-        margin-top:1px;
-        padding-top:1px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="titulo">*** TICKET ***</div>
-    <div class="subtitulo">${ticketID}</div>
-    <div class="info">Fecha: ${fecha}</div>
-    <div class="info">Cajero: ${cajeroID}</div>
-    <div class="info">Pago: ${tipoPago}</div>
-    <div class="items">
-      ${items.map(it => `<div class="item-line">${it.nombre} $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio*it.cant).toFixed(2)}</div>`).join("")}
-    </div>
-    <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
-  </body>
-</html>
-`);
-doc.close();
-iframe.contentWindow.focus();
-iframe.contentWindow.print();
-setTimeout(() => iframe.remove(), 500);
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+  <html>
+    <head>
+      <style>
+        @page {
+          size: auto;
+          margin: 0;
+        }
+        body {
+          font-family: monospace;
+          font-size: 10px;
+          width: 5cm;
+          margin: 0;
+          padding: 4px;
+          white-space: pre-wrap;
+        }
+        .titulo {
+          text-align: center;
+          font-weight: bold;
+          border-bottom: 1px dashed #000;
+          margin-bottom: 4px;
+          padding-bottom: 2px;
+        }
+        .subtitulo {
+          text-align: center;
+          margin-bottom: 4px;
+        }
+        .info {
+          font-size: 10px;
+          margin-bottom: 2px;
+        }
+        #hr-ticket {
+          border: none;
+          border-top: 1px dashed #000;
+          margin: 6px 0;
+        }
+        .items {
+          margin-top: 4px;
+          margin-bottom: 6px;
+        }
+        .item-line {
+          border-bottom: 1px dotted #000;
+          padding: 2px 0;
+        }
+        .total {
+          text-align: center;
+          font-weight: bold;
+          font-size: 12px;
+          border-top: 1px dashed #000;
+          margin-top: 6px;
+          padding-top: 4px;
+        }
+        .footer-space {
+          height: 25px; /* espacio al final para evitar solapamiento */
+        }
+      </style>
+    </head>
+    <body>
+      <div class="titulo">*** TICKET ***</div>
+      <div class="subtitulo">${ticketID}</div>
+      <div class="info">Fecha: ${fecha}</div>
+      <div class="info">Cajero: ${cajeroID}</div>
+      <div class="info">Pago: ${tipoPago}</div>
+      <hr id="hr-ticket">
+      <div class="items">
+        ${items.map(it => `
+          <div class="item-line">
+            ${it.nombre}<br>
+            $${it.precio.toFixed(2)} x${it.cant} = $${(it.precio * it.cant).toFixed(2)}
+          </div>
+        `).join("")}
+      </div>
+      <div class="total">TOTAL: $${total.toFixed(2)}${porcentajeTexto}</div>
+      <div class="footer-space"></div>
+    </body>
+  </html>
+  `);
+  doc.close();
+
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+
+  setTimeout(() => iframe.remove(), 1000);
 }
+
 
 // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
