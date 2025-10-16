@@ -385,6 +385,11 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
           padding: 4px;
           white-space: pre-wrap;
         }
+        .header-box {
+          border: 1px solid #000;
+          padding: 4px;
+          margin-bottom: 6px;
+        }
         .titulo {
           text-align: center;
           font-weight: bold;
@@ -397,8 +402,9 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
           margin-bottom: 4px;
         }
         .info {
+          text-align: left;
           font-size: 10px;
-          margin-bottom: 2px;
+          margin: 1px 0;
         }
         #hr-ticket {
           border: none;
@@ -406,10 +412,12 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
           margin: 6px 0;
         }
         .items {
+          text-align: left;
           margin-top: 4px;
           margin-bottom: 6px;
         }
         .item-line {
+          text-align: left;
           border-bottom: 1px dotted #000;
           padding: 2px 0;
         }
@@ -422,16 +430,18 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
           padding-top: 4px;
         }
         .footer-space {
-          height: 25px; /* espacio al final para evitar solapamiento */
+          height: 25px;
         }
       </style>
     </head>
     <body>
-      <div class="titulo">*** TICKET ***</div>
-      <div class="subtitulo">${ticketID}</div>
-      <div class="info">Fecha: ${fecha}</div>
-      <div class="info">Cajero: ${cajeroID}</div>
-      <div class="info">Pago: ${tipoPago}</div>
+      <div class="header-box">
+        <div class="titulo">*** TICKET ***</div>
+        <div class="subtitulo">${ticketID}</div>
+        <div class="info">Fecha: ${fecha}</div>
+        <div class="info">Cajero: ${cajeroID}</div>
+        <div class="info">Pago: ${tipoPago}</div>
+      </div>
       <hr id="hr-ticket">
       <div class="items">
         ${items.map(it => `
@@ -451,11 +461,10 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 1000);
+  setTimeout(() => iframe.remove(), 2000);
 }
 
-
-// --- COBRAR ---
+  // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
