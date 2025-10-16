@@ -356,9 +356,21 @@ btnAddSuelto.addEventListener("click", async () => {
 });
 
 // --- IMPRIMIR TICKET ---
-function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
+  // Obtener nombre de tienda desde /config
+  let shopName = "TICKET";
+  try {
+    const snap = await window.get(window.ref("/config"));
+    if (snap.exists()) {
+      const val = snap.val();
+      shopName = val.shopName || "TICKET";
+    }
+  } catch (e) {
+    console.error("Error al cargar nombre de tienda:", e);
+  }
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
@@ -436,7 +448,7 @@ function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     </head>
     <body>
       <div class="header-box">
-        <div class="titulo">*** TICKET ***</div>
+        <div class="titulo">*** ${shopName.toUpperCase()} ***</div>
         <div class="subtitulo">${ticketID}</div>
         <div class="info">Fecha: ${fecha}</div>
         <div class="info">Cajero: ${cajeroID}</div>
