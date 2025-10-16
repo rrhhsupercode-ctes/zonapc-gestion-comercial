@@ -360,7 +360,6 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
-  // Obtener nombre de tienda desde /config
   let shopName = "ZONAPC";
   try {
     const snap = await window.get(window.ref("/config"));
@@ -393,25 +392,30 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
           margin: 0;
           padding: 3px;
           color: #000;
-          line-height: 1.2;
+          line-height: 1.3;
         }
-        .ticket-container { width: 100%; }
+
+        .ticket-container {
+          width: 100%;
+          page-break-inside: avoid;
+        }
 
         .ticket-header {
           text-align: center;
           font-weight: bold;
-          border-bottom: 0.5px solid #000;
-          margin-bottom: 2px;
-          padding-bottom: 1px;
+          border-bottom: 1px solid #000;
+          margin-bottom: 4px;
+          padding-bottom: 2px;
         }
-        .ticket-subheader { text-align: center; margin-bottom: 2px; }
-        .ticket-info { text-align: left; font-size: 10px; margin: 0; padding: 0; }
 
-        .ticket-items { text-align: left; line-height: 1.2; margin: 2px 0; }
+        .ticket-subheader { text-align: center; margin-bottom: 2px; }
+        .ticket-info { text-align: left; font-size: 10px; margin-bottom: 2px; }
+
+        .ticket-items { text-align: left; margin-bottom: 2px; }
         .ticket-item {
           display: block;
-          border-bottom: 0.5px solid #000;
-          padding: 1px 0;
+          border-top: 1px solid #000;
+          padding: 2px 0;
           margin: 0;
           word-wrap: break-word;
         }
@@ -420,12 +424,17 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
           text-align: center;
           font-weight: bold;
           font-size: 12px;
-          border-top: 0.5px solid #000;
-          margin: 2px 0 0 0;
-          padding-top: 2px;
+          border-top: 1px solid #000;
+          padding-top: 3px;
+          margin-top: 4px;
         }
 
         .ticket-footer-space { height: 10px; }
+
+        * {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
       </style>
     </head>
     <body>
