@@ -355,6 +355,11 @@ btnAddSuelto.addEventListener("click", async () => {
   inputCodigoSuelto.value = "";
 });
 
+// --- FUNCION AUXILIAR ---
+function formatPrecio(valor) {
+  return valor.toFixed(2);
+}
+
 // --- IMPRIMIR TICKET ---
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
@@ -389,11 +394,11 @@ Pago: ${tipoPago}
 ====================
 
 ${items.map(it => `  ${it.nombre}
-  $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio * it.cant).toFixed(2)}
+  $${formatPrecio(it.precio)} (x${it.cant}) = $${formatPrecio(it.precio * it.cant)}
   ====================`).join("\n")}
 
-TOTAL: $${total.toFixed(2)}${porcentajeTexto}
-<span style="font-size:8px;">Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA ${formatPrecio(iva)})</span>
+TOTAL: $${formatPrecio(total)}${porcentajeTexto}
+<span style="font-size:8px;">Régimen de Transparencia Fiscal al Consumidor Ley 27.743 (IVA $${formatPrecio(iva)})</span>
 <span style="font-size:8px;">Correspondiente a impuestos a nivel nacional</span>
 ====================
 `;
@@ -440,9 +445,8 @@ ${contenido}
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
 
-  setTimeout(() => iframe.remove(), 100); // dejar 0.1s antes de remover
+  setTimeout(() => iframe.remove(), 2000); // dejar 2s antes de remover
 }
-
 
 // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
