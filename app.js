@@ -390,61 +390,66 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
           margin: 0;
         }
         body {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
           font-family: monospace;
           font-size: 10px;
           width: 5cm;
           margin: 0;
-          padding: 4px;
-          white-space: pre-wrap;
+          padding: 3px;
           color: #000;
         }
         .header-box {
           border: 1px solid #000;
-          padding: 4px;
-          margin-bottom: 6px;
+          padding: 2px 3px;
+          margin-bottom: 4px;
+          line-height: 1.1;
         }
         .titulo {
           text-align: center;
           font-weight: bold;
-          border-bottom: 1px solid #000;
-          margin-bottom: 4px;
-          padding-bottom: 2px;
+          border-bottom: 0.5px solid #000;
+          margin: 0 0 2px 0;
+          padding-bottom: 1px;
         }
         .subtitulo {
           text-align: center;
-          margin-bottom: 4px;
+          margin: 0 0 2px 0;
         }
         .info {
           text-align: left;
           font-size: 10px;
-          margin: 1px 0;
+          margin: 0;
+          padding: 0;
         }
         #hr-ticket {
           border: none;
-          border-top: 1px solid #000;
-          margin: 6px 0;
+          border-top: 0.5px solid #000;
+          margin: 4px 0;
         }
         .items {
           text-align: left;
-          margin-top: 4px;
-          margin-bottom: 6px;
+          margin: 2px 0;
+          line-height: 1.2;
         }
         .item-line {
           text-align: left;
-          border-bottom: 1px solid #000;
-          padding: 2px 0;
+          border-bottom: 0.5px solid #000;
+          padding: 1px 0;
+          margin: 0;
           word-wrap: break-word;
+          display: block;
         }
         .total {
           text-align: center;
           font-weight: bold;
           font-size: 12px;
-          border-top: 1px solid #000;
-          margin-top: 6px;
-          padding-top: 4px;
+          border-top: 0.5px solid #000;
+          margin-top: 4px;
+          padding-top: 2px;
         }
         .footer-space {
-          height: 25px;
+          height: 20px;
         }
       </style>
     </head>
