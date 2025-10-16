@@ -355,10 +355,23 @@ btnAddSuelto.addEventListener("click", async () => {
   inputCodigoSuelto.value = "";
 });
 
-// --- IMPRIMIR TICKET ---
+// --- IMPRIMIR TICKET (versión robusta UTF-8 usando Blob + fallback a srcdoc) ---
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
+  // Normaliza y escapa texto para evitar problemas de codificación / HTML
+  function safeText(s) {
+    if (s == null) return "";
+    if (typeof s !== "string") s = String(s);
+    // Normaliza Unicode (NFC) y escapa tags HTML
+    return s.normalize("NFC")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
 
   let shopName = "TICKET";
   let shopLocation = "Sucursal Nueva";
@@ -367,46 +380,44 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
-      shopName = val.shopName || "TICKET";
-      shopLocation = val.shopLocation || "Sucursal Nueva";
-      shopCuit = val.shopCuit || "00000000000";
+      shopName = val.shopName || shopName;
+      shopLocation = val.shopLocation || shopLocation;
+      shopCuit = val.shopCuit || shopCuit;
     }
   } catch (e) {
     console.error("Error al cargar configuración de tienda:", e);
   }
 
-  const contenido = `
-${shopName.toUpperCase()}
-${shopLocation}
-CUIT: ${shopCuit}
-${ticketID}
-Fecha: ${fecha}
-Cajero: ${cajeroID}
-Pago: ${tipoPago}
+  const itemsTexto = items.map(it => {
+    const nombre = safeText(it.nombre);
+    const precio = Number(it.precio || 0).toFixed(2);
+    const cant = Number(it.cant || 0);
+    const linea = `  ${nombre}\n  $${precio} (x${cant}) = $${(Number(it.precio || 0) * cant).toFixed(2)}\n  ====================`;
+    return linea;
+  }).join("\n\n");
+
+  const contenidoTextoPlano = `
+${safeText(shopName).toUpperCase()}
+${safeText(shopLocation)}
+CUIT: ${safeText(shopCuit)}
+${safeText(ticketID)}
+Fecha: ${safeText(fecha)}
+Cajero: ${safeText(cajeroID)}
+Pago: ${safeText(tipoPago)}
 ====================
 
-${items.map(it => `  ${it.nombre}
-  $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio * it.cant).toFixed(2)}
-  ====================`).join("\n")}
+${itemsTexto}
 
-TOTAL: $${total.toFixed(2)}${porcentajeTexto}
+TOTAL: $${Number(total || 0).toFixed(2)}${porcentajeTexto}
 ====================
-`;
+`.trim();
 
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(`
-<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Ticket</title>
     <style>
       @page { size: auto; margin: 0; }
       body {
@@ -419,29 +430,82 @@ TOTAL: $${total.toFixed(2)}${porcentajeTexto}
         line-height: 1.4;
         text-align: center;
       }
-      body span.sep {
-        display: block;
-        text-align: center;
-      }
-      #hr-ticket {
-        border: none;
-        border-top: 1px dashed #000;
-      }
+      #hr-ticket { border: none; border-top: 1px dashed #000; display:block; margin:6px 0; }
     </style>
   </head>
   <body>
-${contenido}
+${contenidoTextoPlano.replace(/\n/g, "\n")}
   </body>
-</html>
-  `);
-  doc.close();
+</html>`;
 
-  iframe.contentWindow.focus();
-  iframe.contentWindow.print();
+  // Crear iframe oculto
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.left = "-9999px";
+  iframe.style.top = "0";
+  iframe.style.width = "1px";
+  iframe.style.height = "1px";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
 
-  setTimeout(() => iframe.remove(), 100); // fijo 100ms
+  // Intento 1: usar Blob con type text/html;charset=utf-8 (más robusto)
+  try {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    let cleaned = false;
+
+    iframe.onload = () => {
+      try {
+        // Forzar foco y print
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (e) {
+        console.error("Error al imprimir desde iframe (blob):", e);
+      } finally {
+        // limpiar después de 2000ms (tu preferencia)
+        setTimeout(() => {
+          if (!cleaned) {
+            cleaned = true;
+            URL.revokeObjectURL(url);
+            iframe.remove();
+          }
+        }, 2000);
+      }
+    };
+
+    iframe.src = url;
+  } catch (err) {
+    // Fallback: usar srcdoc (incluye meta charset)
+    try {
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (e) {
+          console.error("Error al imprimir desde iframe (srcdoc fallback):", e);
+        } finally {
+          setTimeout(() => iframe.remove(), 100);
+        }
+      };
+      // Algunos navegadores no soportan srcdoc en blobs, pero lo intentamos como fallback
+      iframe.srcdoc = html;
+    } catch (err2) {
+      // Último recurso: document.write en el iframe
+      try {
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(html);
+        doc.close();
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err3) {
+        console.error("Fallo total al generar el iframe para imprimir ticket:", err3);
+      } finally {
+        setTimeout(() => iframe.remove(), 100);
+      }
+    }
+  }
 }
-
 
   // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
