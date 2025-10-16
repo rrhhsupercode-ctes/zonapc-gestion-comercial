@@ -362,20 +362,23 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
 
   let shopName = "TICKET";
   let shopLocation = "Sucursal Nueva";
+  let shopCuit = "00000000000";
   try {
     const snap = await window.get(window.ref("/config"));
     if (snap.exists()) {
       const val = snap.val();
       shopName = val.shopName || "TICKET";
       shopLocation = val.shopLocation || "Sucursal Nueva";
+      shopCuit = val.shopCuit || "00000000000";
     }
   } catch (e) {
-    console.error("Error al cargar nombre/ubicación de tienda:", e);
+    console.error("Error al cargar configuración de tienda:", e);
   }
 
   const contenido = `
 ${shopName.toUpperCase()}
 ${shopLocation}
+CUIT: ${shopCuit}
 ${ticketID}
 Fecha: ${fecha}
 Cajero: ${cajeroID}
@@ -1636,9 +1639,10 @@ btnAgregarCajero.addEventListener("click", () => {
 loadCajeroSelectOptions();
 
 
-  // --- CONFIG ---
+// --- CONFIG ---
 const configNombre = document.getElementById("config-nombre");
-const configUbicacion = document.getElementById("config-ubicacion"); // nuevo input
+const configUbicacion = document.getElementById("config-ubicacion");
+const configCuit = document.getElementById("config-cuit"); // nuevo input
 const configPassActual = document.getElementById("config-pass-actual");
 const configPassNueva = document.getElementById("config-pass-nueva");
 const guardarConfig = document.getElementById("guardar-config");
@@ -1651,7 +1655,8 @@ async function loadConfig() {
   if (snap.exists()) {
     const val = snap.val();
     configNombre.value = val.shopName || "";
-    configUbicacion.value = val.shopLocation || "Sucursal Nueva"; // valor por defecto
+    configUbicacion.value = val.shopLocation || "Sucursal Nueva";
+    configCuit.value = val.shopCuit || "00000000000"; // valor por defecto
   }
 }
 
@@ -1663,9 +1668,13 @@ guardarConfig.addEventListener("click", async () => {
     configMsg.textContent = "Contraseña incorrecta";
     return;
   }
+  // Asegurar CUIT de 11 dígitos
+  let cuitValue = configCuit.value.replace(/\D/g, '').padStart(11, '0').slice(0,11);
+
   await window.update(window.ref("/config"), {
     shopName: configNombre.value,
     shopLocation: configUbicacion.value || "Sucursal Nueva",
+    shopCuit: cuitValue,
     passAdmin: configPassNueva.value || val.passAdmin
   });
   configMsg.textContent = "✅ Configuración guardada";
