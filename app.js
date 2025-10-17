@@ -567,6 +567,30 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
+  //Submit automático al tipear 13 dígitos en stock
+  const inputCodigo = document.getElementById("cobro-codigo");
+inputCodigo.addEventListener("input", () => {
+  const val = inputCodigo.value.trim();
+  if (val.length === 13) {
+    // simula presionar el botón OK
+    document.getElementById("btn-add-product").click();
+    // opcional: limpiar el input después
+    inputCodigo.value = "";
+  }
+});
+
+  //Submit automático al tipear 13 dígitos en sueltos
+  const inputCodigoSuelto = document.getElementById("cobro-codigo-suelto");
+inputCodigoSuelto.addEventListener("input", () => {
+  const val = inputCodigoSuelto.value.trim();
+  if (val.length === 13) {
+    // simula presionar el botón OK
+    document.getElementById("btn-add-suelto").click();
+    // opcional: limpiar el input después
+    inputCodigoSuelto.value = "";
+  }
+});
+
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
