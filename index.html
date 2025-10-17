@@ -73,32 +73,25 @@
 
     <!-- FILA COBRO NORMAL -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <span class="emoji">🔢​</span>
       <select id="cobro-cantidad"></select>
-        <span class="emoji">#️⃣​</span>
       <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
       <select id="cobro-productos" style="flex:2;">
-        <span class="emoji">🔎​</span>
         <option value="">Elija un producto en stock</option>
       </select>
-      <button id="btn-add-product" class="emoji">✅​</button>
+      <button id="btn-add-product">✅​</button>
     </div>
 
     <!-- FILA SUELTOS (KG + Precio) -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <span class="emoji">⚖️</span>
       <button id="btn-decr-kg" style="width:30px;">-</button>
       <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
       <button id="btn-incr-kg" style="width:30px;">+</button>
-      <span class="emoji">💲</span>
       <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
-      <span class="emoji">#️⃣​</span>
       <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
-      <span class="emoji">🔎​</span>
       <select id="cobro-sueltos" style="flex:2;">
         <option value="">Elija un producto suelto</option>
       </select>
-      <button id="btn-add-suelto" class="emoji">✅​</button>
+      <button id="btn-add-suelto">✅​</button>
     </div>
 
     <!-- FILA DESCUENTO / RECARGO -->
@@ -140,7 +133,7 @@
         <option value="TODOS">TODOS</option>
       </select>
       
-      <button id="btn-tirar-z" class="emoji">📃Tirar Z</button>
+      <button id="btn-tirar-z">📃Tirar Z</button>
       <table id="tabla-movimientos">
         <thead>
           <tr>
@@ -170,8 +163,8 @@
       <h2>Stock</h2>
       <input id="stock-codigo" placeholder="Código producto">
       <select id="stock-cantidad"></select>
-      <button id="agregar-stock" class="emoji">➕Agregar Stock➕</button>
-      <button id="buscar-stock" class="emoji">🔍Buscar</button>
+      <button id="agregar-stock">➕Agregar Stock➕</button>
+      <button id="buscar-stock">🔍Buscar</button>
       <table id="tabla-stock">
         <thead>
           <tr>
@@ -191,8 +184,8 @@
     <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
     <button id="sueltos-btn-decr" style="width:30px;">-</button>
     <button id="sueltos-btn-incr" style="width:30px;">+</button>
-    <button id="btn-agregar-suelto" class="emoji">➕Agregar Suelto➕</button>
-    <button id="btn-buscar-suelto" class="emoji">🔍Buscar</button>
+    <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
+    <button id="btn-buscar-suelto">🔍Buscar</button>
   </div>
 
   <table id="tabla-sueltos">
@@ -217,7 +210,7 @@
       <p class="emoji">🔠</p><input id="cajero-nombre" placeholder="Nombre">
       <p class="emoji">🔢</p><input id="cajero-dni" placeholder="DNI">
       <p class="emoji">🔣</p><input id="cajero-pass" type="password" placeholder="Contraseña">
-      <button id="agregar-cajero" class="emoji">➕Agregar Cajero(a)➕</button>
+      <button id="agregar-cajero">➕Agregar Cajero(a)➕</button>
       <table id="tabla-cajeros">
         <thead>
           <tr>
