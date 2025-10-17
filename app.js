@@ -535,20 +535,22 @@ btnCobrar.addEventListener("click", async () => {
         }
       }
 
-      // --- ALERTA INMEDIATA ---
-      alert("VENTA FINALIZADA");
-
-      // --- IMPRIMIR TICKET ---
+      // --- IMPRIMIR TICKET AUTOMÁTICAMENTE ---
       imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
 
-      // --- LIMPIAR ---
-      carrito = [];
-      actualizarTabla();
-      loadStock();
-      loadSueltos();
-      loadMovimientos();
-      loadHistorial();
-      modal.remove();
+      // --- ALERTA VENTA FINALIZADA POST-IMPRESIÓN ---
+      setTimeout(() => {
+        alert("VENTA FINALIZADA");
+
+        // --- LIMPIAR ---
+        carrito = [];
+        actualizarTabla();
+        loadStock();
+        loadSueltos();
+        loadMovimientos();
+        loadHistorial();
+        modal.remove();
+      }, 500); // espera 0.5s para iniciar alert tras imprimir
     });
   });
 });
@@ -557,6 +559,23 @@ btnCobrar.addEventListener("click", async () => {
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
 const btnTirarZ = document.getElementById("btn-tirar-z");
+
+// --- GENERAR NUEVO TICKET ID ---
+async function generarTicketID() {
+  const snap = await window.get(window.ref("/ultimoTicketID"));
+  let ultimo = snap.exists() ? parseInt(snap.val()) : 0;
+
+  // Incrementar y hacer rollover si supera 999999
+  let nuevo = ultimo + 1;
+  if (nuevo > 999999) nuevo = 1;
+
+  const ticketID = "ID_" + nuevo.toString().padStart(6, "0");
+
+  // Guardar el nuevo valor en la base
+  await window.set(window.ref("/ultimoTicketID"), nuevo);
+
+  return ticketID;
+}
 
 // Cargar movimientos
 async function loadMovimientos() {
@@ -577,34 +596,31 @@ async function loadMovimientos() {
 
     tr.style.backgroundColor = eliminado ? "#ccc" : "";
     tr.innerHTML = `
-      <td>${id}</td>
+      <td>${mov.ticketID}</td>
       <td>${mov.total.toFixed(2)}</td>
       <td>${mov.tipo}</td>
       <td>${mov.cajero}</td>
       <td>${horaStr}</td>
       <td>
-        <button class="reimprimir" data-id="${id}" ${eliminado ? "disabled" : ""}>🖨</button>
-        <button class="eliminar" data-id="${id}" ${eliminado ? "disabled" : ""}>❌</button>
+        <button class="reimprimir" data-id="${mov.ticketID}" ${eliminado ? "disabled" : ""}>🖨</button>
+        <button class="eliminar" data-id="${mov.ticketID}" ${eliminado ? "disabled" : ""}>❌</button>
       </td>
     `;
 
-// --- REIMPRIMIR MOVIMIENTO ---
-tr.querySelector(".reimprimir").addEventListener("click", () => {
-  const fechaObj = new Date(mov.fecha);
-  const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()}`;
-  const horaStr = `${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')}`;
-  const fechaFormateada = `${fechaStr} (${horaStr})`;
+    // --- REIMPRIMIR MOVIMIENTO ---
+    tr.querySelector(".reimprimir").addEventListener("click", () => {
+      const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()}`;
+      const fechaFormateada = `${fechaStr} (${horaStr})`;
 
-  // Reutilizamos la función imprimirTicket
-  imprimirTicket(
-    mov.ticketID || "N/A",
-    fechaFormateada,
-    mov.cajero,
-    mov.items,
-    mov.total,
-    mov.tipo
-  );
-});
+      imprimirTicket(
+        mov.ticketID || "N/A",
+        fechaFormateada,
+        mov.cajero,
+        mov.items,
+        mov.total,
+        mov.tipo
+      );
+    });
 
     // --- ELIMINAR MOVIMIENTO ---
     tr.querySelector(".eliminar").addEventListener("click", () => {
@@ -619,7 +635,7 @@ tr.querySelector(".reimprimir").addEventListener("click", () => {
             await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
           }
         }
-        await window.update(window.ref(`/movimientos/${id}`), { eliminado: true });
+        await window.update(window.ref(`/movimientos/${mov.ticketID}`), { eliminado: true });
         loadMovimientos();
       });
     });
@@ -660,7 +676,7 @@ btnTirarZ.addEventListener("click", () => {
       tipo: "TIRAR Z",
       fecha: fechaZ.toISOString(),
       fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(),
-      items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: id })),
+      items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: mov.ticketID })),
       totalPorTipoPago,
       totalGeneral,
       cajeros: [...new Set(todosMov.map(([, mov]) => mov.cajero))],
@@ -677,7 +693,7 @@ btnTirarZ.addEventListener("click", () => {
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- FORMATO IDÉNTICO AL DE REIMPRESIÓN ---
+    // --- FORMATO DE IMPRESIÓN ---
     const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
 
     let cuerpo = '';
@@ -690,7 +706,7 @@ btnTirarZ.addEventListener("click", () => {
         const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
         cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
         ventasTipo.forEach(m => {
-          cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
+          cuerpo += `   ${m.ticketID.slice(-6)}  $${m.total.toFixed(2)}\n`;
         });
         cuerpo += `--------------------------------\n`;
       }
