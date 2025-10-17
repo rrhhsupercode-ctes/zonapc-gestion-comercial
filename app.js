@@ -760,7 +760,7 @@ async function loadHistorial() {
           <button class="eliminar-z">❌</button>`;
       }
     } else {
-      botones = `<button class="reimprimir" data-id="${id}">🖨</button>`;
+      botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
     }
 
     tr.innerHTML = `
