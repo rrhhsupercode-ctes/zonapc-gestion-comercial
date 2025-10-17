@@ -927,17 +927,6 @@ const tablaStock = document.getElementById("tabla-stock").querySelector("tbody")
 const btnStockDecr = document.getElementById("stock-btn-decr");
 const btnStockIncr = document.getElementById("stock-btn-incr");
 
-// Cargar opciones 1 a 999 si el input es un <select>
-if (stockCantidad.tagName === "SELECT") {
-  stockCantidad.innerHTML = "";
-  for (let i = 1; i <= 999; i++) {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = i;
-    stockCantidad.appendChild(opt);
-  }
-}
-
 // Actualiza cantidad (0–999)
 function actualizarCant(delta, inputElement) {
   let val = parseInt(inputElement.value) || 0;
@@ -945,72 +934,24 @@ function actualizarCant(delta, inputElement) {
   inputElement.value = val;
 }
 
+// Botones globales
 if (btnStockDecr) btnStockDecr.addEventListener("click", () => actualizarCant(-1, stockCantidad));
 if (btnStockIncr) btnStockIncr.addEventListener("click", () => actualizarCant(1, stockCantidad));
 
 // Formato fecha
 function formatFecha(iso) {
   const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const min = String(d.getMinutes()).padStart(2, "0");
-  return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} (${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')})`;
 }
 
-// Formato precio "$00000,00"
+// Formato precio "$0.000.000,00"
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
-  const entStr = String(entero).padStart(5, "0");
-  const decStr = String(dec).padStart(2, "0");
-  return `$${entStr},${decStr}`;
+  return `$${entero.toLocaleString('es-AR', {minimumIntegerDigits:1})},${String(dec).padStart(2,'0')}`;
 }
 
-// Modal admin (solo para abrir sección stock desde header)
-function showAdminActionModal(actionCallback) {
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;
-  `;
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
-      <h2>Contraseña Administrador</h2>
-      <input id="admin-pass-input" type="password" placeholder="Contraseña Admin" style="width:100%; margin:5px 0;">
-      <div style="margin-top:10px;">
-        <button id="admin-pass-aceptar" style="margin-right:5px;">Aceptar</button>
-        <button id="admin-pass-cancelar" style="background:red; color:#fff;">Cancelar</button>
-      </div>
-      <p id="admin-pass-msg" style="color:red; margin-top:5px;"></p>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  const input = modal.querySelector("#admin-pass-input");
-  const aceptar = modal.querySelector("#admin-pass-aceptar");
-  const cancelar = modal.querySelector("#admin-pass-cancelar");
-  const msg = modal.querySelector("#admin-pass-msg");
-
-  cancelar.addEventListener("click", () => modal.remove());
-  aceptar.addEventListener("click", async () => {
-    const pass = input.value.trim();
-    const confSnap = await window.get(window.ref("/config"));
-    const confVal = confSnap.exists() ? confSnap.val() : {};
-    const passAdmin = confVal.passAdmin || "1918";
-    const masterPass = confVal.masterPass || "1409";
-    if (pass !== passAdmin && pass !== masterPass) {
-      msg.textContent = "Contraseña incorrecta";
-      return;
-    }
-    modal.remove();
-    actionCallback();
-  });
-}
-
-// Cargar stock
+// Cargar stock con edición directa
 async function loadStock(filtro = "") {
   const snap = await window.get(window.ref("/stock"));
   tablaStock.innerHTML = "";
@@ -1022,133 +963,75 @@ async function loadStock(filtro = "") {
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  stockArray.sort((a, b) => new Date(b[1].fecha || 0) - new Date(a[1].fecha || 0));
+  stockArray.sort((a,b) => new Date(b[1].fecha||0)-new Date(a[1].fecha||0));
 
   stockArray.forEach(([id, prod]) => {
     const tr = document.createElement("tr");
+
+    const entero = Math.floor(prod.precio);
+    const dec = Math.round((prod.precio - entero) * 100);
+
     tr.innerHTML = `
       <td>${id}</td>
-      <td>${prod.nombre}</td>
-      <td>${prod.cant}</td>
-      <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
-      <td>${formatPrecio(prod.precio)}</td>
-      <td>
-        <button data-edit-id="${id}">✏️</button>
-        <button data-del-id="${id}">❌</button>
+      <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%;" data-field="nombre"></td>
+      <td style="display:flex; align-items:center; gap:4px;">
+        <button class="btn-cant" data-action="-">-</button>
+        <input type="number" min="0" max="999" value="${prod.cant}" style="width:50px; text-align:center;" data-field="cant">
+        <button class="btn-cant" data-action="+">+</button>
       </td>
+      <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
+      <td style="display:flex; gap:4px; align-items:center;">
+        <input type="text" value="${entero}" style="width:60px; text-align:right;" data-field="precio-entero">
+        <span>,</span>
+        <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:30px; text-align:center;" data-field="precio-centavos">
+      </td>
+      <td><button data-del-id="${id}">❌</button></td>
     `;
 
-    // --- Eliminar SIN contraseña ---
+    // --- ELIMINAR ---
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", async () => {
       await window.remove(window.ref(`/stock/${id}`));
       loadStock();
       loadProductos();
     });
 
-    // --- Editar SIN contraseña ---
-    tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", async () => {
-      const modal = document.createElement("div");
-      modal.style.cssText = `
-        position:fixed; top:0; left:0; width:100%; height:100%;
-        display:flex; justify-content:center; align-items:center;
-        background:rgba(0,0,0,0.7); z-index:9999;
-      `;
-
-      const enteroInicial = Math.floor(prod.precio);
-      const centavosInicial = Math.round((prod.precio - enteroInicial) * 100).toString().padStart(2, "0");
-
-      modal.innerHTML = `
-        <div style="background:#fff; padding:20px; border-radius:10px; width:340px; text-align:center;">
-          <h2>Editar Stock ${id}</h2>
-
-          <label>Nombre</label>
-          <input id="edit-nombre" type="text" value="${prod.nombre}" style="width:100%; margin:5px 0;">
-
-          <label>Cantidad (0-999)</label>
-          <div style="display:flex; align-items:center; justify-content:space-between; margin:5px 0;">
-            <button id="cant-decr" style="width:30%;">-</button>
-            <input id="edit-cant" type="number" min="0" max="999" value="${prod.cant}" style="width:40%; text-align:center;">
-            <button id="cant-incr" style="width:30%;">+</button>
-          </div>
-
-          <label>Precio</label>
-          <div style="display:flex; gap:6px; justify-content:center; align-items:center; margin-top:5px;">
-            <input id="edit-precio" type="text" style="width:65%; text-align:center;" value="${enteroInicial}">
-            <span>,</span>
-            <input id="edit-centavos" type="number" min="0" max="99" placeholder="00" style="width:25%; text-align:center;" value="${centavosInicial}">
-          </div>
-
-          <p id="preview-precio" style="margin-top:6px; font-weight:bold;">${formatPrecio(prod.precio)}</p>
-          <p id="edit-msg" style="color:red; min-height:18px; margin-top:5px;"></p>
-
-          <div style="margin-top:10px;">
-            <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-            <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-
-      const editNombre = modal.querySelector("#edit-nombre");
-      const editCant = modal.querySelector("#edit-cant");
-      const editPrecio = modal.querySelector("#edit-precio");
-      const editCentavos = modal.querySelector("#edit-centavos");
-      const editAceptar = modal.querySelector("#edit-aceptar");
-      const editCancelar = modal.querySelector("#edit-cancelar");
-      const editMsg = modal.querySelector("#edit-msg");
-      const preview = modal.querySelector("#preview-precio");
-      const cantDecr = modal.querySelector("#cant-decr");
-      const cantIncr = modal.querySelector("#cant-incr");
-
-      // Cantidad
-      cantDecr.addEventListener("click", () => actualizarCant(-1, editCant));
-      cantIncr.addEventListener("click", () => actualizarCant(1, editCant));
-
-      // Precio
-      function formatearPrecioModal(inputElement) {
-        let raw = inputElement.value.replace(/\D/g, "");
-        if (raw.length > 7) raw = raw.slice(0, 7);
-        inputElement.value = raw;
-        actualizarPreview();
-      }
-      editPrecio.addEventListener("input", () => formatearPrecioModal(editPrecio));
-      editCentavos.addEventListener("input", () => {
-        let val = parseInt(editCentavos.value);
-        if (isNaN(val) || val < 0) val = 0;
-        if (val > 99) val = 99;
-        editCentavos.value = val.toString().padStart(2, "0");
-        actualizarPreview();
-      });
-      function actualizarPreview() {
-        const entero = parseInt(editPrecio.value) || 0;
-        const dec = parseInt(editCentavos.value) || 0;
-        preview.textContent = formatPrecio(entero + dec / 100);
-      }
-
-      editCancelar.addEventListener("click", () => modal.remove());
-      editAceptar.addEventListener("click", async () => {
-        const newNombre = editNombre.value.trim();
-        const newCant = parseInt(editCant.value) || 0;
-        const entero = parseInt(editPrecio.value) || 0;
-        const dec = parseInt(editCentavos.value) || 0;
-        const newPrecio = entero + dec / 100;
-
-        if (!newNombre || newCant < 0 || newCant > 999) {
-          editMsg.textContent = "Campos obligatorios o cantidad inválida";
-          return;
-        }
-
-        await window.update(window.ref(`/stock/${id}`), {
-          nombre: newNombre,
-          cant: newCant,
-          precio: newPrecio,
-        });
-
-        loadStock();
+    // --- CANTIDAD + / - ---
+    tr.querySelectorAll(".btn-cant").forEach(btn => {
+      const input = tr.querySelector('input[data-field="cant"]');
+      btn.addEventListener("click", async () => {
+        actualizarCant(btn.dataset.action === "+" ? 1 : -1, input);
+        await window.update(window.ref(`/stock/${id}`), { cant: parseInt(input.value) });
         loadProductos();
-        modal.remove();
       });
     });
+
+    // --- GUARDAR CAMBIOS AUTOMÁTICOS ---
+    tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
+      let val = e.target.value.trim().slice(0,20);
+      e.target.value = val;
+      await window.update(window.ref(`/stock/${id}`), { nombre: val });
+    });
+
+    const inputEnt = tr.querySelector('input[data-field="precio-entero"]');
+    const inputDec = tr.querySelector('input[data-field="precio-centavos"]');
+
+    function guardarPrecio() {
+      let enteroVal = parseInt(inputEnt.value.replace(/\D/g,"")) || 0;
+      if(enteroVal>9999999) enteroVal=9999999;
+      inputEnt.value = enteroVal;
+
+      let decVal = parseInt(inputDec.value) || 0;
+      if(decVal<0) decVal=0;
+      if(decVal>99) decVal=99;
+      inputDec.value = decVal.toString().padStart(2,'0');
+
+      const precioFinal = enteroVal + decVal/100;
+      window.update(window.ref(`/stock/${id}`), { precio: precioFinal });
+      loadProductos();
+    }
+
+    inputEnt.addEventListener("change", guardarPrecio);
+    inputDec.addEventListener("change", guardarPrecio);
 
     tablaStock.appendChild(tr);
   });
@@ -1158,37 +1041,30 @@ async function loadStock(filtro = "") {
 btnAgregarStock.addEventListener("click", async () => {
   const codigo = stockCodigo.value.trim();
   const cant = parseInt(stockCantidad.value);
-  if (!codigo || isNaN(cant) || cant <= 0) return;
-
+  if(!codigo || isNaN(cant) || cant<=0) return;
   const snap = await window.get(window.ref(`/stock/${codigo}`));
   const fecha = new Date().toISOString();
-
-  if (snap.exists()) {
-    const currentCant = parseInt(snap.val().cant) || 0;
-    const newCant = Math.min(999, currentCant + cant);
-    await window.update(window.ref(`/stock/${codigo}`), { cant: newCant, fecha });
+  if(snap.exists()){
+    const currentCant = parseInt(snap.val().cant)||0;
+    const newCant = Math.min(999,currentCant+cant);
+    await window.update(window.ref(`/stock/${codigo}`),{ cant: newCant, fecha });
   } else {
-    await window.set(window.ref(`/stock/${codigo}`), {
+    await window.set(window.ref(`/stock/${codigo}`),{
       nombre: "NUEVO",
-      cant: Math.min(999, cant),
+      cant: Math.min(999,cant),
       fecha,
-      precio: 0.0,
+      precio:0.0,
     });
   }
-
   loadStock();
   loadProductos();
 });
 
 // Buscar stock
-btnBuscarStock.addEventListener("click", () => {
-  const filtro = stockCodigo.value.trim();
-  loadStock(filtro);
-});
+btnBuscarStock.addEventListener("click",()=>{ loadStock(stockCodigo.value.trim()); });
 
 // Inicial
 loadStock();
-
 
 // --- SUELTOS ---
 const sueltosCodigo = document.getElementById("sueltos-codigo");
