@@ -267,13 +267,19 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
-  // actualizar precio segun KG actual
-  inputPrecioSuelto.value = (parseFloat(inputKgSuelto.value) * precioUnitarioActual).toFixed(2);
+  // calcular precio según KG
+  let precio = parseFloat(inputKgSuelto.value) * precioUnitarioActual;
+
+  // formatear con miles y centavos
+  let entero = Math.floor(precio);
+  let dec = Math.round((precio - entero) * 100);
+  inputPrecioSuelto.value = entero.toLocaleString('es-AR') + ',' + String(dec).padStart(2,'0');
 }
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
-  let precio = parseFloat(inputPrecioSuelto.value) || 0;
+  let valor = inputPrecioSuelto.value.replace(/\./g,'').replace(',', '.'); // quitar puntos y pasar coma a punto
+  let precio = parseFloat(valor) || 0;
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
