@@ -276,7 +276,7 @@ async function actualizarPrecioUnitario() {
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
   // limpiar input, quitar puntos y limitar a 7 dígitos
-  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 7);
+  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
   let precio = parseInt(raw) || 0;
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
   
