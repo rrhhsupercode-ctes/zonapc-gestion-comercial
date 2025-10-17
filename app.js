@@ -677,7 +677,7 @@ btnTirarZ.addEventListener("click", () => {
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- FORMATO IGUAL AL DE REIMPRESIÓN ---
+    // --- FORMATO IDÉNTICO AL DE REIMPRESIÓN ---
     const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
 
     let cuerpo = '';
@@ -713,10 +713,29 @@ btnTirarZ.addEventListener("click", () => {
       <html>
         <head>
           <style>
-            body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
-            .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
-            .bloque { margin-bottom:8px; }
-            .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
+            body {
+              font-family: monospace;
+              font-size: 13px;
+              max-width: 6cm;
+              white-space: pre-line;
+              margin: 0;
+              padding: 6px;
+            }
+            .titulo {
+              text-align: center;
+              font-weight: bold;
+              border-bottom: 1px dashed #000;
+              margin-bottom: 6px;
+              padding-bottom: 2px;
+            }
+            .bloque { margin-bottom: 8px; }
+            .total {
+              text-align: center;
+              font-weight: bold;
+              font-size: 14px;
+              border-top: 1px dashed #000;
+              padding-top: 4px;
+            }
           </style>
         </head>
         <body>
