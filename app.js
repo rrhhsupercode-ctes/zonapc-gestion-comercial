@@ -677,24 +677,30 @@ btnTirarZ.addEventListener("click", () => {
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
 
-    // --- Formato estético del ticket Z ---
-    let cuerpo = "";
-    for (const cajero of registroZ.cajeros) {
-      cuerpo += `\nCAJERO: ${cajero}\n------------------------------`;
-      const movCajero = registroZ.items.filter(m => m.cajero === cajero);
-      const tiposPago = [...new Set(movCajero.map(m => m.tipo))];
-      for (const tipo of tiposPago) {
-        const ventasTipo = movCajero.filter(m => m.tipo === tipo);
-        const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-        cuerpo += `\n  [${tipo}]  Subtotal: $${subtotal.toFixed(2)}\n`;
-        ventasTipo.forEach(m => {
-          cuerpo += `    #${m.ticketID}\n    $${m.total.toFixed(2)}\n`;
-        });
-      }
-      cuerpo += `\n------------------------------`;
-    }
+    // --- FORMATO IGUAL AL DE REIMPRESIÓN ---
+    const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
 
-    // --- Imprimir Z ---
+    let cuerpo = '';
+    for (const cajero of registroZ.cajeros) {
+      cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
+      const movCajero = registroZ.items.filter(i => i.cajero === cajero);
+      const tiposPago = [...new Set(movCajero.map(i => i.tipo))];
+      for (const tipo of tiposPago) {
+        const ventasTipo = movCajero.filter(i => i.tipo === tipo);
+        const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+        cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
+        ventasTipo.forEach(m => {
+          cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
+        });
+        cuerpo += `--------------------------------\n`;
+      }
+      cuerpo += `\n`;
+    }
+    cuerpo += `TOTAL GENERAL: $${registroZ.totalGeneral.toFixed(2)}\n--------------------------------\n`;
+    cuerpo += `CIERRE COMPLETO - ${registroZ.cajeros.length} CAJEROS\n`;
+    cuerpo += `--------------------------------\nFIN DEL REPORTE Z\n`;
+
+    // --- IMPRIMIR ---
     const iframe = document.createElement("iframe");
     iframe.style.position = "absolute";
     iframe.style.width = "0";
@@ -715,16 +721,16 @@ btnTirarZ.addEventListener("click", () => {
         </head>
         <body>
           <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
-          <div class="bloque">${fechaZ.toLocaleDateString()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})</div>
+          <div class="bloque">${fechaFormateada}</div>
           <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
-          <div class="total">TOTAL: $${totalGeneral.toFixed(2)}</div>
+          <div class="total">TOTAL: $${registroZ.totalGeneral.toFixed(2)}</div>
         </body>
       </html>
     `);
     doc.close();
     iframe.contentWindow.focus();
     iframe.contentWindow.print();
-    setTimeout(()=>iframe.remove(),500);
+    setTimeout(() => iframe.remove(), 100);
   });
 });
 
