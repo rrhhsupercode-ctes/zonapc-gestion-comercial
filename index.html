@@ -73,28 +73,32 @@
 
     <!-- FILA COBRO NORMAL -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+      <span>🔢​</span>
       <select id="cobro-cantidad"></select>
+        <span>#️⃣​</span>
       <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
       <select id="cobro-productos" style="flex:2;">
-        <option value="">Elija un Item</option>
+        <span>🔎​</span>
+        <option value="">Elija un producto en stock</option>
       </select>
-      <button id="btn-add-product">OK</button>
+      <button id="btn-add-product">✅​</button>
     </div>
 
     <!-- FILA SUELTOS (KG + Precio) -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <span>Kg</span>
+      <span>⚖️</span>
       <button id="btn-decr-kg" style="width:30px;">-</button>
       <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
       <button id="btn-incr-kg" style="width:30px;">+</button>
-      <span>$</span>
+      <span>💲</span>
       <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
-
+      <span>#️⃣​</span>
       <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
+      <span>🔎​</span>
       <select id="cobro-sueltos" style="flex:2;">
-        <option value="">Elija un Item (Sueltos)</option>
+        <option value="">Elija un producto suelto</option>
       </select>
-      <button id="btn-add-suelto">OK</button>
+      <button id="btn-add-suelto">✅​</button>
     </div>
 
     <!-- FILA DESCUENTO / RECARGO -->
