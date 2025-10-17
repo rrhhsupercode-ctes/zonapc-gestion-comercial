@@ -399,9 +399,12 @@ ${items.map(it => `  ${it.nombre}
 
 TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 ==============================
-<span style="font-size:8px;">Regimen de Transparencia Fiscal al Consumidor Ley 27.743</span>
-<span style="font-size:8px;">(IVA $${formatPrecioSimple(iva)})</span>
-<span style="font-size:8px;">Correspondiente a impuestos a nivel nacional</span>
+<span style="font-size:8px;">Regimen de Transparencia Fiscal</span>
+<span style="font-size:8px;">al Consumidor Ley 27.743</span>
+<span style="font-size:8px;">IVA Contenido $${formatPrecioSimple(iva)}</span>
+<span style="font-size:8px;">Otros impuestos nacionales Indirectos</span>
+<span style="font-size:8px;">Imp. Internos importados $0,00</span>
+<span style="font-size:8px;">Los impuestos informados son solo los que corresponden a nivel nacional</span>
 ==============================
 `;
 
