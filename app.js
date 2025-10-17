@@ -368,7 +368,7 @@ async function loadMovimientos() {
       <td>${mov.cajero}</td>
       <td>${horaStr}</td>
       <td>
-        <button class="reimprimir" data-id="${mov.ticketID}" ${eliminado ? "disabled" : ""}>🖨</button>
+        <button class="reimprimir" data-id="${mov.ticketID}" ${eliminado ? "disabled" : ""}>🧾​</button>
         <button class="eliminar" data-id="${mov.ticketID}" ${eliminado ? "disabled" : ""}>❌</button>
       </td>
     `;
@@ -556,7 +556,7 @@ async function loadHistorial() {
     if (mov.tipo === "TIRAR Z") {
       if (!expirada && !mov.eliminado) {
         botones = `
-          <button class="reimprimir" data-id="${id}">🖨</button>
+          <button class="reimprimir" data-id="${id}">🧾​</button>
           <button class="eliminar-z">❌</button>`;
       }
     } else {
