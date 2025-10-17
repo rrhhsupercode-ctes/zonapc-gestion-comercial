@@ -470,11 +470,11 @@ btnCobrar.addEventListener("click", async () => {
     <div style="background:#fff; padding:20px; border-radius:10px; text-align:center;">
       <h2>¿Cómo Pagará el Cliente?</h2>
       <div style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin:10px 0;">
-        <button data-pay="Efectivo">Efectivo</button>
-        <button data-pay="Tarjeta">Tarjeta</button>
-        <button data-pay="QR">QR</button>
-        <button data-pay="Electronico">Electronico</button>
-        <button data-pay="Otro">Otro</button>
+        <button data-pay="Efectivo">💵​Efectivo</button>
+        <button data-pay="Tarjeta">💳​Tarjeta</button>
+        <button data-pay="QR">📲QR</button>
+        <button data-pay="Electronico">📳Electronico</button>
+        <button data-pay="Otro">💰Otro</button>
       </div>
       <button id="cancelar-pago" style="background:red; color:#fff; padding:5px 15px;">Cancelar</button>
     </div>
