@@ -126,8 +126,6 @@ const tablaCobro = document.getElementById("tabla-cobro").querySelector("tbody")
 const totalDiv = document.getElementById("total-div");
 const btnCobrar = document.getElementById("btn-cobrar");
 const inputPrecioSuelto = document.getElementById("input-precio-suelto");
-const inputCodigoPrecio = document.getElementById("cobro-codigo-precio");
-const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
 
 // nuevos inputs
 const inputDescuento = document.getElementById("input-descuento");
@@ -169,7 +167,6 @@ async function loadProductos() {
   inputCodigoProducto.value = "";
   inputCodigoSuelto.value = "";
   inputKgSuelto.value = "0.100";
-  if (inputCodigoPrecio) inputCodigoPrecio.value = "";
   inputPrecioSuelto.value = "000";
 }
 
@@ -268,8 +265,7 @@ btnAddProduct.addEventListener("click", async () => {
   cobroProductos.value = "";
 });
 
-// --- SUELTOS UNIFICADOS KG <-> PRECIO ---
-// Nota: comportamiento "balanza": tecleas dígitos y se interpretan como 0.001, 0.012, 0.123, 1.234, 12.345, ...
+// --- SUELTOS KG <-> PRECIO ---
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return;
@@ -277,11 +273,9 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
-  // kg ya está en formato 0.000 a 9999.999
   let kg = parseFloat(inputKgSuelto.value.replace(',', '.')) || 0;
   if (kg > 9999.999) kg = 9999.999;
 
-  // calcular precio redondeado y mostrar con puntos de miles (sin decimales)
   let precio = Math.round(kg * precioUnitarioActual);
   if (precio > 9999999) precio = 9999999;
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
@@ -289,7 +283,6 @@ async function actualizarPrecioUnitario() {
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
-  // quitar todo menos dígitos, permitir hasta 9 dígitos
   let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
   let precio = parseInt(raw) || 0;
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
@@ -299,38 +292,23 @@ async function actualizarKgSegunPrecio() {
   inputKgSuelto.value = kg.toFixed(3);
 }
 
-// --- Escuchar cambios en inputs y selección sueltos ---
-// PRICE -> KG
+// Escuchar cambios sueltos
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
-// KG -> PRICE (modo balanza: interpretamos lo tipeado como entero de gramos)
 inputKgSuelto.addEventListener("input", async () => {
-  // tomar solo dígitos y hasta 5 dígitos (max 5: p.ej. 12345 => 12.345)
   let digits = inputKgSuelto.value.replace(/\D/g, '').slice(0, 5);
-  if (!digits) {
-    inputKgSuelto.value = "0.000";
-    return;
-  }
-
-  // asegurar mínimo 4 dígitos para formateo correcto (0.001..1.234)
   while (digits.length < 4) digits = "0" + digits;
-
-  // insertar punto antes de los últimos 3 dígitos
   const formatted = `${digits.slice(0, -3)}.${digits.slice(-3)}`;
   let num = parseFloat(formatted);
   if (isNaN(num)) num = 0;
   if (num > 9999.999) num = 9999.999;
-
   inputKgSuelto.value = num.toFixed(3);
-
-  // actualizar precio en vivo
   await actualizarPrecioUnitario();
 });
 
-// cambios de selección/código suelto recalculan
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
 
-// --- Botón agregar suelto unificado ---
+// --- Botón agregar suelto ---
 btnAddSuelto.addEventListener("click", async () => {
   const id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
@@ -356,7 +334,7 @@ btnAddSuelto.addEventListener("click", async () => {
   inputCodigoSuelto.value = "";
 });
 
-// --- SUBMIT AUTOMÁTICO AL LLEGAR A 13 DÍGITOS ---
+// --- SUBMIT AUTOMÁTICO 13 dígitos ---
 inputCodigoProducto.addEventListener("input", () => {
   if (inputCodigoProducto.value.trim().length === 13) {
     btnAddProduct.click();
@@ -369,6 +347,97 @@ inputCodigoSuelto.addEventListener("input", () => {
     btnAddSuelto.click();
     inputCodigoSuelto.value = "";
   }
+});
+
+// --- BOTÓN COBRAR FUNCIONAL RESTAURADO ---
+btnCobrar.addEventListener("click", async () => {
+  if (!currentUser || carrito.length === 0) return;
+
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; text-align:center;">
+      <h2>¿Cómo Pagará el Cliente?</h2>
+      <div style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin:10px 0;">
+        <button data-pay="Efectivo">Efectivo</button>
+        <button data-pay="Tarjeta">Tarjeta</button>
+        <button data-pay="QR">QR</button>
+        <button data-pay="Electronico">Electronico</button>
+        <button data-pay="Otro">Otro</button>
+      </div>
+      <button id="cancelar-pago" style="background:red; color:#fff; padding:5px 15px;">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  function disableButtons() { modal.querySelectorAll("button").forEach(b => b.disabled = true); }
+  document.getElementById("cancelar-pago").addEventListener("click", () => {
+    disableButtons();
+    modal.remove();
+  });
+
+  modal.querySelectorAll("button[data-pay]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      disableButtons();
+      const tipoPago = btn.dataset.pay;
+      const fechaHoy = new Date().toISOString().split("T")[0];
+
+      const confSnap = await window.get(window.ref("/config"));
+      const confVal = confSnap.exists() ? confSnap.val() : {};
+      let ultimoID = confVal.ultimoTicketID || 0;
+      let ultimoFecha = confVal.ultimoTicketFecha || "";
+      if (ultimoFecha !== fechaHoy) ultimoID = 0;
+      ultimoID++;
+      const ticketID = "ID_" + String(ultimoID).padStart(6,"0");
+
+      const fecha = new Date();
+      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
+
+      const totalOriginal = carrito.reduce((a,b) => a+b.cant*b.precio,0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
+
+      await window.set(window.ref(`/movimientos/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        eliminado: false, porcentajeAplicado: porcentajeFinal||0
+      });
+
+      await window.set(window.ref(`/historial/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        porcentajeAplicado: porcentajeFinal||0
+      });
+
+      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
+
+      for (const item of carrito) {
+        const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
+        if (snapItem.exists()) {
+          const data = snapItem.val();
+          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
+          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
+        }
+      }
+
+      // --- IMPRIMIR TICKET ---
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
+
+      setTimeout(() => {
+        alert("VENTA FINALIZADA");
+        carrito = [];
+        actualizarTabla();
+        loadStock();
+        loadSueltos();
+        loadMovimientos();
+        loadHistorial();
+        modal.remove();
+      }, 500);
+    });
+  });
 });
 
 // --- MOVIMIENTOS ---
