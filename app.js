@@ -893,6 +893,15 @@ const tablaStock = document.getElementById("tabla-stock").querySelector("tbody")
 const btnStockDecr = document.getElementById("stock-btn-decr");
 const btnStockIncr = document.getElementById("stock-btn-incr");
 
+// --- LLENAR SELECT CANTIDAD 001-999 ---
+for (let i = 1; i <= 999; i++) {
+  const opt = document.createElement("option");
+  opt.value = i;
+  opt.textContent = String(i).padStart(3, "0");
+  stockCantidad.appendChild(opt);
+}
+stockCantidad.value = "001"; // valor por defecto
+
 // Actualiza cantidad (0–999)
 function actualizarCant(delta, inputElement) {
   let val = parseInt(inputElement.value) || 0;
