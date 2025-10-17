@@ -1082,64 +1082,60 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// --- FORMATEAR KG INLINE ---
-function formatearKgInline(inputElement, delta = 0) {
-  let raw = inputElement.value.replace(/\D/g,"");
+// Formateo KG
+function formatearKg(inputElement, msgElement, delta = 0) {
+  let raw = inputElement.value.replace(/\D/g, "");
 
-  // Incremento/decremento
-  if(delta !== 0){
+  if (delta !== 0) {
     let val = parseFloat(inputElement.value) || 0;
     val = Math.min(99.000, Math.max(0.000, val + delta));
     inputElement.value = val.toFixed(3);
+    if (msgElement) msgElement.textContent = "";
     return;
   }
 
   let val;
-  switch(raw.length){
+  switch (raw.length) {
     case 0: val = 0.000; break;
     case 1: val = parseFloat("0.00" + raw); break;
     case 2: val = parseFloat("0.0" + raw); break;
     case 3: val = parseFloat("0." + raw); break;
     case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
-    case 5: val = parseFloat(raw.slice(0,2) + "." + raw.slice(2,5)); break;
-    default: val = parseFloat(raw.slice(0,2) + "." + raw.slice(2,5)); break;
+    case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
+    default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
   }
 
-  if(isNaN(val) || val < 0 || val > 99) val = 0.000;
-  inputElement.value = val.toFixed(3);
+  if (isNaN(val) || val < 0 || val > 99) {
+    msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
+    inputElement.value = "0.000";
+  } else {
+    inputElement.value = val.toFixed(3);
+    msgElement.textContent = "";
+  }
 }
 
-// --- FORMATEAR PRECIO INLINE ---
-function formatearPrecioInline(inputEnt, inputDec) {
-  // Limitar a 7 dígitos
-  let raw = inputEnt.value.replace(/\D/g,"").slice(0,7);
-  inputEnt.value = raw;
+// Botones + y -
+btnSueltoIncr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, 0.100));
+btnSueltoDecr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, -0.100));
 
-  // Centavos
-  let decVal = parseInt(inputDec.value) || 0;
-  if(decVal < 0) decVal = 0;
-  if(decVal > 99) decVal = 99;
-  inputDec.value = decVal.toString().padStart(2,'0');
+// Edición manual
+sueltosKg.addEventListener("input", () => formatearKg(sueltosKg, msgKg));
+sueltosKg.addEventListener("blur", () => formatearKg(sueltosKg, msgKg));
+
+// Formatos
+function formatFecha(iso) {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} (${hh}:${min})`;
 }
-
-// --- FORMATO DE PRECIO PARA MOSTRAR ---
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
-  let entStr = entero.toString();
-  // Formato miles según cantidad de dígitos
-  if(entStr.length <= 3) entStr = entStr;
-  else if(entStr.length === 4) entStr = entStr[0] + "." + entStr.slice(1);
-  else if(entStr.length === 5) entStr = entStr.slice(0,2) + "." + entStr.slice(2);
-  else if(entStr.length === 6) entStr = entStr.slice(0,3) + "." + entStr.slice(3);
-  else if(entStr.length === 7) entStr = entStr[0] + "." + entStr.slice(1,4) + "." + entStr.slice(4);
-  return `$${entStr},${dec.toString().padStart(2,'0')}`;
-}
-
-// Formatos de fecha
-function formatFecha(iso) {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} (${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')})`;
+  return `$${entero.toLocaleString('es-AR')},${String(dec).padStart(2,'0')}`;
 }
 
 // Cargar sueltos con edición directa
@@ -1159,17 +1155,14 @@ async function loadSueltos(filtro = "") {
   sueltosArray.forEach(([id, prod]) => {
     const tr = document.createElement("tr");
 
+    // Separar entero y centavos
     const entero = Math.floor(prod.precio);
     const dec = Math.round((prod.precio - entero) * 100);
 
     tr.innerHTML = `
       <td>${id}</td>
       <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
-      <td style="display:flex; align-items:center; gap:4px;">
-        <button class="btn-kg" data-action="-">-</button>
-        <input type="text" value="${parseFloat(prod.kg).toFixed(3)}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="kg">
-        <button class="btn-kg" data-action="+">+</button>
-      </td>
+      <td><input type="text" value="${prod.kg.toFixed(3)}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="kg"></td>
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td style="display:flex; gap:4px; align-items:center;">
         <input type="text" value="${entero}" style="width:100%; max-width:90px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
@@ -1186,41 +1179,50 @@ async function loadSueltos(filtro = "") {
       loadProductos();
     });
 
-    // --- KG INLINE ---
-    const inputKg = tr.querySelector('input[data-field="kg"]');
-    tr.querySelectorAll(".btn-kg").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        formatearKgInline(inputKg, btn.dataset.action === "+" ? 0.100 : -0.100);
-        await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(inputKg.value) });
-        loadProductos();
-      });
-    });
-    inputKg.addEventListener("input", () => formatearKgInline(inputKg));
-    inputKg.addEventListener("blur", async () => {
-      formatearKgInline(inputKg);
-      await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(inputKg.value) });
-    });
-
-    // --- NOMBRE ---
+    // --- GUARDAR NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
       let val = e.target.value.trim().slice(0,20);
       e.target.value = val;
       await window.update(window.ref(`/sueltos/${id}`), { nombre: val });
     });
 
-    // --- PRECIO INLINE ---
+    // --- GUARDAR KG ---
+    const inputKg = tr.querySelector('input[data-field="kg"]');
+    function guardarKg() {
+      let raw = inputKg.value.replace(/\D/g,"");
+      let val;
+      switch (raw.length) {
+        case 0: val=0.000; break;
+        case 1: val=parseFloat("0.00"+raw); break;
+        case 2: val=parseFloat("0.0"+raw); break;
+        case 3: val=parseFloat("0."+raw); break;
+        case 4: val=parseFloat(raw[0]+"."+raw.slice(1)); break;
+        case 5: val=parseFloat(raw.slice(0,2)+"."+raw.slice(2,5)); break;
+        default: val=parseFloat(raw.slice(0,2)+"."+raw.slice(2,5)); break;
+      }
+      if(isNaN(val)||val<0||val>99) val=0.000;
+      inputKg.value = val.toFixed(3);
+      window.update(window.ref(`/sueltos/${id}`), { kg: val });
+    }
+    inputKg.addEventListener("input", guardarKg);
+    inputKg.addEventListener("blur", guardarKg);
+
+    // --- GUARDAR PRECIO ---
     const inputEnt = tr.querySelector('input[data-field="precio-entero"]');
     const inputDec = tr.querySelector('input[data-field="precio-centavos"]');
-
     function guardarPrecio() {
-      formatearPrecioInline(inputEnt, inputDec);
-      const precioFinal = parseInt(inputEnt.value) + parseInt(inputDec.value)/100;
+      let raw = inputEnt.value.replace(/\D/g,"").slice(0,7);
+      let val = parseInt(raw)||0;
+      inputEnt.value = val.toLocaleString('es-AR');
+      let decVal = parseInt(inputDec.value)||0;
+      if(decVal<0) decVal=0;
+      if(decVal>99) decVal=99;
+      inputDec.value = decVal.toString().padStart(2,'0');
+      const precioFinal = val + decVal/100;
       window.update(window.ref(`/sueltos/${id}`), { precio: precioFinal });
-      loadProductos();
     }
-
-    inputEnt.addEventListener("change", guardarPrecio);
-    inputDec.addEventListener("change", guardarPrecio);
+    inputEnt.addEventListener("input", guardarPrecio);
+    inputDec.addEventListener("input", guardarPrecio);
 
     tablaSueltos.appendChild(tr);
   });
