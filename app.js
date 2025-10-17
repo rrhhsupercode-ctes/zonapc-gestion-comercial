@@ -970,14 +970,25 @@ async function loadStock(filtro = "") {
       loadProductos();
     });
 
-    // --- CANTIDAD + / - ---
+    // --- CANTIDAD + / - Y EDICIÓN MANUAL ---
+    const inputCant = tr.querySelector('input[data-field="cant"]');
+
+    // Botones + / -
     tr.querySelectorAll(".btn-cant").forEach(btn => {
-      const input = tr.querySelector('input[data-field="cant"]');
       btn.addEventListener("click", async () => {
-        actualizarCant(btn.dataset.action === "+" ? 1 : -1, input);
-        await window.update(window.ref(`/stock/${id}`), { cant: parseInt(input.value) });
+        actualizarCant(btn.dataset.action === "+" ? 1 : -1, inputCant);
+        await window.update(window.ref(`/stock/${id}`), { cant: parseInt(inputCant.value) });
         loadProductos();
       });
+    });
+
+    // Edición manual
+    inputCant.addEventListener("change", async () => {
+      let val = parseInt(inputCant.value) || 0;
+      val = Math.min(999, Math.max(0, val));
+      inputCant.value = val;
+      await window.update(window.ref(`/stock/${id}`), { cant: val });
+      loadProductos();
     });
 
     // --- GUARDAR NOMBRE ---
