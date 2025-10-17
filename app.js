@@ -951,7 +951,7 @@ function formatPrecio(num) {
   return `$${entero.toLocaleString('es-AR', {minimumIntegerDigits:1})},${String(dec).padStart(2,'0')}`;
 }
 
-// Cargar stock con edición directa
+// Cargar stock con edición directa y responsive
 async function loadStock(filtro = "") {
   const snap = await window.get(window.ref("/stock"));
   tablaStock.innerHTML = "";
@@ -973,17 +973,17 @@ async function loadStock(filtro = "") {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%; min-width:110px; box-sizing:border-box;" data-field="nombre"></td>
+      <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
       <td style="display:flex; align-items:center; gap:4px;">
         <button class="btn-cant" data-action="-">-</button>
-        <input type="number" min="0" max="999" value="${prod.cant}" style="width:56px; min-width:56px; box-sizing:border-box; text-align:center;" data-field="cant">
+        <input type="number" min="0" max="999" value="${prod.cant}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="cant">
         <button class="btn-cant" data-action="+">+</button>
       </td>
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td style="display:flex; gap:4px; align-items:center;">
-        <input type="text" value="${entero}" style="width:66px; min-width:66px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
+        <input type="text" value="${entero}" style="width:100%; max-width:90px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
         <span>,</span>
-        <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:36px; min-width:36px; box-sizing:border-box; text-align:center;" data-field="precio-centavos">
+        <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:100%; max-width:40px; box-sizing:border-box; text-align:center;" data-field="precio-centavos">
       </td>
       <td><button data-del-id="${id}">❌</button></td>
     `;
@@ -1022,7 +1022,7 @@ async function loadStock(filtro = "") {
 
       let decVal = parseInt(inputDec.value) || 0;
       if(decVal<0) decVal=0;
-      if(decVal>99) decVal=99;
+      if(decVal>99) decVal=decVal.toString().padStart(2,'0');
       inputDec.value = decVal.toString().padStart(2,'0');
 
       const precioFinal = enteroVal + decVal/100;
