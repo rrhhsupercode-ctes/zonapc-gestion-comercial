@@ -201,7 +201,7 @@ function actualizarTabla() {
       <td>${item.nombre}</td>
       <td>${item.precio.toFixed(2)}</td>
       <td>${(item.cant * item.precio).toFixed(2)}</td>
-      <td><button data-idx="${idx}">?</button></td>
+      <td><button data-idx="${idx}">❌</button></td>
     `;
     tr.querySelector("button").addEventListener("click", () => {
       carrito.splice(idx, 1);
@@ -267,69 +267,21 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
-  // actualizar precio segun KG actual
-  inputPrecioSuelto.value = (parseFloat(inputKgSuelto.value) * precioUnitarioActual).toFixed(2);
+  let precio = Math.round(parseFloat(inputKgSuelto.value) * precioUnitarioActual);
+  if (precio > 9999999) precio = 9999999;
+  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
 }
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
-  let precio = parseFloat(inputPrecioSuelto.value) || 0;
+  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
+  let precio = parseInt(raw) || 0;
+  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
+  
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
-// --- NUEVO FORMATEO KG FANTÁSTICO ---
-const msgKgCobro = document.createElement("p");
-msgKgCobro.style.color = "red";
-msgKgCobro.style.margin = "4px 0 0 0";
-msgKgCobro.style.fontSize = "0.9em";
-inputKgSuelto.parentNode.appendChild(msgKgCobro);
-
-// Valor inicial igual que SUELTOS
-inputKgSuelto.value = "0.000";
-
-function formatearKgCobro(inputElement, msgElement, delta = 0) {
-  let raw = inputElement.value.replace(/\D/g, "");
-
-  if (delta !== 0) {
-    let val = parseFloat(inputElement.value) || 0;
-    val = Math.min(99.000, Math.max(0.000, val + delta));
-    inputElement.value = val.toFixed(3);
-    if (msgElement) msgElement.textContent = "";
-    actualizarPrecioUnitario();
-    return;
-  }
-
-  let val;
-  switch (raw.length) {
-    case 0: val = 0.000; break;
-    case 1: val = parseFloat("0.00" + raw); break;
-    case 2: val = parseFloat("0.0" + raw); break;
-    case 3: val = parseFloat("0." + raw); break;
-    case 4: val = parseFloat(raw[0] + "." + raw.slice(1, 4)); break;
-    case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-    default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-  }
-
-  if (isNaN(val) || val < 0.000 || val > 99) {
-    msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-    inputElement.value = "0.000"; // restablecemos a 0.000 en error
-  } else {
-    inputElement.value = val.toFixed(3);
-    msgElement.textContent = "";
-  }
-
-  actualizarPrecioUnitario();
-}
-
-// --- Botones + / - sueltos con formateo ---
-btnKgMas.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, 0.100));
-btnKgMenos.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, -0.100));
-
-// --- Edición manual KG ---
-inputKgSuelto.addEventListener("input", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-inputKgSuelto.addEventListener("blur", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-
-// --- Escuchar cambios precio / selección sueltos ---
+// --- Escuchar cambios en input de precio / selección sueltos ---
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
@@ -349,210 +301,24 @@ btnAddSuelto.addEventListener("click", async () => {
 
   agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
 
-  // reset inputs
   inputKgSuelto.value = "0.100";
   inputPrecioSuelto.value = "000";
   inputCodigoSuelto.value = "";
 });
 
-// --- FORMATO DE PRECIOS ---
-function formatPrecioSimple(valor) {
-  return valor.toFixed(2).replace('.', ',');
-}
-
-// --- IMPRIMIR TICKET ---
-async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-  const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
-
-  let shopName = "TICKET";
-  let shopLocation = "Sucursal Nueva";
-  let shopCuit = "00000000000";
-  try {
-    const snap = await window.get(window.ref("/config"));
-    if (snap.exists()) {
-      const val = snap.val();
-      shopName = val.shopName || "TICKET";
-      shopLocation = val.shopLocation || "Sucursal Nueva";
-      shopCuit = val.shopCuit || "00000000000";
-    }
-  } catch (e) {
-    console.error("Error al cargar configuración de tienda:", e);
+// --- SUBMIT AUTOMÁTICO AL LLEGAR A 13 DÍGITOS ---
+inputCodigoProducto.addEventListener("input", () => {
+  if (inputCodigoProducto.value.trim().length === 13) {
+    btnAddProduct.click();
+    inputCodigoProducto.value = "";
   }
+});
 
-  const iva = total * 0.21; // IVA 21%
-
-  const contenido = `
-*** CONSUMIDOR FINAL ***
-${shopName.toUpperCase()}
-${shopLocation}
-CUIT: ${shopCuit}
-${ticketID}
-Fecha: ${fecha}
-Cajero: ${cajeroID}
-Pago: ${tipoPago}
-==============================
-
-${items.map(it => `  ${it.nombre}
-  $${formatPrecioSimple(it.precio)} (x${it.cant}) = $${formatPrecioSimple(it.precio * it.cant)}
-  =========================`).join("\n")}
-
-TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
-==============================
-<span>Regimen de Transparencia Fiscal</span>
-<span>al Consumidor Ley 27.743</span>
-<span>IVA Contenido $${formatPrecioSimple(iva)}</span>
-<span>Otros impuestos nacionales </span>
-<span>Indirectos</span>
-<span>Imp. Internos importados $0,00</span>
-<span>Los impuestos informados son </span>
-<span>solo los que corresponden </span>
-<span>a nivel nacional</span>
-==============================
-`;
-
-  // --- IMPRIMIR EN IFRAME ---
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(`
-<html>
-  <head>
-    <style>
-      @page { size: auto; margin: 0; }
-      body {
-        font-family: monospace;
-        font-size: 10px;
-        width: 5cm;
-        margin: 0;
-        padding: 4px;
-        white-space: pre-wrap;
-        line-height: 1.4;
-        text-align: center;
-      }
-      body span.sep {
-        display: block;
-        text-align: center;
-      }
-      span { display:block; text-align:center; }
-    </style>
-  </head>
-  <body>
-${contenido}
-  </body>
-</html>
-  `);
-  doc.close();
-
-  iframe.contentWindow.focus();
-  iframe.contentWindow.print();
-
-  setTimeout(() => iframe.remove(), 100); // 2s antes de remover
-}
-
-// --- COBRAR ---
-btnCobrar.addEventListener("click", async () => {
-  if (!currentUser || carrito.length === 0) return;
-
-  const modal = document.createElement("div");
-  modal.style.cssText = `
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:flex; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;
-  `;
-  modal.innerHTML = `
-    <div style="background:#fff; padding:20px; border-radius:10px; text-align:center;">
-      <h2>¿Cómo Pagará el Cliente?</h2>
-      <div style="display:flex; flex-wrap:wrap; gap:5px; justify-content:center; margin:10px 0;">
-        <button data-pay="Efectivo">???Efectivo</button>
-        <button data-pay="Tarjeta">???Tarjeta</button>
-        <button data-pay="QR">??QR</button>
-        <button data-pay="Electronico">??Electronico</button>
-        <button data-pay="Otro">??Otro</button>
-      </div>
-      <button id="cancelar-pago" style="background:red; color:#fff; padding:5px 15px;">Cancelar</button>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  const allButtons = modal.querySelectorAll("button");
-
-  function disableButtons() { allButtons.forEach(b => b.disabled = true); }
-
-  document.getElementById("cancelar-pago").addEventListener("click", () => {
-    disableButtons();
-    modal.remove();
-  });
-
-  modal.querySelectorAll("button[data-pay]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      disableButtons();
-
-      const tipoPago = btn.dataset.pay;
-      const fechaHoy = new Date().toISOString().split("T")[0];
-
-      const confSnap = await window.get(window.ref("/config"));
-      const confVal = confSnap.exists() ? confSnap.val() : {};
-      let ultimoID = confVal.ultimoTicketID || 0;
-      let ultimoFecha = confVal.ultimoTicketFecha || "";
-
-      if (ultimoFecha !== fechaHoy) ultimoID = 0;
-      ultimoID++;
-      const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
-
-      const fecha = new Date();
-      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-
-      const totalOriginal = carrito.reduce((a,b) => a+b.cant*b.precio,0);
-      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
-
-      await window.set(window.ref(`/movimientos/${ticketID}`), {
-        ticketID, cajero: currentUser.id, items: carrito,
-        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        eliminado: false, porcentajeAplicado: porcentajeFinal||0
-      });
-
-      await window.set(window.ref(`/historial/${ticketID}`), {
-        ticketID, cajero: currentUser.id, items: carrito,
-        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        porcentajeAplicado: porcentajeFinal||0
-      });
-
-      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
-
-      for (const item of carrito) {
-        const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-        if (snapItem.exists()) {
-          const data = snapItem.val();
-          if (item.tipo === "stock") await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: data.cant - item.cant });
-          else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
-        }
-      }
-
-      // --- IMPRIMIR TICKET AUTOMÁTICAMENTE ---
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
-
-      // --- ALERTA VENTA FINALIZADA POST-IMPRESIÓN ---
-      setTimeout(() => {
-        alert("VENTA FINALIZADA");
-
-        // --- LIMPIAR ---
-        carrito = [];
-        actualizarTabla();
-        loadStock();
-        loadSueltos();
-        loadMovimientos();
-        loadHistorial();
-        modal.remove();
-      }, 500); // espera 0.5s para iniciar alert tras imprimir
-    });
-  });
+inputCodigoSuelto.addEventListener("input", () => {
+  if (inputCodigoSuelto.value.trim().length === 13) {
+    btnAddSuelto.click();
+    inputCodigoSuelto.value = "";
+  }
 });
 
 // --- MOVIMIENTOS ---
