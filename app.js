@@ -1082,41 +1082,64 @@ msgKg.style.margin = "4px 0 0 0";
 msgKg.style.fontSize = "0.9em";
 sueltosKg.parentNode.appendChild(msgKg);
 
-// Formateo KG
-function formatearKg(inputElement, msgElement, delta = 0) {
-  let val = parseFloat(inputElement.value) || 0;
-  if (delta !== 0) {
+// --- FORMATEAR KG INLINE ---
+function formatearKgInline(inputElement, delta = 0) {
+  let raw = inputElement.value.replace(/\D/g,"");
+
+  // Incremento/decremento
+  if(delta !== 0){
+    let val = parseFloat(inputElement.value) || 0;
     val = Math.min(99.000, Math.max(0.000, val + delta));
     inputElement.value = val.toFixed(3);
-    if (msgElement) msgElement.textContent = "";
     return;
   }
-  if (val < 0 || val > 99 || isNaN(val)) {
-    if (msgElement) msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-    inputElement.value = "0.000";
-  } else {
-    inputElement.value = val.toFixed(3);
-    if (msgElement) msgElement.textContent = "";
+
+  let val;
+  switch(raw.length){
+    case 0: val = 0.000; break;
+    case 1: val = parseFloat("0.00" + raw); break;
+    case 2: val = parseFloat("0.0" + raw); break;
+    case 3: val = parseFloat("0." + raw); break;
+    case 4: val = parseFloat(raw[0] + "." + raw.slice(1)); break;
+    case 5: val = parseFloat(raw.slice(0,2) + "." + raw.slice(2,5)); break;
+    default: val = parseFloat(raw.slice(0,2) + "." + raw.slice(2,5)); break;
   }
+
+  if(isNaN(val) || val < 0 || val > 99) val = 0.000;
+  inputElement.value = val.toFixed(3);
 }
 
-// Botones + y -
-if (btnSueltoIncr) btnSueltoIncr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, 0.100));
-if (btnSueltoDecr) btnSueltoDecr.addEventListener("click", () => formatearKg(sueltosKg, msgKg, -0.100));
+// --- FORMATEAR PRECIO INLINE ---
+function formatearPrecioInline(inputEnt, inputDec) {
+  // Limitar a 7 dígitos
+  let raw = inputEnt.value.replace(/\D/g,"").slice(0,7);
+  inputEnt.value = raw;
 
-// Edición manual
-sueltosKg.addEventListener("input", () => formatearKg(sueltosKg, msgKg));
-sueltosKg.addEventListener("blur", () => formatearKg(sueltosKg, msgKg));
-
-// Formatos
-function formatFecha(iso) {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
+  // Centavos
+  let decVal = parseInt(inputDec.value) || 0;
+  if(decVal < 0) decVal = 0;
+  if(decVal > 99) decVal = 99;
+  inputDec.value = decVal.toString().padStart(2,'0');
 }
+
+// --- FORMATO DE PRECIO PARA MOSTRAR ---
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
-  return `$${entero.toLocaleString('es-AR', {minimumIntegerDigits:1})},${String(dec).padStart(2,'0')}`;
+  let entStr = entero.toString();
+  // Formato miles según cantidad de dígitos
+  if(entStr.length <= 3) entStr = entStr;
+  else if(entStr.length === 4) entStr = entStr[0] + "." + entStr.slice(1);
+  else if(entStr.length === 5) entStr = entStr.slice(0,2) + "." + entStr.slice(2);
+  else if(entStr.length === 6) entStr = entStr.slice(0,3) + "." + entStr.slice(3);
+  else if(entStr.length === 7) entStr = entStr[0] + "." + entStr.slice(1,4) + "." + entStr.slice(4);
+  return `$${entStr},${dec.toString().padStart(2,'0')}`;
+}
+
+// Formatos de fecha
+function formatFecha(iso) {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} (${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')})`;
 }
 
 // Cargar sueltos con edición directa
@@ -1131,7 +1154,7 @@ async function loadSueltos(filtro = "") {
     return id.toLowerCase().includes(filtro) || prod.nombre.toLowerCase().includes(filtro);
   });
 
-  sueltosArray.sort((a,b) => new Date(b[1].fecha||0) - new Date(a[1].fecha||0));
+  sueltosArray.sort((a, b) => new Date(b[1].fecha || 0) - new Date(a[1].fecha || 0));
 
   sueltosArray.forEach(([id, prod]) => {
     const tr = document.createElement("tr");
@@ -1163,48 +1186,41 @@ async function loadSueltos(filtro = "") {
       loadProductos();
     });
 
-    // --- KG + / - ---
+    // --- KG INLINE ---
+    const inputKg = tr.querySelector('input[data-field="kg"]');
     tr.querySelectorAll(".btn-kg").forEach(btn => {
-      const input = tr.querySelector('input[data-field="kg"]');
       btn.addEventListener("click", async () => {
-        formatearKg(input, null, btn.dataset.action === "+" ? 0.100 : -0.100);
-        await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(input.value) });
+        formatearKgInline(inputKg, btn.dataset.action === "+" ? 0.100 : -0.100);
+        await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(inputKg.value) });
         loadProductos();
       });
     });
+    inputKg.addEventListener("input", () => formatearKgInline(inputKg));
+    inputKg.addEventListener("blur", async () => {
+      formatearKgInline(inputKg);
+      await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(inputKg.value) });
+    });
 
-    // --- GUARDAR CAMBIOS AUTOMÁTICOS ---
+    // --- NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
       let val = e.target.value.trim().slice(0,20);
       e.target.value = val;
       await window.update(window.ref(`/sueltos/${id}`), { nombre: val });
     });
 
-    const inputKg = tr.querySelector('input[data-field="kg"]');
+    // --- PRECIO INLINE ---
     const inputEnt = tr.querySelector('input[data-field="precio-entero"]');
     const inputDec = tr.querySelector('input[data-field="precio-centavos"]');
 
     function guardarPrecio() {
-      let enteroVal = parseInt(inputEnt.value.replace(/\D/g,"")) || 0;
-      if(enteroVal>9999999) enteroVal=9999999;
-      inputEnt.value = enteroVal;
-
-      let decVal = parseInt(inputDec.value) || 0;
-      if(decVal<0) decVal=0;
-      if(decVal>99) decVal=99;
-      inputDec.value = decVal.toString().padStart(2,'0');
-
-      const precioFinal = enteroVal + decVal/100;
+      formatearPrecioInline(inputEnt, inputDec);
+      const precioFinal = parseInt(inputEnt.value) + parseInt(inputDec.value)/100;
       window.update(window.ref(`/sueltos/${id}`), { precio: precioFinal });
       loadProductos();
     }
 
     inputEnt.addEventListener("change", guardarPrecio);
     inputDec.addEventListener("change", guardarPrecio);
-    inputKg.addEventListener("blur", async () => {
-      formatearKg(inputKg, null);
-      await window.update(window.ref(`/sueltos/${id}`), { kg: parseFloat(inputKg.value) });
-    });
 
     tablaSueltos.appendChild(tr);
   });
