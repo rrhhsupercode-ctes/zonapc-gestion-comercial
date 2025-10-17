@@ -165,10 +165,11 @@ async function loadProductos() {
     cobroCantidad.appendChild(opt);
   }
 
+  // valores iniciales
   inputCodigoProducto.value = "";
   inputCodigoSuelto.value = "";
   inputKgSuelto.value = "0.100";
-  inputCodigoPrecio.value = "";
+  if (inputCodigoPrecio) inputCodigoPrecio.value = "";
   inputPrecioSuelto.value = "000";
 }
 
@@ -243,7 +244,32 @@ async function agregarAlCarrito(nuevoItem) {
   actualizarTabla();
 }
 
+// --- BOTÓN AGREGAR PRODUCTO (STOCK) ---
+btnAddProduct.addEventListener("click", async () => {
+  const id = cobroProductos.value || inputCodigoProducto.value.trim();
+  const cant = parseInt(cobroCantidad.value) || 1;
+  if (!id) return alert("Seleccione un producto o ingrese código");
+
+  const snap = await window.get(window.ref(`/stock/${id}`));
+  if (!snap.exists()) return alert("Producto no encontrado");
+  const data = snap.val();
+
+  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
+
+  agregarAlCarrito({
+    id,
+    nombre: data.nombre,
+    cant,
+    precio: data.precio,
+    tipo: "stock"
+  });
+
+  inputCodigoProducto.value = "";
+  cobroProductos.value = "";
+});
+
 // --- SUELTOS UNIFICADOS KG <-> PRECIO ---
+// Nota: comportamiento "balanza": tecleas dígitos y se interpretan como 0.001, 0.012, 0.123, 1.234, 12.345, ...
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return;
@@ -251,8 +277,11 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
+  // kg ya está en formato 0.000 a 9999.999
   let kg = parseFloat(inputKgSuelto.value.replace(',', '.')) || 0;
   if (kg > 9999.999) kg = 9999.999;
+
+  // calcular precio redondeado y mostrar con puntos de miles (sin decimales)
   let precio = Math.round(kg * precioUnitarioActual);
   if (precio > 9999999) precio = 9999999;
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
@@ -260,6 +289,7 @@ async function actualizarPrecioUnitario() {
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
+  // quitar todo menos dígitos, permitir hasta 9 dígitos
   let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
   let precio = parseInt(raw) || 0;
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
@@ -270,41 +300,75 @@ async function actualizarKgSegunPrecio() {
 }
 
 // --- Escuchar cambios en inputs y selección sueltos ---
+// PRICE -> KG
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
+// KG -> PRICE (modo balanza: interpretamos lo tipeado como entero de gramos)
 inputKgSuelto.addEventListener("input", async () => {
+  // tomar solo dígitos y hasta 5 dígitos (max 5: p.ej. 12345 => 12.345)
   let digits = inputKgSuelto.value.replace(/\D/g, '').slice(0, 5);
   if (!digits) {
     inputKgSuelto.value = "0.000";
     return;
   }
+
+  // asegurar mínimo 4 dígitos para formateo correcto (0.001..1.234)
   while (digits.length < 4) digits = "0" + digits;
-  let formatted = `${digits.slice(0, -3)}.${digits.slice(-3)}`;
+
+  // insertar punto antes de los últimos 3 dígitos
+  const formatted = `${digits.slice(0, -3)}.${digits.slice(-3)}`;
   let num = parseFloat(formatted);
+  if (isNaN(num)) num = 0;
   if (num > 9999.999) num = 9999.999;
+
   inputKgSuelto.value = num.toFixed(3);
+
+  // actualizar precio en vivo
   await actualizarPrecioUnitario();
 });
+
+// cambios de selección/código suelto recalculan
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
 
 // --- Botón agregar suelto unificado ---
 btnAddSuelto.addEventListener("click", async () => {
-  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
+  const id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
 
   const snap = await window.get(window.ref(`/sueltos/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
 
-  let cant = parseFloat(inputKgSuelto.value) || 0;
+  const cant = parseFloat(inputKgSuelto.value) || 0;
   if (cant <= 0) return alert("Cantidad inválida");
   if (cant > data.kg) return alert("STOCK INSUFICIENTE");
 
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+  agregarAlCarrito({
+    id,
+    nombre: data.nombre,
+    cant,
+    precio: data.precio,
+    tipo: "sueltos"
+  });
 
   inputKgSuelto.value = "0.100";
   inputPrecioSuelto.value = "000";
   inputCodigoSuelto.value = "";
+});
+
+// --- SUBMIT AUTOMÁTICO AL LLEGAR A 13 DÍGITOS ---
+inputCodigoProducto.addEventListener("input", () => {
+  if (inputCodigoProducto.value.trim().length === 13) {
+    btnAddProduct.click();
+    inputCodigoProducto.value = "";
+  }
+});
+
+inputCodigoSuelto.addEventListener("input", () => {
+  if (inputCodigoSuelto.value.trim().length === 13) {
+    btnAddSuelto.click();
+    inputCodigoSuelto.value = "";
+  }
 });
 
 // --- MOVIMIENTOS ---
