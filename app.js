@@ -259,7 +259,7 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
-// --- SUELTOS UNIFICADOS KG <-> PRECIO ---
+// --- SUELTOS UNIFICADOS KG <-> PRECIO (formateo dinámico) ---
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return;
@@ -277,7 +277,13 @@ async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
 
   // quitar puntos antes de convertir
-  let precio = parseInt(inputPrecioSuelto.value.replace(/\./g,'')) || 0;
+  let raw = inputPrecioSuelto.value.replace(/\D/g, '');
+  let precio = parseInt(raw) || 0;
+
+  // formatear con puntos mientras tipeás
+  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
+
+  // actualizar KG según precio
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
@@ -285,6 +291,10 @@ async function actualizarKgSegunPrecio() {
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
+
+// --- Escuchar cambios en KG para actualizar precio dinámicamente ---
+inputKgSuelto.addEventListener("input", actualizarPrecioUnitario);
+inputKgSuelto.addEventListener("blur", actualizarPrecioUnitario);
 
 // --- NUEVO FORMATEO KG FANTÁSTICO ---
 const msgKgCobro = document.createElement("p");
