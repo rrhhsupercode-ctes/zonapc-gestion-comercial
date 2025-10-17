@@ -281,8 +281,9 @@ async function actualizarKgSegunPrecio() {
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
-// --- Escuchar cambios en input de precio / selección sueltos ---
+// --- Escuchar cambios en inputs y selección sueltos ---
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
+inputKgSuelto.addEventListener("input", actualizarPrecioUnitario);
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
 
@@ -306,20 +307,6 @@ btnAddSuelto.addEventListener("click", async () => {
   inputCodigoSuelto.value = "";
 });
 
-// --- SUBMIT AUTOMÁTICO AL LLEGAR A 13 DÍGITOS ---
-inputCodigoProducto.addEventListener("input", () => {
-  if (inputCodigoProducto.value.trim().length === 13) {
-    btnAddProduct.click();
-    inputCodigoProducto.value = "";
-  }
-});
-
-inputCodigoSuelto.addEventListener("input", () => {
-  if (inputCodigoSuelto.value.trim().length === 13) {
-    btnAddSuelto.click();
-    inputCodigoSuelto.value = "";
-  }
-});
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
