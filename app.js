@@ -983,7 +983,7 @@ async function loadStock(filtro = "") {
       <td style="display:flex; gap:4px; align-items:center;">
         <input type="text" value="${entero}" style="width:100%; max-width:90px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
         <span>,</span>
-        <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:100%; max-width:40px; box-sizing:border-box; text-align:center;" data-field="precio-centavos">
+        <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:100%; max-width:60px; min-width:40px; box-sizing:border-box; text-align:center;" data-field="precio-centavos">
       </td>
       <td><button data-del-id="${id}">❌</button></td>
     `;
