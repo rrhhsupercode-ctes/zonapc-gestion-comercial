@@ -1120,7 +1120,6 @@ async function loadSueltos(filtro = "") {
   sueltosArray.forEach(([id, prod]) => {
     const tr = document.createElement("tr");
 
-    // Separar entero y centavos
     const entero = Math.floor(prod.precio);
     const dec = Math.round((prod.precio - entero) * 100);
 
@@ -1130,7 +1129,7 @@ async function loadSueltos(filtro = "") {
       <td><input type="text" value="${prod.kg.toFixed(3)}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="kg"></td>
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td style="display:flex; gap:4px; align-items:center;">
-        <input type="text" value="${entero}" style="width:100%; max-width:90px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
+        <input type="text" value="${entero.toLocaleString('es-AR')}" style="width:100%; max-width:90px; box-sizing:border-box; text-align:right;" data-field="precio-entero">
         <span>,</span>
         <input type="number" min="0" max="99" value="${dec.toString().padStart(2,'0')}" style="width:100%; max-width:60px; min-width:40px; box-sizing:border-box; text-align:center;" data-field="precio-centavos">
       </td>
@@ -1178,7 +1177,7 @@ async function loadSueltos(filtro = "") {
     function guardarPrecio() {
       let raw = inputEnt.value.replace(/\D/g,"").slice(0,7);
       let val = parseInt(raw)||0;
-      inputEnt.value = val.toLocaleString('es-AR');
+      inputEnt.value = val.toLocaleString('es-AR'); // <--- formateo correcto al cargar y editar
       let decVal = parseInt(inputDec.value)||0;
       if(decVal<0) decVal=0;
       if(decVal>99) decVal=99;
