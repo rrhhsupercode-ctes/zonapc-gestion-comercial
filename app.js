@@ -267,21 +267,24 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
-  // calcular precio según KG
-  let precio = parseFloat(inputKgSuelto.value) * precioUnitarioActual;
-
-  // formatear con miles y centavos
-  let entero = Math.floor(precio);
-  let dec = Math.round((precio - entero) * 100);
-  inputPrecioSuelto.value = entero.toLocaleString('es-AR') + ',' + String(dec).padStart(2,'0');
+  // calcular precio redondo según KG
+  let precio = Math.round(parseFloat(inputKgSuelto.value) * precioUnitarioActual);
+  // formatear con puntos de miles
+  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
 }
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
-  let valor = inputPrecioSuelto.value.replace(/\./g,'').replace(',', '.'); // quitar puntos y pasar coma a punto
-  let precio = parseFloat(valor) || 0;
+
+  // quitar puntos antes de convertir
+  let precio = parseInt(inputPrecioSuelto.value.replace(/\./g,'')) || 0;
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
+
+// --- Escuchar cambios en precio / selección sueltos ---
+inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
+cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
+inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
 
 // --- NUEVO FORMATEO KG FANTÁSTICO ---
 const msgKgCobro = document.createElement("p");
