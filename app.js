@@ -259,7 +259,7 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
-// --- SUELTOS UNIFICADOS KG <-> PRECIO (formateo dinámico) ---
+// --- SUELTOS UNIFICADOS KG <-> PRECIO ---
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return;
@@ -267,34 +267,27 @@ async function actualizarPrecioUnitario() {
   if (!snap.exists()) return;
   precioUnitarioActual = snap.val().precio;
 
-  // calcular precio redondo según KG
+  // actualizar precio según KG actual, redondeado y con puntos de miles
   let precio = Math.round(parseFloat(inputKgSuelto.value) * precioUnitarioActual);
-  // formatear con puntos de miles
+  if (precio > 9999999) precio = 9999999; // máximo 7 dígitos
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
 }
 
 async function actualizarKgSegunPrecio() {
   if (!precioUnitarioActual) return;
-
-  // quitar puntos antes de convertir
-  let raw = inputPrecioSuelto.value.replace(/\D/g, '');
+  // limpiar input, quitar puntos y limitar a 7 dígitos
+  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 7);
   let precio = parseInt(raw) || 0;
-
-  // formatear con puntos mientras tipeás
   inputPrecioSuelto.value = precio.toLocaleString('es-AR');
-
-  // actualizar KG según precio
+  
+  // actualizar KG
   inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
 }
 
-// --- Escuchar cambios en precio / selección sueltos ---
+// --- Escuchar cambios en input de precio ---
 inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
 cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
 inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
-
-// --- Escuchar cambios en KG para actualizar precio dinámicamente ---
-inputKgSuelto.addEventListener("input", actualizarPrecioUnitario);
-inputKgSuelto.addEventListener("blur", actualizarPrecioUnitario);
 
 // --- NUEVO FORMATEO KG FANTÁSTICO ---
 const msgKgCobro = document.createElement("p");
