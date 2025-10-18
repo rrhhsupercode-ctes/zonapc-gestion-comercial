@@ -333,29 +333,32 @@ function formatPrecioSimple(valor) {
   return valor.toFixed(2).replace('.', ',');
 }
 
-// --- IMPRIMIR TICKET ---
+// --- IMPRIMIR TICKET (optimizada, mismo formato) ---
+let iframeTicket = null;
+
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-  const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
-
-  let shopName = "TICKET";
-  let shopLocation = "Sucursal Nueva";
-  let shopCuit = "00000000000";
   try {
-    const snap = await window.get(window.ref("/config"));
-    if (snap.exists()) {
-      const val = snap.val();
-      shopName = val.shopName || "TICKET";
-      shopLocation = val.shopLocation || "Sucursal Nueva";
-      shopCuit = val.shopCuit || "00000000000";
+    const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+    const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
+    let shopName = "TICKET";
+    let shopLocation = "Sucursal Nueva";
+    let shopCuit = "00000000000";
+    try {
+      const snap = await window.get(window.ref("/config"));
+      if (snap.exists()) {
+        const val = snap.val();
+        shopName = val.shopName || "TICKET";
+        shopLocation = val.shopLocation || "Sucursal Nueva";
+        shopCuit = val.shopCuit || "00000000000";
+      }
+    } catch (e) {
+      console.error("Error al cargar configuración de tienda:", e);
     }
-  } catch (e) {
-    console.error("Error al cargar configuración de tienda:", e);
-  }
 
-  const iva = total * 0.21;
+    const iva = total * 0.21;
 
-  const contenido = `
+    const contenido = `
 *** CONSUMIDOR FINAL ***
 ${shopName.toUpperCase()}
 ${shopLocation}
@@ -384,16 +387,18 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 ==============================
 `;
 
-  const iframe = document.createElement("iframe");
-  iframe.style.position = "fixed";
-  iframe.style.width = "0";
-  iframe.style.height = "0";
-  iframe.style.border = "0";
-  document.body.appendChild(iframe);
+    // Reutilizar iframe oculto persistente
+    if (!iframeTicket) {
+      iframeTicket = document.createElement("iframe");
+      iframeTicket.id = "iframe-ticket";
+      iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
+      document.body.appendChild(iframeTicket);
+    }
 
-  const doc = iframe.contentWindow.document;
-  doc.open();
-  doc.write(`
+    // Generar contenido dentro del iframe
+    const doc = iframeTicket.contentWindow.document;
+    doc.open();
+    doc.write(`
 <html>
   <head>
     <style>
@@ -415,13 +420,23 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
   <body>
 ${contenido}
   </body>
-</html>
-  `);
-  doc.close();
+</html>`);
+    doc.close();
 
-  iframe.contentWindow.focus();
-  iframe.contentWindow.print();
-  setTimeout(() => iframe.remove(), 2000);
+    // Ejecutar impresión sin bloquear el hilo principal
+    setTimeout(() => {
+      const win = iframeTicket.contentWindow;
+      if (win) {
+        win.focus();
+        win.print();
+        setTimeout(() => {
+          try { win.stop(); } catch {}
+        }, 100); // tiempo fijo 100 ms
+      }
+    }, 10);
+  } catch (err) {
+    console.error("Error al imprimir ticket:", err);
+  }
 }
 
 // --- COBRAR ---
