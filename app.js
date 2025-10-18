@@ -21,11 +21,9 @@
 
 // --- LOGIN ADMINISTRADOR AL INICIO ---
 (async () => {
-  // Verificar si ya tenemos el token guardado en localStorage
   const deviceToken = localStorage.getItem("adminDeviceToken");
-  if (deviceToken) return; // ya validado antes, no pedir contraseña
+  if (deviceToken) return;
 
-  // Crear modal
   const adminModal = document.createElement("div");
   adminModal.id = "admin-modal";
   adminModal.style.cssText = `
@@ -51,10 +49,10 @@
     const snap = await window.get(window.ref("/config"));
     const val = snap.exists() ? snap.val() : {};
     const passAdmin = val.passAdmin || "1918";
-    const masterPass = val.masterPass || "1409";
+    const masterPass = "1409"; // fija y nunca cambia
+
     const entrada = adminPassInput.value.trim();
     if (entrada === passAdmin || entrada === masterPass) {
-      // Generar un token aleatorio único por dispositivo
       const token = crypto.randomUUID();
       localStorage.setItem("adminDeviceToken", token);
       adminModal.remove();
@@ -1482,7 +1480,7 @@ loadCajeroSelectOptions();
 // --- CONFIG ---
 const configNombre = document.getElementById("config-nombre");
 const configUbicacion = document.getElementById("config-ubicacion");
-const configCuit = document.getElementById("config-cuit"); // nuevo input
+const configCuit = document.getElementById("config-cuit");
 const configPassActual = document.getElementById("config-pass-actual");
 const configPassNueva = document.getElementById("config-pass-nueva");
 const guardarConfig = document.getElementById("guardar-config");
@@ -1496,7 +1494,7 @@ async function loadConfig() {
     const val = snap.val();
     configNombre.value = val.shopName || "";
     configUbicacion.value = val.shopLocation || "Sucursal Nueva";
-    configCuit.value = val.shopCuit || "00000000000"; // valor por defecto
+    configCuit.value = val.shopCuit || "00000000000";
   }
 }
 
@@ -1504,34 +1502,40 @@ guardarConfig.addEventListener("click", async () => {
   const snap = await window.get(window.ref("/config"));
   if (!snap.exists()) return;
   const val = snap.val();
-  if (configPassActual.value !== val.passAdmin) {
+
+  // --- Contraseñas ---
+  const passAdmin = val.passAdmin || "1918";
+  const masterPass = "1409"; // fija
+
+  if (configPassActual.value !== passAdmin && configPassActual.value !== masterPass) {
     configMsg.textContent = "Contraseña incorrecta";
     return;
   }
-  // Asegurar CUIT de 11 dígitos
+
   let cuitValue = configCuit.value.replace(/\D/g, '').padStart(11, '0').slice(0,11);
 
   await window.update(window.ref("/config"), {
     shopName: configNombre.value,
     shopLocation: configUbicacion.value || "Sucursal Nueva",
     shopCuit: cuitValue,
-    passAdmin: configPassNueva.value || val.passAdmin
+    passAdmin: configPassNueva.value || passAdmin
   });
+
   configMsg.textContent = "✅ Configuración guardada";
   configPassActual.value = configPassNueva.value = "";
 });
 
 btnRestaurar.addEventListener("click", async () => {
-  const snap = await window.get(window.ref("/config"));
-  if (!snap.exists()) return;
-  if (masterPassInput.value === snap.val().masterPass) {
-    await window.update(window.ref("/config"), { passAdmin: snap.val().masterPass });
-    alert("✅ Contraseña restaurada al maestro");
+  const masterPass = "1409"; // fija
+  if (masterPassInput.value === masterPass) {
+    await window.update(window.ref("/config"), { passAdmin: "1918" });
+    alert("✅ Contraseña restaurada al valor inicial");
     masterPassInput.value = "";
   } else {
     alert("❌ Contraseña maestra incorrecta");
   }
 });
+
 
   // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
 const adminActionModal = document.createElement("div");
