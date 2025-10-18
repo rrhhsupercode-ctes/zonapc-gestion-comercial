@@ -1360,108 +1360,110 @@ async function loadCajerosTabla() {
         // Eliminar cajero usando modal
         tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click", () => {
           showAdminActionModal(async () => {
-            // Confirmación removida, solo se elimina directamente
             await window.remove(window.ref(`/cajeros/${id}`));
             loadCajerosTabla();
             loadCajeros();
           });
         });
 
-// Editar cajero usando modal de admin
-tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
-  showAdminActionModal(async () => {
-    const modal = document.createElement("div");
-    modal.style.cssText = `
-      position:fixed; top:0; left:0; width:100%; height:100%;
-      display:flex; justify-content:center; align-items:center;
-      background:rgba(0,0,0,0.7); z-index:9999;
-    `;
-    modal.innerHTML = `
-      <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
-        <h2>Editar Cajero ${id}</h2>
-        
-        <label for="edit-nro">Número de Cajero (1-99)</label>
-        <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
+        // Editar cajero usando modal de admin
+        tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () => {
+          showAdminActionModal(async () => {
+            const modal = document.createElement("div");
+            modal.style.cssText = `
+              position:fixed; top:0; left:0; width:100%; height:100%;
+              display:flex; justify-content:center; align-items:center;
+              background:rgba(0,0,0,0.7); z-index:9999;
+            `;
+            modal.innerHTML = `
+              <div style="background:#fff; padding:20px; border-radius:10px; width:320px; text-align:center;">
+                <h2>Editar Cajero ${id}</h2>
+                
+                <label for="edit-nro">Número de Cajero (1-99)</label>
+                <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
 
-        <label for="edit-nombre">Nombre (6 a 25 letras)</label>
-        <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
+                <label for="edit-nombre">Nombre (6 a 25 letras)</label>
+                <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
 
-        <label for="edit-dni">DNI (8 dígitos)</label>
-        <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
+                <label for="edit-dni">DNI (8 dígitos)</label>
+                <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
 
-        <label for="edit-pass">Contraseña</label>
-        <input id="edit-pass" type="password" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
+                <label for="edit-pass">Contraseña</label>
+                <input id="edit-pass" type="password" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
 
-        <div style="margin-top:10px;">
-          <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
-          <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
-        </div>
-        <p id="edit-msg" style="color:red; margin-top:5px;"></p>
-      </div>
-    `;
-    document.body.appendChild(modal);
+                <div style="margin-top:10px;">
+                  <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
+                  <button id="edit-cancelar" style="background:red; color:#fff;">Cancelar</button>
+                </div>
+                <p id="edit-msg" style="color:red; margin-top:5px;"></p>
+              </div>
+            `;
+            document.body.appendChild(modal);
 
-    const editNro = modal.querySelector("#edit-nro");
-    const editNombre = modal.querySelector("#edit-nombre");
-    const editDni = modal.querySelector("#edit-dni");
-    const editPass = modal.querySelector("#edit-pass");
-    const editAceptar = modal.querySelector("#edit-aceptar");
-    const editCancelar = modal.querySelector("#edit-cancelar");
-    const editMsg = modal.querySelector("#edit-msg");
+            const editNro = modal.querySelector("#edit-nro");
+            const editNombre = modal.querySelector("#edit-nombre");
+            const editDni = modal.querySelector("#edit-dni");
+            const editPass = modal.querySelector("#edit-pass");
+            const editAceptar = modal.querySelector("#edit-aceptar");
+            const editCancelar = modal.querySelector("#edit-cancelar");
+            const editMsg = modal.querySelector("#edit-msg");
 
-    editCancelar.addEventListener("click", () => modal.remove());
+            editCancelar.addEventListener("click", () => modal.remove());
 
-    editAceptar.addEventListener("click", async () => {
-  const newNro = String(editNro.value).padStart(2, "0");
-  const newNombre = editNombre.value.trim();
-  const newDni = editDni.value.trim();
-  const newPass = editPass.value.trim();
+            editAceptar.addEventListener("click", async () => {
+              const newNro = String(editNro.value).padStart(2, "0");
+              const newNombre = editNombre.value.trim();
+              const newDni = editDni.value.trim();
+              const newPass = editPass.value.trim();
 
-  if (!newNro || !newNombre || !newDni || !newPass) {
-    editMsg.textContent = "Todos los campos son obligatorios";
-    return;
-  }
+              if (!newNro || !newNombre || !newDni || !newPass) {
+                editMsg.textContent = "Todos los campos son obligatorios";
+                return;
+              }
 
-  if (!/^\d{8}$/.test(newDni)) {
-    editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
-    return;
-  }
+              if (!/^\d{8}$/.test(newDni)) {
+                editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
+                return;
+              }
 
-  if (
-    !/^[A-Za-zñÑ]+(?:\s[A-Za-zñÑ]+)*$/.test(newNombre) ||
-    newNombre.length < 6 ||
-    newNombre.length > 25
-  ) {
-    editMsg.textContent = "El nombre debe tener entre 6 y 25 letras, puede incluir espacios y ñ";
-    return;
-  }
+              if (
+                !/^[A-Za-zÁÉÍÓÚáéíóúñÑ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúñÑ]+)*$/.test(newNombre) ||
+                newNombre.length < 6 ||
+                newNombre.length > 25
+              ) {
+                editMsg.textContent = "El nombre debe tener entre 6 y 25 letras, puede incluir espacios, ñ y acentos";
+                return;
+              }
 
-  if (newPass.length < 4 || newPass.length > 8) {
-    editMsg.textContent = "La contraseña debe tener entre 4 y 8 caracteres";
-    return;
-  }
+              if (newPass.length < 4 || newPass.length > 8) {
+                editMsg.textContent = "La contraseña debe tener entre 4 y 8 caracteres";
+                return;
+              }
 
-  if (newNro !== id) {
-    const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
-    if (existingSnap.exists()) {
-      editMsg.textContent = "❌ Este Nro ya está en uso";
-      return;
-    }
-    await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
-    await window.remove(window.ref(`/cajeros/${id}`));
-  } else {
-    await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
-  }
+              if (newNro !== id) {
+                const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
+                if (existingSnap.exists()) {
+                  editMsg.textContent = "❌ Este Nro ya está en uso";
+                  return;
+                }
+                await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
+                await window.remove(window.ref(`/cajeros/${id}`));
+              } else {
+                await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+              }
 
-  loadCajerosTabla();
-  loadCajeros();
-  modal.remove();
-});
+              loadCajerosTabla();
+              loadCajeros();
+              modal.remove();
+            });
+          });
+        });
 
         tablaCajeros.appendChild(tr);
       });
-  }
-}
+  } // 👈 cierre del if (snap.exists())
+}   // 👈 cierre de la función loadCajerosTabla()
+
 
 // Agregar cajero usando modal
 btnAgregarCajero.addEventListener("click", () => {
@@ -1481,11 +1483,11 @@ btnAgregarCajero.addEventListener("click", () => {
   }
 
   if (
-    !/^[A-Za-zñÑ]+(?:\s[A-Za-zñÑ]+)*$/.test(nombre) ||
+    !/^[A-Za-zÁÉÍÓÚáéíóúñÑ]+(?:\s[A-Za-zÁÉÍÓÚáéíóúñÑ]+)*$/.test(nombre) ||
     nombre.length < 6 ||
     nombre.length > 25
   ) {
-    alert("El nombre debe tener entre 6 y 25 letras, puede incluir espacios y ñ");
+    alert("El nombre debe tener entre 6 y 25 letras, puede incluir espacios, ñ y acentos");
     return;
   }
 
@@ -1511,7 +1513,6 @@ btnAgregarCajero.addEventListener("click", () => {
 });
 
 loadCajeroSelectOptions();
-
 
 // --- CONFIG ---
 const configNombre = document.getElementById("config-nombre");
