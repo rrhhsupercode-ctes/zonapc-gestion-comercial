@@ -1006,7 +1006,7 @@ async function loadStock(filtro = "") {
 
     // --- GUARDAR NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
-      let val = e.target.value.trim().slice(0,20);
+      let val = e.target.value.trim().slice(0,25);
       e.target.value = val;
       await window.update(window.ref(`/stock/${id}`), { nombre: val });
     });
@@ -1178,7 +1178,7 @@ async function loadSueltos(filtro = "") {
 
     // --- GUARDAR NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
-      let val = e.target.value.trim().slice(0,20);
+      let val = e.target.value.trim().slice(0,25);
       e.target.value = val;
       await window.update(window.ref(`/sueltos/${id}`), { nombre: val });
     });
