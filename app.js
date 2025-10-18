@@ -961,7 +961,7 @@ async function loadStock(filtro = "") {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
+      <td><input type="text" value="${prod.nombre}" maxlength="25" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
       <td style="display:flex; align-items:center; gap:4px;">
         <button class="btn-cant" data-action="-">-</button>
         <input type="number" min="0" max="999" value="${prod.cant}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="cant">
@@ -1158,7 +1158,7 @@ async function loadSueltos(filtro = "") {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td><input type="text" value="${prod.nombre}" maxlength="20" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
+      <td><input type="text" value="${prod.nombre}" maxlength="25" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
       <td><input type="text" value="${prod.kg.toFixed(3)}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="kg"></td>
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td style="display:flex; gap:4px; align-items:center;">
@@ -1383,14 +1383,14 @@ tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () =>
         <label for="edit-nro">Número de Cajero (1-99)</label>
         <input id="edit-nro" type="number" min="1" max="99" placeholder="Nro Cajero" value="${id}" style="width:100%; margin:5px 0;">
 
-        <label for="edit-nombre">Nombre (6 a 20 letras)</label>
+        <label for="edit-nombre">Nombre (6 a 25 letras)</label>
         <input id="edit-nombre" type="text" placeholder="Nombre" value="${cajero.nombre}" style="width:100%; margin:5px 0;">
 
         <label for="edit-dni">DNI (8 dígitos)</label>
         <input id="edit-dni" type="text" placeholder="DNI" value="${cajero.dni}" style="width:100%; margin:5px 0;" maxlength="8">
 
         <label for="edit-pass">Contraseña</label>
-        <input id="edit-pass" type="text" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
+        <input id="edit-pass" type="password" placeholder="Contraseña" value="${cajero.pass}" style="width:100%; margin:5px 0;">
 
         <div style="margin-top:10px;">
           <button id="edit-aceptar" style="margin-right:5px;">Aceptar</button>
@@ -1412,45 +1412,51 @@ tr.querySelector(`button[data-edit-id="${id}"]`).addEventListener("click", () =>
     editCancelar.addEventListener("click", () => modal.remove());
 
     editAceptar.addEventListener("click", async () => {
-      const newNro = String(editNro.value).padStart(2, "0");
-      const newNombre = editNombre.value.trim();
-      const newDni = editDni.value.trim();
-      const newPass = editPass.value.trim();
+  const newNro = String(editNro.value).padStart(2, "0");
+  const newNombre = editNombre.value.trim();
+  const newDni = editDni.value.trim();
+  const newPass = editPass.value.trim();
 
-      if (!newNro || !newNombre || !newDni || !newPass) {
-        editMsg.textContent = "Todos los campos son obligatorios";
-        return;
-      }
+  if (!newNro || !newNombre || !newDni || !newPass) {
+    editMsg.textContent = "Todos los campos son obligatorios";
+    return;
+  }
 
-      if (!/^\d{8}$/.test(newDni)) {
-        editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
-        return;
-      }
+  if (!/^\d{8}$/.test(newDni)) {
+    editMsg.textContent = "El DNI debe tener exactamente 8 dígitos";
+    return;
+  }
 
-      if (!/^[A-Za-zñÑ\s]{6,20}$/.test(newNombre)) {
-        editMsg.textContent = "El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ";
-        return;
-      }
+  if (
+    !/^[A-Za-zñÑ]+(?:\s[A-Za-zñÑ]+)*$/.test(newNombre) ||
+    newNombre.length < 6 ||
+    newNombre.length > 25
+  ) {
+    editMsg.textContent = "El nombre debe tener entre 6 y 25 letras, puede incluir espacios y ñ";
+    return;
+  }
 
-      if (newNro !== id) {
-        const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
-        if (existingSnap.exists()) {
-          editMsg.textContent = "❌ Este Nro ya está en uso";
-          return;
-        }
-        await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
-        await window.remove(window.ref(`/cajeros/${id}`));
-      } else {
-        await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
-      }
+  if (newPass.length < 4 || newPass.length > 8) {
+    editMsg.textContent = "La contraseña debe tener entre 4 y 8 caracteres";
+    return;
+  }
 
-      loadCajerosTabla();
-      loadCajeros();
-      modal.remove();
-    });
-  });
+  if (newNro !== id) {
+    const existingSnap = await window.get(window.ref(`/cajeros/${newNro}`));
+    if (existingSnap.exists()) {
+      editMsg.textContent = "❌ Este Nro ya está en uso";
+      return;
+    }
+    await window.set(window.ref(`/cajeros/${newNro}`), { nombre: newNombre, dni: newDni, pass: newPass });
+    await window.remove(window.ref(`/cajeros/${id}`));
+  } else {
+    await window.update(window.ref(`/cajeros/${id}`), { nombre: newNombre, dni: newDni, pass: newPass });
+  }
+
+  loadCajerosTabla();
+  loadCajeros();
+  modal.remove();
 });
-
 
         tablaCajeros.appendChild(tr);
       });
@@ -1463,15 +1469,28 @@ btnAgregarCajero.addEventListener("click", () => {
   const nombre = cajeroNombre.value.trim();
   const dni = cajeroDni.value.trim();
   const pass = cajeroPass.value.trim();
-  if (!nro || !nombre || !dni || !pass) return;
+
+  if (!nro || !nombre || !dni || !pass) {
+    alert("Todos los campos son obligatorios");
+    return;
+  }
 
   if (!/^\d{8}$/.test(dni)) {
     alert("El DNI debe tener exactamente 8 dígitos");
     return;
   }
 
-  if (!/^[A-Za-zñÑ\s]{6,20}$/.test(nombre)) {
-    alert("El nombre debe tener entre 6 y 20 letras, puede incluir espacios y ñ");
+  if (
+    !/^[A-Za-zñÑ]+(?:\s[A-Za-zñÑ]+)*$/.test(nombre) ||
+    nombre.length < 6 ||
+    nombre.length > 25
+  ) {
+    alert("El nombre debe tener entre 6 y 25 letras, puede incluir espacios y ñ");
+    return;
+  }
+
+  if (pass.length < 4 || pass.length > 8) {
+    alert("La contraseña debe tener entre 4 y 8 caracteres");
     return;
   }
 
@@ -1483,7 +1502,9 @@ btnAgregarCajero.addEventListener("click", () => {
     }
 
     await window.set(window.ref(`/cajeros/${nro}`), { nombre, dni, pass });
-    cajeroNombre.value = cajeroDni.value = cajeroPass.value = "";
+    cajeroNombre.value = "";
+    cajeroDni.value = "";
+    cajeroPass.value = "";
     loadCajerosTabla();
     loadCajeros();
   });
