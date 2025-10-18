@@ -961,7 +961,7 @@ async function loadStock(filtro = "") {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td><input type="text" value="${prod.nombre}" maxlength="25" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
+      <td><input type="text" value="${prod.nombre}" maxlength="30" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
       <td style="display:flex; align-items:center; gap:4px;">
         <button class="btn-cant" data-action="-">-</button>
         <input type="number" min="0" max="999" value="${prod.cant}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="cant">
@@ -1006,7 +1006,7 @@ async function loadStock(filtro = "") {
 
     // --- GUARDAR NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
-      let val = e.target.value.trim().slice(0,25);
+      let val = e.target.value.trim().slice(0,30);
       e.target.value = val;
       await window.update(window.ref(`/stock/${id}`), { nombre: val });
     });
@@ -1158,7 +1158,7 @@ async function loadSueltos(filtro = "") {
 
     tr.innerHTML = `
       <td>${id}</td>
-      <td><input type="text" value="${prod.nombre}" maxlength="25" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
+      <td><input type="text" value="${prod.nombre}" maxlength="30" style="width:100%; min-width:100px; box-sizing:border-box;" data-field="nombre"></td>
       <td><input type="text" value="${prod.kg.toFixed(3)}" style="width:100%; max-width:70px; box-sizing:border-box; text-align:center;" data-field="kg"></td>
       <td>${prod.fecha ? formatFecha(prod.fecha) : ""}</td>
       <td style="display:flex; gap:4px; align-items:center;">
@@ -1178,7 +1178,7 @@ async function loadSueltos(filtro = "") {
 
     // --- GUARDAR NOMBRE ---
     tr.querySelector('input[data-field="nombre"]').addEventListener("change", async e => {
-      let val = e.target.value.trim().slice(0,25);
+      let val = e.target.value.trim().slice(0,30);
       e.target.value = val;
       await window.update(window.ref(`/sueltos/${id}`), { nombre: val });
     });
