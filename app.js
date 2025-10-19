@@ -109,12 +109,18 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// === COBRO (nuevo flujo unificado) ===
+// =====================
+// === COBRO (FINAL) ===
+// =====================
+
+// Elementos UI (IDs originales que sí existen en el HTML limpio)
 const inputCodigoProducto = document.getElementById("cobro-codigo");
-const btnBuscarGeneral     = document.getElementById("btn-buscar-general");
-const modalBusqueda        = document.getElementById("modal-busqueda");
-const inputBusqueda        = document.getElementById("input-busqueda");
-const tablaResultadosBody  = document.getElementById("tabla-resultados-busqueda").querySelector("tbody");
+const btnBuscarGeneral    = document.getElementById("btn-buscar-general");
+const modalBusqueda       = document.getElementById("modal-busqueda");
+const inputBusqueda       = document.getElementById("input-busqueda");
+const tablaResultadosBody = document
+  .getElementById("tabla-resultados-busqueda")
+  .querySelector("tbody");
 
 const tablaCobroBody = document.getElementById("tabla-cobro").querySelector("tbody");
 const totalDiv       = document.getElementById("total-div");
@@ -123,7 +129,9 @@ const btnCobrar      = document.getElementById("btn-cobrar");
 const inputDescuento = document.getElementById("input-descuento");
 const inputRecargo   = document.getElementById("input-recargo");
 
-// --- Inicialización general de datos (mantiene compatibilidad con otras secciones) ---
+// -----------------------------
+// Inicialización (compat resto)
+// -----------------------------
 async function inicializarCobro() {
   try {
     const [snapStock, snapSueltos] = await Promise.all([
@@ -131,25 +139,26 @@ async function inicializarCobro() {
       window.get(window.ref("/sueltos"))
     ]);
 
-    if (snapStock.exists()) window.stockCache = snapStock.val();
+    if (snapStock.exists())  window.stockCache   = snapStock.val();
     if (snapSueltos.exists()) window.sueltosCache = snapSueltos.val();
 
-    // Inicializa el resto del sistema (como antes)
-    if (typeof loadStock === "function") loadStock();
-    if (typeof loadSueltos === "function") loadSueltos();
-    if (typeof loadMovimientos === "function") loadMovimientos();
-    if (typeof loadHistorial === "function") loadHistorial();
+    // Mantener funcionamiento del resto de secciones (si existen)
+    if (typeof loadStock === "function")      loadStock();
+    if (typeof loadSueltos === "function")    loadSueltos();
+    if (typeof loadMovimientos === "function")loadMovimientos();
+    if (typeof loadHistorial === "function")  loadHistorial();
   } catch (err) {
     console.error("Error al inicializar datos:", err);
   }
 }
 inicializarCobro();
 
-// Estado
+// -----------------
+// Estado y utils
+// -----------------
 let carrito = []; // [{id, nombre, tipo: "stock"|"sueltos", cant: number, precio: number}]
 let porcentajeFinal = 0; // recargo - descuento
 
-// === Utilidades ===
 function formatPrecioSimple(valor) {
   const n = Number(valor) || 0;
   return n.toFixed(2).replace(".", ",");
@@ -157,7 +166,9 @@ function formatPrecioSimple(valor) {
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 function esEnteroPositivo(n) { return Number.isInteger(n) && n > 0; }
 
-// === Carga/Inicialización ===
+// -----------------------------
+// UI base
+// -----------------------------
 function initCobroUI() {
   inputCodigoProducto.value = "";
   inputDescuento.value = "0";
@@ -167,7 +178,9 @@ function initCobroUI() {
 }
 initCobroUI();
 
-// === Descuento / Recargo ===
+// -----------------------------
+// Descuento/Recargo
+// -----------------------------
 function actualizarPorcentajeFinal() {
   const d = clamp(Math.round(Number(inputDescuento.value) || 0), 0, 100);
   const r = clamp(Math.round(Number(inputRecargo.value)   || 0), 0, 100);
@@ -179,7 +192,9 @@ function actualizarPorcentajeFinal() {
 inputDescuento.addEventListener("input", actualizarPorcentajeFinal);
 inputRecargo.addEventListener("input", actualizarPorcentajeFinal);
 
-// === Tabla de Cobro (render + edición) ===
+// ---------------------------------------
+// Render y edición de la tabla de cobro
+// ---------------------------------------
 async function actualizarTabla() {
   tablaCobroBody.innerHTML = "";
   let total = 0;
@@ -188,50 +203,55 @@ async function actualizarTabla() {
     const it = carrito[i];
     const tr = document.createElement("tr");
 
-    const celdaCant = document.createElement("td");
+    // Cant/KG editable
+    const tdCant = document.createElement("td");
     const inpCant = document.createElement("input");
     inpCant.type = "text";
-    inpCant.value = it.tipo === "sueltos" ? (Number(it.cant).toFixed(3)) : String(it.cant);
+    inpCant.value = it.tipo === "sueltos" ? Number(it.cant).toFixed(3) : String(it.cant);
     inpCant.dataset.idx = String(i);
     inpCant.dataset.field = "cant";
     inpCant.style.width = "80px";
     inpCant.style.textAlign = "center";
-    celdaCant.appendChild(inpCant);
+    tdCant.appendChild(inpCant);
 
-    const celdaNombre = document.createElement("td");
-    celdaNombre.textContent = it.nombre;
+    // Nombre
+    const tdNombre = document.createElement("td");
+    tdNombre.textContent = it.nombre;
 
-    const celdaPrecio = document.createElement("td");
+    // Precio unidad (sueltos: campo editable del MONTO para recalcular KG)
+    const tdPrecio = document.createElement("td");
     if (it.tipo === "sueltos") {
       const inpPrecio = document.createElement("input");
       inpPrecio.type = "text";
-      inpPrecio.value = String(Math.round(it.precio * it.cant)); // precio total del suelto (monto editable)
+      inpPrecio.value = String(Math.round(it.precio * it.cant)); // monto total editable
       inpPrecio.dataset.idx = String(i);
       inpPrecio.dataset.field = "precio";
       inpPrecio.style.width = "90px";
       inpPrecio.style.textAlign = "right";
-      celdaPrecio.appendChild(inpPrecio);
+      tdPrecio.appendChild(inpPrecio);
     } else {
-      celdaPrecio.textContent = Number(it.precio).toFixed(2);
+      tdPrecio.textContent = Number(it.precio).toFixed(2);
     }
 
-    const celdaTotal = document.createElement("td");
-    celdaTotal.textContent = (it.cant * it.precio).toFixed(2);
+    // Total
+    const tdTotal = document.createElement("td");
+    tdTotal.textContent = (it.cant * it.precio).toFixed(2);
 
-    const celdaAccion = document.createElement("td");
+    // Acción
+    const tdAccion = document.createElement("td");
     const btnDel = document.createElement("button");
     btnDel.textContent = "❌";
     btnDel.addEventListener("click", () => {
       carrito.splice(i, 1);
       actualizarTabla();
     });
-    celdaAccion.appendChild(btnDel);
+    tdAccion.appendChild(btnDel);
 
-    tr.appendChild(celdaCant);
-    tr.appendChild(celdaNombre);
-    tr.appendChild(celdaPrecio);
-    tr.appendChild(celdaTotal);
-    tr.appendChild(celdaAccion);
+    tr.appendChild(tdCant);
+    tr.appendChild(tdNombre);
+    tr.appendChild(tdPrecio);
+    tr.appendChild(tdTotal);
+    tr.appendChild(tdAccion);
     tablaCobroBody.appendChild(tr);
 
     total += it.cant * it.precio;
@@ -250,53 +270,66 @@ tablaCobroBody.addEventListener("input", async (e) => {
   const idx = Number(t.dataset.idx);
   const field = t.dataset.field;
   if (Number.isNaN(idx) || !field) return;
+
   const item = carrito[idx];
 
   if (field === "cant") {
     if (item.tipo === "stock") {
+      // Editar cantidad (1..999, <= stock disponible)
       let val = parseInt(String(t.value).replace(/\D/g, ""), 10);
       if (!esEnteroPositivo(val)) val = 1;
+
       const snap = await window.get(window.ref(`/stock/${item.id}`));
       if (!snap.exists()) return alert("Producto no encontrado");
       const disp = Number(snap.val().cant) || 0;
       if (val > disp) { alert("No hay tanta cantidad disponible"); val = disp || 1; }
       val = clamp(val, 1, 999);
+
       item.cant = val;
       t.value = String(val);
     } else {
-      // sueltos: editar KG
+      // Editar KG (0.001..99, <= kg disponible)
       let val = parseFloat(String(t.value).replace(",", "."));
       if (!isFinite(val)) val = 0;
       val = Math.round(clamp(val, 0.001, 99) * 1000) / 1000;
+
       const snap = await window.get(window.ref(`/sueltos/${item.id}`));
       if (!snap.exists()) return alert("Producto no encontrado");
       const disp = Number(snap.val().kg) || 0;
       const precioUnitario = Number(snap.val().precio) || 0;
+
       if (val > disp) { alert("No hay tanta cantidad disponible"); val = Math.max(0.001, Math.min(disp, 99)); }
+
       item.cant = val;
       item.precio = precioUnitario; // precio por KG
       t.value = val.toFixed(3);
     }
   } else if (field === "precio" && item.tipo === "sueltos") {
-    // sueltos: editar PRECIO TOTAL -> recalcula KG
+    // Editar PRECIO TOTAL (sueltos) -> recalcular KG
     const snap = await window.get(window.ref(`/sueltos/${item.id}`));
     if (!snap.exists()) return alert("Producto no encontrado");
+
     const precioUnitario = Number(snap.val().precio) || 0;
     let monto = parseInt(String(t.value).replace(/\D/g, ""), 10);
     if (!isFinite(monto)) monto = 0;
+
     let nuevoKg = precioUnitario > 0 ? (monto / precioUnitario) : 0;
     const disp = Number(snap.val().kg) || 0;
+
     if (nuevoKg > disp) { alert("No hay tanta cantidad disponible"); nuevoKg = disp; }
     nuevoKg = Math.round(clamp(nuevoKg, 0.001, 99) * 1000) / 1000;
+
     item.cant = nuevoKg;
-    item.precio = precioUnitario;
+    item.precio = precioUnitario; // precio por KG
     t.value = String(monto);
   }
 
   actualizarTabla();
 });
 
-// === Agregar al carrito ===
+// -----------------------------
+// Agregar productos al carrito
+// -----------------------------
 async function agregarAlCarrito(nuevoItem) {
   const path = `/${nuevoItem.tipo}/${nuevoItem.id}`;
   const snap = await window.get(window.ref(path));
@@ -320,20 +353,22 @@ async function agregarAlCarrito(nuevoItem) {
       nombre: data.nombre,
       tipo: nuevoItem.tipo,
       cant: nuevoItem.cant,
-      precio: Number(data.precio) // en sueltos = precio por KG
+      precio: Number(data.precio) // sueltos: precio por KG
     });
   }
 
   actualizarTabla();
 }
 
-// === Escaneo automático (13 dígitos) ===
+// -----------------------------
+// Escaneo automático (13 díg.)
+// -----------------------------
 inputCodigoProducto.addEventListener("input", async () => {
   const code = inputCodigoProducto.value.trim();
   if (code.length !== 13) return;
   inputCodigoProducto.value = "";
 
-  // Intentar STOCK
+  // STOCK
   const st = await window.get(window.ref(`/stock/${code}`));
   if (st.exists()) {
     const v = st.val();
@@ -341,7 +376,7 @@ inputCodigoProducto.addEventListener("input", async () => {
     return agregarAlCarrito({ id: code, tipo: "stock", cant: 1 });
   }
 
-  // Intentar SUELTOS
+  // SUELTOS
   const su = await window.get(window.ref(`/sueltos/${code}`));
   if (su.exists()) {
     const v = su.val();
@@ -352,7 +387,9 @@ inputCodigoProducto.addEventListener("input", async () => {
   alert("Producto no encontrado");
 });
 
-// === Modal de Búsqueda ===
+// -----------------------------
+// Modal de búsqueda unificado
+// -----------------------------
 btnBuscarGeneral.addEventListener("click", () => {
   modalBusqueda.classList.remove("hidden");
   inputBusqueda.value = "";
@@ -363,7 +400,7 @@ document.getElementById("btn-cerrar-busqueda").addEventListener("click", () => {
   modalBusqueda.classList.add("hidden");
 });
 
-// Búsqueda viva (min 2 chars), orden alfabético, filas inactivas si disp <= 0
+// Búsqueda viva (mín. 2 chars), orden alfabético, fila gris sin stock
 inputBusqueda.addEventListener("input", async () => {
   const q = inputBusqueda.value.trim().toLowerCase();
   tablaResultadosBody.innerHTML = "";
@@ -377,12 +414,18 @@ inputBusqueda.addEventListener("input", async () => {
   let lista = [];
   if (snapStock.exists()) {
     for (const [id, v] of Object.entries(snapStock.val())) {
-      lista.push({ id, nombre: String(v.nombre || ""), tipo: "stock", disp: Number(v.cant) || 0, precio: Number(v.precio) || 0 });
+      lista.push({
+        id, nombre: String(v.nombre || ""), tipo: "stock",
+        disp: Number(v.cant) || 0, precio: Number(v.precio) || 0
+      });
     }
   }
   if (snapSueltos.exists()) {
     for (const [id, v] of Object.entries(snapSueltos.val())) {
-      lista.push({ id, nombre: String(v.nombre || ""), tipo: "sueltos", disp: Number(v.kg) || 0, precio: Number(v.precio) || 0 });
+      lista.push({
+        id, nombre: String(v.nombre || ""), tipo: "sueltos",
+        disp: Number(v.kg) || 0, precio: Number(v.precio) || 0
+      });
     }
   }
 
@@ -397,7 +440,9 @@ inputBusqueda.addEventListener("input", async () => {
     const tdCodigo = document.createElement("td");  tdCodigo.textContent = it.id;
     const tdNombre = document.createElement("td");  tdNombre.textContent = it.nombre;
     const tdTipo   = document.createElement("td");  tdTipo.textContent = it.tipo === "stock" ? "stock" : "sueltos";
-    const tdDisp   = document.createElement("td");  tdDisp.style.textAlign = "right"; tdDisp.textContent = it.disp.toFixed(it.tipo==="sueltos"?3:0);
+    const tdDisp   = document.createElement("td");
+    tdDisp.style.textAlign = "right";
+    tdDisp.textContent = it.disp.toFixed(it.tipo === "sueltos" ? 3 : 0);
 
     const tdAcc    = document.createElement("td");
     const btnAdd   = document.createElement("button");
@@ -414,12 +459,13 @@ inputBusqueda.addEventListener("input", async () => {
     tr.appendChild(tdTipo);
     tr.appendChild(tdDisp);
     tr.appendChild(tdAcc);
-
     tablaResultadosBody.appendChild(tr);
   }
 });
 
-// === Imprimir Ticket (mismo formato; 100ms fijo para limpiar/stop) ===
+// --------------------------------------
+// Imprimir ticket (igual que tu versión)
+// --------------------------------------
 let iframeTicket = null;
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   try {
@@ -509,7 +555,7 @@ ${contenido}
       if (win) {
         win.focus();
         win.print();
-        setTimeout(() => { try { win.stop(); } catch {} }, 100); // 100 ms fijo
+        setTimeout(() => { try { win.stop(); } catch {} }, 100);
       }
     }, 10);
   } catch (err) {
@@ -517,7 +563,9 @@ ${contenido}
   }
 }
 
-// === COBRAR (mismo flujo de tu app: movimientos, historial, stock) ===
+// --------------------------------------
+// Cobro (movimientos/historial/stock)
+// --------------------------------------
 btnCobrar.addEventListener("click", async () => {
   if (!window.currentUser || carrito.length === 0) return;
 
@@ -562,8 +610,8 @@ btnCobrar.addEventListener("click", async () => {
       let ultimoFecha = confVal.ultimoTicketFecha || "";
       if (ultimoFecha !== fechaHoyISO) ultimoID = 0;
       ultimoID++;
-      const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
 
+      const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
       const fecha = new Date();
       const fechaStr =
         `${String(fecha.getDate()).padStart(2,"0")}/` +
@@ -612,7 +660,7 @@ btnCobrar.addEventListener("click", async () => {
         alert("VENTA FINALIZADA");
         carrito = [];
         actualizarTabla();
-        // Estas funciones existen en tu app y mantienen el resto sincronizado:
+        // Mantener sincronización del resto
         try { window.loadStock && window.loadStock(); } catch {}
         try { window.loadSueltos && window.loadSueltos(); } catch {}
         try { window.loadMovimientos && window.loadMovimientos(); } catch {}
