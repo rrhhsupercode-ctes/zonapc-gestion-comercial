@@ -132,6 +132,7 @@ const inputRecargo = document.getElementById("input-recargo");
 let carrito = [];
 let porcentajeFinal = 0;
 let precioUnitarioActual = 0;
+let bloqueaStockListener = false; // evita conflicto entre stock y sueltos
 
 // --- Funciones de carga ---
 async function loadProductos() {
@@ -195,7 +196,7 @@ function actualizarTabla() {
       <td>${item.nombre}</td>
       <td>${item.precio.toFixed(2)}</td>
       <td>${(item.cant * item.precio).toFixed(2)}</td>
-      <td><button data-idx="${idx}">?</button></td>
+      <td><button data-idx="${idx}">❌</button></td>
     `;
     tr.querySelector("button").addEventListener("click", () => {
       carrito.splice(idx, 1);
@@ -244,6 +245,15 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
+// --- Escaneo automático para stock ---
+inputCodigoProducto.addEventListener("input", () => {
+  if (bloqueaStockListener) return;
+  if (inputCodigoProducto.value.trim().length === 13) {
+    btnAddProduct.click();
+    inputCodigoProducto.value = "";
+  }
+});
+
 // --- Escaneo automático para sueltos también ---
 inputCodigoProducto.addEventListener("input", async () => {
   const codigo = inputCodigoProducto.value.trim();
@@ -252,12 +262,13 @@ inputCodigoProducto.addEventListener("input", async () => {
   const refSuelto = window.ref(`/sueltos/${codigo}`);
   const snapSuelto = await window.get(refSuelto);
   if (snapSuelto.exists()) {
+    bloqueaStockListener = true;
     const data = snapSuelto.val();
     if (data.kg > 0) {
       agregarAlCarrito({
         id: codigo,
         nombre: data.nombre,
-        cant: 0.000,   // ← se agrega con 0.000 kg
+        cant: 0.000, // agregado con 0.000 KG
         precio: data.precio,
         tipo: "sueltos"
       });
@@ -265,6 +276,7 @@ inputCodigoProducto.addEventListener("input", async () => {
       alert("Stock insuficiente en sueltos");
     }
     inputCodigoProducto.value = "";
+    setTimeout(() => bloqueaStockListener = false, 100);
     return;
   }
 
