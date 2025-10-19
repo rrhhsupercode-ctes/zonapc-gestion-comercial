@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Zona PC V3.8.2</title>
+  <title>Zona PC V3.8.3</title>
   <link rel="stylesheet" href="styles.css">
 
   <!-- Firebase SDK Modular 11.8.1 -->
@@ -13,13 +13,13 @@
 
     // Configuración de Firebase
     const firebaseConfig = {
-  apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
-  authDomain: "zonapc-actualizado.firebaseapp.com",
-  databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
-  projectId: "zonapc-actualizado",
-  storageBucket: "zonapc-actualizado.firebasestorage.app",
-  messagingSenderId: "837716085875",
-  appId: "1:837716085875:web:198ad1963c42c1105eae06"
+      apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
+      authDomain: "zonapc-actualizado.firebaseapp.com",
+      databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
+      projectId: "zonapc-actualizado",
+      storageBucket: "zonapc-actualizado.firebasestorage.app",
+      messagingSenderId: "837716085875",
+      appId: "1:837716085875:web:198ad1963c42c1105eae06"
     };
 
     // Inicialización
@@ -27,7 +27,7 @@
     const db = getDatabase(app);
     const auth = getAuth(app);
 
-    // Wrappers globales (opcional, para compatibilidad con init.js y app.js)
+    // Wrappers globales
     window.app = app;
     window.db = db;
     window.auth = auth;
@@ -46,7 +46,7 @@
 <body>
   <header>
     <img src="https://iili.io/KXkB2Ax.png" alt="ZONAPC" class="banner-img">
-    <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.2</h1>
+    <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.3</h1>
     <nav>
       <button class="nav-btn" data-section="cobro">Cobrar</button>
       <button class="nav-btn" data-section="movimientos">Movimientos</button>
@@ -71,27 +71,10 @@
 
   <div id="cobro-controles" class="hidden">
 
-    <!-- FILA COBRO NORMAL -->
-    <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <select id="cobro-cantidad"></select>
-      <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-productos" style="flex:2;">
-        <option value="">Elija un producto en stock</option>
-      </select>
-      <button id="btn-add-product">OK​</button>
-    </div>
-
-    <!-- FILA SUELTOS (KG + Precio) -->
-    <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <button id="btn-decr-kg" style="width:30px;">-</button>
-      <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
-      <button id="btn-incr-kg" style="width:30px;">+</button>
-      <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
-      <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-sueltos" style="flex:2;">
-        <option value="">Elija un producto suelto</option>
-      </select>
-      <button id="btn-add-suelto">OK​</button>
+    <!-- FILA UNIFICADA (ESCANEO + BUSCAR) -->
+    <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
+      <input id="scan-codigo" placeholder="Escanear código o escribir..." style="flex:1;">
+      <button id="btn-buscar-cobro">🔍Buscar</button>
     </div>
 
     <!-- FILA DESCUENTO / RECARGO -->
@@ -106,7 +89,7 @@
       </div>
     </div>
 
-    <!-- TABLA DE COBRO -->
+    <!-- TABLA DE COBRO EDITABLE -->
     <table id="tabla-cobro">
       <thead>
         <tr>
@@ -119,20 +102,42 @@
       </thead>
       <tbody></tbody>
     </table>
+
     <div id="total-div">TOTAL: $0</div>
-    <button id="btn-cobrar" class="hidden">💸​Cobrar</button>
+    <button id="btn-cobrar" class="hidden">💸Cobrar</button>
   </div>
 </section>
+
+<!-- MODAL BUSCAR PRODUCTOS -->
+<div id="modal-buscar" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:9999;">
+  <div style="background:#fff; padding:20px; border-radius:10px; max-width:600px; width:90%; text-align:center;">
+    <h2 style="margin-bottom:10px;">¿Qué desea buscar?</h2>
+    <input id="buscar-input" maxlength="30" placeholder="Ingrese nombre o código..." style="width:90%; padding:5px; margin-bottom:10px; text-align:center;">
+    <div style="margin-bottom:10px;">
+      <button id="buscar-cancelar" style="background:red; color:white; padding:5px 15px; border:none; border-radius:5px;">Cancelar</button>
+    </div>
+    <table id="tabla-buscar-resultados" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#eee;">
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Cant/Kg</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
 
     <!-- MOVIMIENTOS -->
     <section id="movimientos" class="hidden">
       <h2>Movimientos</h2>
-
       <label for="filtroCajero">Nro Cajero(a):</label>
       <select id="filtroCajero">
         <option value="TODOS">TODOS</option>
       </select>
-      
       <button id="btn-tirar-z">📃Tirar Z</button>
       <table id="tabla-movimientos">
         <thead>
@@ -176,32 +181,30 @@
     </section>
 
     <!-- SUELTOS -->
-<section id="sueltos" class="hidden">
-  <h2>Sueltos</h2>
-
-  <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-    <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
-    <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
-    <button id="sueltos-btn-decr" style="width:30px;">-</button>
-    <button id="sueltos-btn-incr" style="width:30px;">+</button>
-    <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
-    <button id="btn-buscar-suelto">🔍Buscar</button>
-  </div>
-
-  <table id="tabla-sueltos">
-    <thead>
-      <tr>
-        <th>Código</th>
-        <th>Nombre</th>
-        <th>KG</th>
-        <th>Fecha</th>
-        <th>Precio</th>
-        <th>Acción</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</section>
+    <section id="sueltos" class="hidden">
+      <h2>Sueltos</h2>
+      <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+        <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
+        <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
+        <button id="sueltos-btn-decr" style="width:30px;">-</button>
+        <button id="sueltos-btn-incr" style="width:30px;">+</button>
+        <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
+        <button id="btn-buscar-suelto">🔍Buscar</button>
+      </div>
+      <table id="tabla-sueltos">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>KG</th>
+            <th>Fecha</th>
+            <th>Precio</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
     <!-- CAJEROS -->
     <section id="cajeros" class="hidden">
@@ -224,20 +227,16 @@
     <!-- CONFIG -->
     <section id="config" class="hidden">
       <h2>Configuración</h2>
-
       <p class="emoji">Datos de esta sucursal:</p><br>
       <p class="emoji">🔠</p><input id="config-nombre" placeholder="Nombre de Tienda">
       <p class="emoji">📌</p><input id="config-ubicacion" placeholder="Ubicación del comercio">
       <p class="emoji">🔢​</p><input id="config-cuit" placeholder="CUIT">
-      
       <div id="admin-pass-config">
         <input id="config-pass-actual" type="password" placeholder="Contraseña actual">
         <input id="config-pass-nueva" type="password" placeholder="Nueva contraseña">
-
-        <button id="guardar-config" class="btn-guardar">✅​Guardar</button>
+        <button id="guardar-config" class="btn-guardar">✅Guardar</button>
         <p id="config-msg" class="msg-error"></p>
       </div>
-
       <input id="master-pass" placeholder="Contraseña Maestra">
       <button id="btn-restaurar" class="btn-restaurar">🔑Restaurar Contraseña</button>
     </section>
