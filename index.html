@@ -108,32 +108,52 @@
     <button id="btn-cobrar" class="hidden">💸Cobrar</button>
   </div>
 
-  <!-- MODAL DE BÚSQUEDA -->
-<div id="modal-busqueda-overlay" class="modal-overlay hidden">
-  <div id="modal-busqueda" class="modal">
-    <h3>¿Qué desea buscar?</h3>
+  <!-- MODAL DE BÚSQUEDA FINAL -->
+<div id="modal-busqueda" class="hidden" style="
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  display:none; /* oculto por defecto */
+  justify-content:center;
+  align-items:center;
+  background:rgba(0,0,0,0.7);
+  z-index:9999;
+">
+  <div style="
+    background:#fff;
+    padding:20px;
+    border-radius:10px;
+    width:90%;
+    max-width:700px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  ">
+    <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
     <div style="display:flex; gap:10px; margin-bottom:10px;">
       <input id="input-busqueda" type="text" maxlength="30"
              placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
              style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
-      <button id="btn-cancelar-busqueda" class="btn-eliminar">Cancelar</button>
+      <button id="btn-cancelar-busqueda"
+              style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
+        Cancelar
+      </button>
     </div>
 
     <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
       <thead>
-        <tr>
-          <th>Código</th>
-          <th>Nombre</th>
-          <th>Tipo</th>
-          <th>Cant/Kg</th>
-          <th>Acción</th>
+        <tr style="background:#eee;">
+          <th style="padding:5px; border:1px solid #ccc;">Código</th>
+          <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
+          <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
+          <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
+          <th style="padding:5px; border:1px solid #ccc;">Acción</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
   </div>
 </div>
-
 
     <!-- MOVIMIENTOS -->
     <section id="movimientos" class="hidden">
