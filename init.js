@@ -29,3 +29,18 @@
     }
   })();
 })();
+
+// --- Inicialización global del sistema (restaurada) ---
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    // Ejecuta los loaders globales si existen
+    if (typeof loadStock === "function")      loadStock();
+    if (typeof loadSueltos === "function")    loadSueltos();
+    if (typeof loadCajeros === "function")    loadCajeros();
+    if (typeof loadMovimientos === "function")loadMovimientos();
+    if (typeof loadHistorial === "function")  loadHistorial();
+  } catch (err) {
+    console.error("Error en inicialización global:", err);
+  }
+});
+
