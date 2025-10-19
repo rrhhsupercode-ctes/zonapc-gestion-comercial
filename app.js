@@ -244,6 +244,33 @@ btnAddProduct.addEventListener("click", async () => {
   inputCodigoProducto.value = "";
 });
 
+// --- Escaneo automático para sueltos también ---
+inputCodigoProducto.addEventListener("input", async () => {
+  const codigo = inputCodigoProducto.value.trim();
+  if (codigo.length !== 13) return;
+
+  const refSuelto = window.ref(`/sueltos/${codigo}`);
+  const snapSuelto = await window.get(refSuelto);
+  if (snapSuelto.exists()) {
+    const data = snapSuelto.val();
+    if (data.kg > 0) {
+      agregarAlCarrito({
+        id: codigo,
+        nombre: data.nombre,
+        cant: 0.000,   // ← se agrega con 0.000 kg
+        precio: data.precio,
+        tipo: "sueltos"
+      });
+    } else {
+      alert("Stock insuficiente en sueltos");
+    }
+    inputCodigoProducto.value = "";
+    return;
+  }
+
+  // si no es suelto, intenta stock (ya manejado por el listener anterior)
+});
+
 // --- SUELTOS KG <-> PRECIO ---
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
