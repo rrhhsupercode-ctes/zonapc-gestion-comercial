@@ -123,6 +123,28 @@ const btnCobrar      = document.getElementById("btn-cobrar");
 const inputDescuento = document.getElementById("input-descuento");
 const inputRecargo   = document.getElementById("input-recargo");
 
+// --- Inicialización general de datos (mantiene compatibilidad con otras secciones) ---
+async function inicializarCobro() {
+  try {
+    const [snapStock, snapSueltos] = await Promise.all([
+      window.get(window.ref("/stock")),
+      window.get(window.ref("/sueltos"))
+    ]);
+
+    if (snapStock.exists()) window.stockCache = snapStock.val();
+    if (snapSueltos.exists()) window.sueltosCache = snapSueltos.val();
+
+    // Inicializa el resto del sistema (como antes)
+    if (typeof loadStock === "function") loadStock();
+    if (typeof loadSueltos === "function") loadSueltos();
+    if (typeof loadMovimientos === "function") loadMovimientos();
+    if (typeof loadHistorial === "function") loadHistorial();
+  } catch (err) {
+    console.error("Error al inicializar datos:", err);
+  }
+}
+inicializarCobro();
+
 // Estado
 let carrito = []; // [{id, nombre, tipo: "stock"|"sueltos", cant: number, precio: number}]
 let porcentajeFinal = 0; // recargo - descuento
