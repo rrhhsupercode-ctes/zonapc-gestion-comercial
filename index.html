@@ -69,6 +69,21 @@
   </div>
 
   <div id="cobro-controles" class="hidden">
+
+    <!-- ELEMENTOS INVISIBLES PARA COMPATIBILIDAD -->
+<div style="display:none;">
+  <select id="cobro-productos"></select>
+  <select id="cobro-sueltos"></select>
+  <select id="cobro-cantidad"></select>
+  <input id="cobro-codigo-suelto">
+  <input id="input-kg-suelto">
+  <input id="input-precio-suelto">
+  <button id="btn-add-product"></button>
+  <button id="btn-add-suelto"></button>
+  <button id="btn-incr-kg"></button>
+  <button id="btn-decr-kg"></button>
+</div>
+
     <!-- FILA PRINCIPAL DE ESCANEO -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
       <input id="cobro-codigo" placeholder="Escanee o ingrese código" style="flex:2;">
