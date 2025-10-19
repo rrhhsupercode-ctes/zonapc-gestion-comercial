@@ -110,45 +110,45 @@ btnLogin.addEventListener("click", async () => {
 });
 
 /*****************************************************
- * SECCIÓN COBRO COMPLETA (AISLADA) – ZONA PC V3.8.3
+ * SECCIÓN COBRO COMPLETA (GLOBAL) – ZONA PC V3.8.3
  * Unificada (Stock + Sueltos) con modal de búsqueda
- * Firebase Modular 11.8.1 – Sin interferir otras secciones
+ * Firebase Modular 11.8.1 – Sin romper otras secciones
  *****************************************************/
-(() => {
-  // --- ELEMENTOS ---
-  const scanCodigo = document.getElementById("scan-codigo");
-  const btnBuscarCobro = document.getElementById("btn-buscar-cobro");
-  const modalBuscar = document.getElementById("modal-buscar");
-  const buscarInput = document.getElementById("buscar-input");
-  const buscarCancelar = document.getElementById("buscar-cancelar");
-  const tablaBuscarResultadosRoot = document.getElementById("tabla-buscar-resultados");
-  const tablaCobroRoot = document.getElementById("tabla-cobro");
-  const inputDescuento = document.getElementById("input-descuento");
-  const inputRecargo = document.getElementById("input-recargo");
-  const totalDiv = document.getElementById("total-div");
-  const btnCobrar = document.getElementById("btn-cobrar");
 
-  // Si la sección no está en el DOM (otra vista), no inicializar
-  if (!scanCodigo || !btnBuscarCobro || !modalBuscar || !buscarInput || !buscarCancelar || !tablaBuscarResultadosRoot || !tablaCobroRoot || !totalDiv || !btnCobrar) return;
+// --- ELEMENTOS (nuevos IDs del HTML V3.8.3) ---
+const scanCodigo = document.getElementById("scan-codigo");
+const btnBuscarCobro = document.getElementById("btn-buscar-cobro");
+const modalBuscar = document.getElementById("modal-buscar");
+const buscarInput = document.getElementById("buscar-input");
+const buscarCancelar = document.getElementById("buscar-cancelar");
+const tablaBuscarResultadosEl = document.getElementById("tabla-buscar-resultados");
+const tablaCobroEl = document.getElementById("tabla-cobro");
+const inputDescuento = document.getElementById("input-descuento");
+const inputRecargo = document.getElementById("input-recargo");
+const totalDiv = document.getElementById("total-div");
+const btnCobrar = document.getElementById("btn-cobrar");
 
-  const tablaBuscarResultados = tablaBuscarResultadosRoot.querySelector("tbody");
-  const tablaCobro = tablaCobroRoot.querySelector("tbody");
+// Si la sección COBRO no existe en el DOM, no continuar (evita romper otras vistas)
+if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar && tablaBuscarResultadosEl && tablaCobroEl && totalDiv && btnCobrar) {
 
-  // --- ESTADO (aislado para no colisionar con otras secciones) ---
-  let carritoCobro = [];
-  let porcentajeCobro = 0;
-  let iframeTicketCobro = null;
+  const tablaBuscarResultados = tablaBuscarResultadosEl.querySelector("tbody");
+  const tablaCobro = tablaCobroEl.querySelector("tbody");
+
+  // --- ESTADO GLOBAL (nombres compatibles con tu app) ---
+  let carrito = [];             // mantiene formato [{id, nombre, cant, precio, tipo}]
+  let porcentajeFinal = 0;      // descuento/recargo final aplicado
+  let iframeTicket = null;      // ticket persistente
 
   // ======================================================
-  //  UTILIDADES LOCALES
+  //  UTILIDADES
   // ======================================================
-  const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
-  const formatPrecioSimpleCobro = (valor) => Number(valor || 0).toFixed(2).replace('.', ',');
+  const clamp = (v, min, max) => Math.min(Math.max(Number(v) || 0, min), max);
+  function formatPrecioSimple(valor) { return Number(valor || 0).toFixed(2).replace('.', ','); }
 
   async function getNode(path) {
     try {
       const snap = await window.get(window.ref(path));
-      return snap.exists() ? snap.val() : null;
+      return snap && snap.exists() ? snap.val() : null;
     } catch {
       return null;
     }
@@ -157,33 +157,33 @@ btnLogin.addEventListener("click", async () => {
   // ======================================================
   //  DESCUENTO / RECARGO
   // ======================================================
-  function calcularPorcentajeFinalCobro() {
-    const desc = clamp(Math.round(Number(inputDescuento.value) || 0), 0, 100);
-    const rec = clamp(Math.round(Number(inputRecargo.value) || 0), 0, 100);
-    inputDescuento.value = String(desc);
-    inputRecargo.value = String(rec);
-    porcentajeCobro = rec - desc;
+  function calcularPorcentajeFinal() {
+    const desc = clamp(inputDescuento.value, 0, 100);
+    const rec = clamp(inputRecargo.value, 0, 100);
+    inputDescuento.value = String(Math.round(desc));
+    inputRecargo.value = String(Math.round(rec));
+    porcentajeFinal = rec - desc;
     actualizarTablaCobro();
   }
-  inputDescuento.addEventListener("input", calcularPorcentajeFinalCobro);
-  inputRecargo.addEventListener("input", calcularPorcentajeFinalCobro);
+  if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
+  if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
 
   // ======================================================
   //  AGREGAR AL CARRITO
   // ======================================================
-  async function agregarAlCarritoCobro(item) {
+  async function agregarAlCarrito(item) {
     const data = await getNode(`/${item.tipo}/${item.id}`);
     if (!data) return alert("Producto no encontrado");
 
-    const idx = carritoCobro.findIndex(it => it.id === item.id && it.tipo === item.tipo);
-    let nuevaCant = item.cant;
-    if (idx >= 0) nuevaCant += carritoCobro[idx].cant;
+    const idx = carrito.findIndex(it => it.id === item.id && it.tipo === item.tipo);
+    let nuevaCant = Number(item.cant) || 0;
+    if (idx >= 0) nuevaCant += Number(carrito[idx].cant) || 0;
 
     const disponible = item.tipo === "stock" ? Number(data.cant || 0) : Number(data.kg || 0);
     if (nuevaCant > disponible) return alert("No hay tanta cantidad disponible");
 
-    if (idx >= 0) carritoCobro[idx].cant += item.cant;
-    else carritoCobro.push({ ...item });
+    if (idx >= 0) carrito[idx].cant = nuevaCant;
+    else carrito.push({ ...item });
 
     actualizarTablaCobro();
   }
@@ -195,14 +195,14 @@ btnLogin.addEventListener("click", async () => {
     tablaCobro.innerHTML = "";
     let total = 0;
 
-    carritoCobro.forEach((item, idx) => {
+    carrito.forEach((item, idx) => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>
           <input type="number"
                  step="${item.tipo === "sueltos" ? "0.001" : "1"}"
                  min="0"
-                 value="${item.cant}"
+                 value="${item.tipo === "sueltos" ? Number(item.cant).toFixed(3) : Number(item.cant)}"
                  style="width:70px; text-align:center;">
         </td>
         <td>${item.nombre}</td>
@@ -214,7 +214,7 @@ btnLogin.addEventListener("click", async () => {
                  style="width:80px; text-align:right;"
                  ${item.tipo === "stock" ? "disabled" : ""}>
         </td>
-        <td class="total-item">${(item.cant * item.precio).toFixed(2)}</td>
+        <td class="total-item">${(Number(item.cant) * Number(item.precio)).toFixed(2)}</td>
         <td><button data-idx="${idx}" class="btn-del">❌</button></td>
       `;
 
@@ -226,7 +226,7 @@ btnLogin.addEventListener("click", async () => {
       // --- editar cantidad/KG ---
       inputCant.addEventListener("input", async () => {
         let nuevaCant = parseFloat(inputCant.value) || 0;
-        if (nuevaCant <= 0) nuevaCant = 0;
+        if (nuevaCant < 0) nuevaCant = 0;
 
         const data = await getNode(`/${item.tipo}/${item.id}`);
         if (!data) return;
@@ -235,41 +235,41 @@ btnLogin.addEventListener("click", async () => {
         if (nuevaCant > disponible) {
           alert("No hay tanta cantidad disponible");
           nuevaCant = disponible;
-          inputCant.value = nuevaCant;
+          inputCant.value = item.tipo === "sueltos" ? nuevaCant.toFixed(3) : nuevaCant;
         }
 
-        carritoCobro[idx].cant = nuevaCant;
-        totalCell.textContent = (carritoCobro[idx].cant * carritoCobro[idx].precio).toFixed(2);
-        actualizarTotalesCobro();
+        carrito[idx].cant = nuevaCant;
+        totalCell.textContent = (Number(carrito[idx].cant) * Number(carrito[idx].precio)).toFixed(2);
+        actualizarTotales();
       });
 
       // --- editar precio en sueltos ---
       if (item.tipo === "sueltos") {
         inputPrecio.addEventListener("input", () => {
           const nuevoPrecio = parseFloat(inputPrecio.value) || 0;
-          carritoCobro[idx].precio = nuevoPrecio;
-          totalCell.textContent = (carritoCobro[idx].cant * carritoCobro[idx].precio).toFixed(2);
-          actualizarTotalesCobro();
+          carrito[idx].precio = nuevoPrecio;
+          totalCell.textContent = (Number(carrito[idx].cant) * Number(carrito[idx].precio)).toFixed(2);
+          actualizarTotales();
         });
       }
 
       // --- eliminar producto ---
       tr.querySelector(".btn-del").addEventListener("click", () => {
-        carritoCobro.splice(idx, 1);
+        carrito.splice(idx, 1);
         actualizarTablaCobro();
       });
 
       tablaCobro.appendChild(tr);
-      total += item.cant * item.precio;
+      total += Number(item.cant) * Number(item.precio);
     });
 
-    const totalMod = total * (1 + porcentajeCobro / 100);
-    const signo = porcentajeCobro > 0 ? "+" : porcentajeCobro < 0 ? "-" : "";
-    const pctTxt = porcentajeCobro !== 0 ? ` <small>(${signo}${Math.abs(porcentajeCobro)}%)</small>` : "";
+    const totalMod = total * (1 + porcentajeFinal / 100);
+    const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+    const pctTxt = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
     totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalMod.toFixed(2)}</span>${pctTxt}`;
-    btnCobrar.classList.toggle("hidden", carritoCobro.length === 0);
+    btnCobrar.classList.toggle("hidden", carrito.length === 0);
   }
-  function actualizarTotalesCobro() { actualizarTablaCobro(); }
+  function actualizarTotales() { actualizarTablaCobro(); }
 
   // ======================================================
   //  ESCANEO AUTOMÁTICO (13 dígitos)
@@ -277,19 +277,19 @@ btnLogin.addEventListener("click", async () => {
   scanCodigo.addEventListener("input", async () => {
     const code = scanCodigo.value.trim();
     if (code.length === 13) {
-      await buscarYAgregarCobro(code);
+      await buscarYAgregar(code);
       scanCodigo.value = "";
     }
   });
 
-  async function buscarYAgregarCobro(code) {
+  async function buscarYAgregar(code) {
     const stock = await getNode(`/stock/${code}`);
     if (stock) {
-      return agregarAlCarritoCobro({ id: code, nombre: stock.nombre, cant: 1, precio: Number(stock.precio || 0), tipo: "stock" });
+      return agregarAlCarrito({ id: code, nombre: stock.nombre, cant: 1, precio: Number(stock.precio || 0), tipo: "stock" });
     }
     const suelto = await getNode(`/sueltos/${code}`);
     if (suelto) {
-      return agregarAlCarritoCobro({ id: code, nombre: suelto.nombre, cant: 0.100, precio: Number(suelto.precio || 0), tipo: "sueltos" });
+      return agregarAlCarrito({ id: code, nombre: suelto.nombre, cant: 0.100, precio: Number(suelto.precio || 0), tipo: "sueltos" });
     }
     alert("Producto no encontrado");
   }
@@ -347,7 +347,7 @@ btnLogin.addEventListener("click", async () => {
         <td><button class="btn-add-modal">Agregar</button></td>
       `;
       tr.querySelector(".btn-add-modal").addEventListener("click", async () => {
-        await agregarAlCarritoCobro({
+        await agregarAlCarrito({
           id: r.id,
           nombre: r.nombre,
           cant: r.tipo === "stock" ? 1 : 0.100,
@@ -364,7 +364,7 @@ btnLogin.addEventListener("click", async () => {
   //  COBRAR / GUARDAR / ACTUALIZAR / IMPRIMIR
   // ======================================================
   btnCobrar.addEventListener("click", async () => {
-    if (!window.currentUser || carritoCobro.length === 0) return;
+    if (!window.currentUser || carrito.length === 0) return;
 
     const modal = document.createElement("div");
     modal.style.cssText = `
@@ -408,34 +408,34 @@ btnLogin.addEventListener("click", async () => {
         const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
         const fecha = new Date();
         const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-        const totalOriginal = carritoCobro.reduce((a,b) => a + (Number(b.cant) * Number(b.precio)), 0);
-        const totalFinal = totalOriginal * (1 + (porcentajeCobro || 0)/100);
+        const totalOriginal = carrito.reduce((a,b) => a + (Number(b.cant) * Number(b.precio)), 0);
+        const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
 
         await window.set(window.ref(`/movimientos/${ticketID}`), {
           ticketID,
           cajero: window.currentUser.id,
-          items: carritoCobro,
+          items: carrito,
           total: totalFinal,
           fecha: fecha.toISOString(),
           tipo: tipoPago,
           eliminado: false,
-          porcentajeAplicado: porcentajeCobro || 0
+          porcentajeAplicado: porcentajeFinal || 0
         });
 
         await window.set(window.ref(`/historial/${ticketID}`), {
           ticketID,
           cajero: window.currentUser.id,
-          items: carritoCobro,
+          items: carrito,
           total: totalFinal,
           fecha: fecha.toISOString(),
           tipo: tipoPago,
-          porcentajeAplicado: porcentajeCobro || 0
+          porcentajeAplicado: porcentajeFinal || 0
         });
 
         await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
         // Actualizar existencias
-        for (const item of carritoCobro) {
+        for (const item of carrito) {
           const nodo = await getNode(`/${item.tipo}/${item.id}`);
           if (!nodo) continue;
           if (item.tipo === "stock") {
@@ -445,14 +445,14 @@ btnLogin.addEventListener("click", async () => {
           }
         }
 
-        await imprimirTicketCobro(ticketID, fechaStr, window.currentUser.id, carritoCobro, totalFinal, tipoPago);
+        await imprimirTicket(ticketID, fechaStr, window.currentUser.id, carrito, totalFinal, tipoPago);
 
         setTimeout(() => {
           alert("VENTA FINALIZADA");
-          carritoCobro = [];
+          carrito = [];
           actualizarTablaCobro();
 
-          // Refrescar otras vistas SOLO si existen (no rompe otras secciones)
+          // Refrescar otras vistas si existen (no rompe secciones)
           if (typeof window.loadStock === "function") window.loadStock();
           if (typeof window.loadSueltos === "function") window.loadSueltos();
           if (typeof window.loadMovimientos === "function") window.loadMovimientos();
@@ -465,12 +465,12 @@ btnLogin.addEventListener("click", async () => {
   });
 
   // ======================================================
-  //  IMPRIMIR TICKET (aislado)
+  //  IMPRIMIR TICKET (persistente)
   // ======================================================
-  async function imprimirTicketCobro(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
     try {
-      const signo = porcentajeCobro > 0 ? "+" : porcentajeCobro < 0 ? "-" : "";
-      const porcentajeTexto = porcentajeCobro !== 0 ? ` (${signo}${Math.abs(porcentajeCobro)}%)` : "";
+      const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+      const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
 
       let shopName = "TICKET";
       let shopLocation = "Sucursal Nueva";
@@ -495,14 +495,14 @@ Pago: ${tipoPago}
 ==============================
 
 ${items.map(it => `  ${it.nombre}
-  $${formatPrecioSimpleCobro(Number(it.precio))} (x${it.cant}) = $${formatPrecioSimpleCobro(Number(it.precio) * Number(it.cant))}
+  $${formatPrecioSimple(Number(it.precio))} (x${it.cant}) = $${formatPrecioSimple(Number(it.precio) * Number(it.cant))}
   =========================`).join("\n")}
 
-TOTAL: $${formatPrecioSimpleCobro(total)}${porcentajeTexto}
+TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 ==============================
 <span>Regimen de Transparencia Fiscal</span>
 <span>al Consumidor Ley 27.743</span>
-<span>IVA Contenido $${formatPrecioSimpleCobro(iva)}</span>
+<span>IVA Contenido $${formatPrecioSimple(iva)}</span>
 <span>Otros impuestos nacionales</span>
 <span>Indirectos</span>
 <span>Imp. Internos importados $0,00</span>
@@ -512,14 +512,14 @@ TOTAL: $${formatPrecioSimpleCobro(total)}${porcentajeTexto}
 ==============================
 `;
 
-      if (!iframeTicketCobro) {
-        iframeTicketCobro = document.createElement("iframe");
-        iframeTicketCobro.id = "iframe-ticket-cobro";
-        iframeTicketCobro.style.cssText = "position:fixed;width:0;height:0;border:0;";
-        document.body.appendChild(iframeTicketCobro);
+      if (!iframeTicket) {
+        iframeTicket = document.createElement("iframe");
+        iframeTicket.id = "iframe-ticket";
+        iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
+        document.body.appendChild(iframeTicket);
       }
 
-      const doc = iframeTicketCobro.contentWindow.document;
+      const doc = iframeTicket.contentWindow.document;
       doc.open();
       doc.write(`
 <html>
@@ -544,13 +544,11 @@ TOTAL: $${formatPrecioSimpleCobro(total)}${porcentajeTexto}
       doc.close();
 
       setTimeout(() => {
-        const win = iframeTicketCobro.contentWindow;
+        const win = iframeTicket.contentWindow;
         if (win) {
           win.focus();
           win.print();
-          setTimeout(() => {
-            try { win.stop(); } catch {}
-          }, 100); // tiempo fijo 100 ms
+          setTimeout(() => { try { win.stop(); } catch {} }, 100); // 100 ms fijo
         }
       }, 10);
     } catch (err) {
@@ -558,9 +556,17 @@ TOTAL: $${formatPrecioSimpleCobro(total)}${porcentajeTexto}
     }
   }
 
-  // Inicializa totales al cargar
-  calcularPorcentajeFinalCobro();
-})();
+  // Inicializar totales al cargar
+  calcularPorcentajeFinal();
+}
+
+/* IMPORTANTE:
+   - Este bloque NO referencia los IDs antiguos (cobro-productos, cobro-sueltos, etc.)
+   - No encapsula en IIFE para mantener compatibilidad global.
+   - No llama funciones inexistentes sin comprobar (loadStock, loadSueltos, ...).
+   - Evita TypeError en vistas donde COBRO no esté montado.
+*/
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
