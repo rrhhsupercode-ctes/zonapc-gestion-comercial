@@ -182,16 +182,18 @@ inputBusqueda.addEventListener("input", async () => {
   });
 });
 
-// --- Mostrar / cerrar modal con tus clases CSS ---
-const modalBusquedaOverlay = document.getElementById("modal-busqueda-overlay");
+// --- Mostrar / cerrar modal ---
+const modalBusqueda = document.getElementById("modal-busqueda");
 
 btnBuscarProducto.addEventListener("click", () => {
-  modalBusquedaOverlay.classList.remove("hidden");
+  modalBusqueda.style.display = "flex";
+  modalBusqueda.classList.remove("hidden");
   inputBusqueda.focus();
 });
 
 btnCancelarBusqueda.addEventListener("click", () => {
-  modalBusquedaOverlay.classList.add("hidden");
+  modalBusqueda.style.display = "none";
+  modalBusqueda.classList.add("hidden");
   inputBusqueda.value = "";
   tablaResultados.innerHTML = "";
 });
