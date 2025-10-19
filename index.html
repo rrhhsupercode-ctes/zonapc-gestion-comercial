@@ -11,23 +11,21 @@
     import { getDatabase, ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
     import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
 
-    // Configuración de Firebase
     const firebaseConfig = {
-  apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
-  authDomain: "zonapc-actualizado.firebaseapp.com",
-  databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
-  projectId: "zonapc-actualizado",
-  storageBucket: "zonapc-actualizado.firebasestorage.app",
-  messagingSenderId: "837716085875",
-  appId: "1:837716085875:web:198ad1963c42c1105eae06"
+      apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
+      authDomain: "zonapc-actualizado.firebaseapp.com",
+      databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
+      projectId: "zonapc-actualizado",
+      storageBucket: "zonapc-actualizado.firebasestorage.app",
+      messagingSenderId: "837716085875",
+      appId: "1:837716085875:web:198ad1963c42c1105eae06"
     };
 
-    // Inicialización
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     const auth = getAuth(app);
 
-    // Wrappers globales (opcional, para compatibilidad con init.js y app.js)
+    // Wrappers globales
     window.app = app;
     window.db = db;
     window.auth = auth;
@@ -43,6 +41,7 @@
     window.signOut = () => signOut(auth);
   </script>
 </head>
+
 <body>
   <header>
     <img src="https://iili.io/KXkB2Ax.png" alt="ZONAPC" class="banner-img">
@@ -59,162 +58,115 @@
   </header>
   
   <main>
-    <!-- COBRAR ORIGINAL + BUSCADOR UNIFICADO -->
-<section id="cobro">
-  <div id="login-modal">
-    <h2>👥Cajero(a)</h2>
-    <select id="login-usuario"></select>
-    <input id="login-pass" type="password" placeholder="Contraseña">
-    <button id="btn-login">🔑Ingresar</button>
-    <p id="login-msg" class="msg-error"></p>
-  </div>
-
-  <div id="cobro-controles" class="hidden">
-    <!-- FILA COBRO NORMAL -->
-    <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <select id="cobro-cantidad"></select>
-      <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-productos" style="flex:2;">
-        <option value="">Elija un producto en stock</option>
-      </select>
-      <button id="btn-add-product">OK</button>
-      <button id="btn-buscar-producto" style="background:#0984e3;color:#fff;">🔍Buscar</button>
-    </div>
-
-    <!-- FILA SUELTOS -->
-    <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <button id="btn-decr-kg" style="width:30px;">-</button>
-      <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
-      <button id="btn-incr-kg" style="width:30px;">+</button>
-      <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
-      <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-sueltos" style="flex:2;">
-        <option value="">Elija un producto suelto</option>
-      </select>
-      <button id="btn-add-suelto">OK</button>
-    </div>
-
-    <!-- DESCUENTO / RECARGO -->
-    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
-      <div style="text-align:center;">
-        <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
-        <input id="input-descuento" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
-      </div>
-      <div style="text-align:center;">
-        <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
-        <input id="input-recargo" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
-      </div>
-    </div>
-
-    <!-- TABLA DE COBRO -->
-    <table id="tabla-cobro">
-      <thead>
-        <tr>
-          <th>Cant / KG</th>
-          <th>Producto</th>
-          <th>Precio Unidad</th>
-          <th>Total</th>
-          <th>Acción</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <div id="total-div">TOTAL: $0</div>
-    <button id="btn-cobrar" class="hidden">💸Cobrar</button>
-  </div>
-
-  <!-- MODAL DE BÚSQUEDA -->
-  <div id="modal-busqueda" class="hidden" style="
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:none; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;">
-    <div style="
-      background:#fff; padding:20px; border-radius:10px;
-      width:90%; max-width:700px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-      <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input id="input-busqueda" type="text" maxlength="30"
-               placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
-               style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
-        <button id="btn-cancelar-busqueda"
-                style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
-          Cancelar
-        </button>
+    <!-- === COBRAR === -->
+    <section id="cobro">
+      <div id="login-modal">
+        <h2>👥Cajero(a)</h2>
+        <select id="login-usuario"></select>
+        <input id="login-pass" type="password" placeholder="Contraseña">
+        <button id="btn-login">🔑Ingresar</button>
+        <p id="login-msg" class="msg-error"></p>
       </div>
 
-      <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="background:#eee;">
-            <th style="padding:5px; border:1px solid #ccc;">Código</th>
-            <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
-            <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
-            <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
-            <th style="padding:5px; border:1px solid #ccc;">Acción</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</section>
+      <div id="cobro-controles" class="hidden">
+        <!-- FILA COBRO NORMAL -->
+        <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+          <select id="cobro-cantidad"></select>
+          <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
+          <select id="cobro-productos" style="flex:2;">
+            <option value="">Elija un producto en stock</option>
+          </select>
+          <button id="btn-add-product">OK</button>
+          <button id="btn-buscar-producto" style="background:#0984e3;color:#fff;">🔍Buscar</button>
+        </div>
 
-  <!-- MODAL DE BÚSQUEDA FINAL -->
-<div id="modal-busqueda" class="hidden" style="
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  display:none; /* oculto por defecto */
-  justify-content:center;
-  align-items:center;
-  background:rgba(0,0,0,0.7);
-  z-index:9999;
-">
-  <div style="
-    background:#fff;
-    padding:20px;
-    border-radius:10px;
-    width:90%;
-    max-width:700px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.4);
-  ">
-    <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
-    <div style="display:flex; gap:10px; margin-bottom:10px;">
-      <input id="input-busqueda" type="text" maxlength="30"
-             placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
-             style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
-      <button id="btn-cancelar-busqueda"
-              style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
-        Cancelar
-      </button>
-    </div>
+        <!-- FILA SUELTOS -->
+        <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+          <button id="btn-decr-kg" style="width:30px;">-</button>
+          <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
+          <button id="btn-incr-kg" style="width:30px;">+</button>
+          <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
+          <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
+          <select id="cobro-sueltos" style="flex:2;">
+            <option value="">Elija un producto suelto</option>
+          </select>
+          <button id="btn-add-suelto">OK</button>
+        </div>
 
-    <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="background:#eee;">
-          <th style="padding:5px; border:1px solid #ccc;">Código</th>
-          <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
-          <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
-          <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
-          <th style="padding:5px; border:1px solid #ccc;">Acción</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
-</div>
+        <!-- DESCUENTO / RECARGO -->
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
+          <div style="text-align:center;">
+            <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
+            <input id="input-descuento" type="number" min="0" max="100" value="0"
+                   style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+          </div>
+          <div style="text-align:center;">
+            <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
+            <input id="input-recargo" type="number" min="0" max="100" value="0"
+                   style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+          </div>
+        </div>
 
-    <!-- MOVIMIENTOS -->
+        <!-- TABLA DE COBRO -->
+        <table id="tabla-cobro">
+          <thead>
+            <tr>
+              <th>Cant / KG</th>
+              <th>Producto</th>
+              <th>Precio Unidad</th>
+              <th>Total</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div id="total-div">TOTAL: $0</div>
+        <button id="btn-cobrar" class="hidden">💸Cobrar</button>
+      </div>
+
+      <!-- MODAL DE BÚSQUEDA UNIFICADO -->
+      <div id="modal-busqueda" class="hidden" style="
+        position:fixed; top:0; left:0; width:100%; height:100%;
+        display:none; justify-content:center; align-items:center;
+        background:rgba(0,0,0,0.7); z-index:9999;">
+        <div style="
+          background:#fff; padding:20px; border-radius:10px;
+          width:90%; max-width:700px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+          <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
+          <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <input id="input-busqueda" type="text" maxlength="30"
+                   placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
+                   style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
+            <button id="btn-cancelar-busqueda"
+                    style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
+              Cancelar
+            </button>
+          </div>
+
+          <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#eee;">
+                <th style="padding:5px; border:1px solid #ccc;">Código</th>
+                <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
+                <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
+                <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
+                <th style="padding:5px; border:1px solid #ccc;">Acción</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- === MOVIMIENTOS === -->
     <section id="movimientos" class="hidden">
       <h2>Movimientos</h2>
-
       <label for="filtroCajero">Nro Cajero(a):</label>
       <select id="filtroCajero">
         <option value="TODOS">TODOS</option>
       </select>
-      
       <button id="btn-tirar-z">📃Tirar Z</button>
       <table id="tabla-movimientos">
         <thead>
@@ -226,7 +178,7 @@
       </table>
     </section>
 
-    <!-- HISTORIAL -->
+    <!-- === HISTORIAL === -->
     <section id="historial" class="hidden">
       <h2>Historial</h2>
       <p id="historial-info">Acá están todos los movimientos mensuales. Se eliminan el día 15 de cada mes.</p>
@@ -240,7 +192,7 @@
       </table>
     </section>
 
-    <!-- STOCK -->
+    <!-- === STOCK === -->
     <section id="stock" class="hidden">
       <h2>Stock</h2>
       <input id="stock-codigo" placeholder="Código producto">
@@ -257,35 +209,28 @@
       </table>
     </section>
 
-    <!-- SUELTOS -->
-<section id="sueltos" class="hidden">
-  <h2>Sueltos</h2>
+    <!-- === SUELTOS === -->
+    <section id="sueltos" class="hidden">
+      <h2>Sueltos</h2>
+      <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+        <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
+        <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
+        <button id="sueltos-btn-decr" style="width:30px;">-</button>
+        <button id="sueltos-btn-incr" style="width:30px;">+</button>
+        <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
+        <button id="btn-buscar-suelto">🔍Buscar</button>
+      </div>
+      <table id="tabla-sueltos">
+        <thead>
+          <tr>
+            <th>Código</th><th>Nombre</th><th>KG</th><th>Fecha</th><th>Precio</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
 
-  <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-    <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
-    <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
-    <button id="sueltos-btn-decr" style="width:30px;">-</button>
-    <button id="sueltos-btn-incr" style="width:30px;">+</button>
-    <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
-    <button id="btn-buscar-suelto">🔍Buscar</button>
-  </div>
-
-  <table id="tabla-sueltos">
-    <thead>
-      <tr>
-        <th>Código</th>
-        <th>Nombre</th>
-        <th>KG</th>
-        <th>Fecha</th>
-        <th>Precio</th>
-        <th>Acción</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-</section>
-
-    <!-- CAJEROS -->
+    <!-- === CAJEROS === -->
     <section id="cajeros" class="hidden">
       <h2>Cajeros</h2>
       <p class="emoji">👥</p><select id="cajero-nro"></select>
@@ -303,29 +248,24 @@
       </table>
     </section>
 
-    <!-- CONFIG -->
+    <!-- === CONFIG === -->
     <section id="config" class="hidden">
       <h2>Configuración</h2>
-
       <p class="emoji">Datos de esta sucursal:</p><br>
       <p class="emoji">🔠</p><input id="config-nombre" placeholder="Nombre de Tienda">
       <p class="emoji">📌</p><input id="config-ubicacion" placeholder="Ubicación del comercio">
       <p class="emoji">🔢​</p><input id="config-cuit" placeholder="CUIT">
-      
       <div id="admin-pass-config">
         <input id="config-pass-actual" type="password" placeholder="Contraseña actual">
         <input id="config-pass-nueva" type="password" placeholder="Nueva contraseña">
-
         <button id="guardar-config" class="btn-guardar">✅​Guardar</button>
         <p id="config-msg" class="msg-error"></p>
       </div>
-
       <input id="master-pass" placeholder="Contraseña Maestra">
       <button id="btn-restaurar" class="btn-restaurar">🔑Restaurar Contraseña</button>
     </section>
   </main>
 
-  <!-- Scripts modulares -->
   <script type="module" src="init.js"></script>
   <script type="module" src="app.js"></script>
 </body>
