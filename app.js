@@ -111,11 +111,11 @@ btnLogin.addEventListener("click", async () => {
 
 /*****************************************************
  * SECCIÓN COBRO COMPLETA (GLOBAL) – ZONA PC V3.8.3
- * Unificada (Stock + Sueltos) con modal de búsqueda
- * Firebase Modular 11.8.1 – Sin romper otras secciones
+ * Unificada (Stock + Sueltos) + Modal Buscar
+ * 100% compatible con otras secciones
  *****************************************************/
 
-// --- ELEMENTOS (nuevos IDs del HTML V3.8.3) ---
+// --- ELEMENTOS (IDs nuevos de index.html V3.8.3) ---
 const scanCodigo = document.getElementById("scan-codigo");
 const btnBuscarCobro = document.getElementById("btn-buscar-cobro");
 const modalBuscar = document.getElementById("modal-buscar");
@@ -128,152 +128,259 @@ const inputRecargo = document.getElementById("input-recargo");
 const totalDiv = document.getElementById("total-div");
 const btnCobrar = document.getElementById("btn-cobrar");
 
-// Si la sección COBRO no existe en el DOM, no continuar (evita romper otras vistas)
-if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar && tablaBuscarResultadosEl && tablaCobroEl && totalDiv && btnCobrar) {
+// --- ESTADO GLOBAL COMPARTIDO (evita romper otras secciones) ---
+window.carrito = Array.isArray(window.carrito) ? window.carrito : []; // [{id,nombre,cant,precio,tipo}]
+window.porcentajeFinal = typeof window.porcentajeFinal === "number" ? window.porcentajeFinal : 0;
+let iframeTicket = null;
 
-  const tablaBuscarResultados = tablaBuscarResultadosEl.querySelector("tbody");
-  const tablaCobro = tablaCobroEl.querySelector("tbody");
+// --- UTILIDADES GLOBALES (otras secciones pueden usarlas) ---
+window.formatPrecioSimple = function formatPrecioSimple(valor) {
+  return Number(valor || 0).toFixed(2).replace('.', ',');
+};
 
-  // --- ESTADO GLOBAL (nombres compatibles con tu app) ---
-  let carrito = [];             // mantiene formato [{id, nombre, cant, precio, tipo}]
-  let porcentajeFinal = 0;      // descuento/recargo final aplicado
-  let iframeTicket = null;      // ticket persistente
+async function getNode(path) {
+  try {
+    const snap = await window.get(window.ref(path));
+    return snap && snap.exists() ? snap.val() : null;
+  } catch {
+    return null;
+  }
+}
 
-  // ======================================================
-  //  UTILIDADES
-  // ======================================================
+// --- DESCUENTO / RECARGO ---
+function calcularPorcentajeFinal() {
   const clamp = (v, min, max) => Math.min(Math.max(Number(v) || 0, min), max);
-  function formatPrecioSimple(valor) { return Number(valor || 0).toFixed(2).replace('.', ','); }
+  const desc = clamp(inputDescuento?.value, 0, 100);
+  const rec  = clamp(inputRecargo?.value, 0, 100);
+  if (inputDescuento) inputDescuento.value = String(Math.round(desc));
+  if (inputRecargo)  inputRecargo.value  = String(Math.round(rec));
+  window.porcentajeFinal = rec - desc;
+  actualizarTablaCobro();
+}
 
-  async function getNode(path) {
-    try {
-      const snap = await window.get(window.ref(path));
-      return snap && snap.exists() ? snap.val() : null;
-    } catch {
-      return null;
-    }
-  }
+// --- AGREGAR AL CARRITO ---
+async function agregarAlCarrito(item) {
+  const data = await getNode(`/${item.tipo}/${item.id}`);
+  if (!data) return alert("Producto no encontrado");
 
-  // ======================================================
-  //  DESCUENTO / RECARGO
-  // ======================================================
-  function calcularPorcentajeFinal() {
-    const desc = clamp(inputDescuento.value, 0, 100);
-    const rec = clamp(inputRecargo.value, 0, 100);
-    inputDescuento.value = String(Math.round(desc));
-    inputRecargo.value = String(Math.round(rec));
-    porcentajeFinal = rec - desc;
-    actualizarTablaCobro();
-  }
-  if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
-  if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
+  const idx = window.carrito.findIndex(it => it.id === item.id && it.tipo === item.tipo);
+  let nuevaCant = Number(item.cant) || 0;
+  if (idx >= 0) nuevaCant += Number(window.carrito[idx].cant) || 0;
 
-  // ======================================================
-  //  AGREGAR AL CARRITO
-  // ======================================================
-  async function agregarAlCarrito(item) {
-    const data = await getNode(`/${item.tipo}/${item.id}`);
-    if (!data) return alert("Producto no encontrado");
+  const disponible = item.tipo === "stock" ? Number(data.cant || 0) : Number(data.kg || 0);
+  if (nuevaCant > disponible) return alert("No hay tanta cantidad disponible");
 
-    const idx = carrito.findIndex(it => it.id === item.id && it.tipo === item.tipo);
-    let nuevaCant = Number(item.cant) || 0;
-    if (idx >= 0) nuevaCant += Number(carrito[idx].cant) || 0;
+  if (idx >= 0) window.carrito[idx].cant = nuevaCant;
+  else window.carrito.push({ ...item });
 
-    const disponible = item.tipo === "stock" ? Number(data.cant || 0) : Number(data.kg || 0);
-    if (nuevaCant > disponible) return alert("No hay tanta cantidad disponible");
+  actualizarTablaCobro();
+}
 
-    if (idx >= 0) carrito[idx].cant = nuevaCant;
-    else carrito.push({ ...item });
+// --- TABLA COBRO (EDITABLE) ---
+function actualizarTablaCobro() {
+  if (!tablaCobroEl || !totalDiv || !btnCobrar) return; // si no está la vista cobro, no falla
+  const tbody = tablaCobroEl.querySelector("tbody");
+  if (!tbody) return;
 
-    actualizarTablaCobro();
-  }
+  tbody.innerHTML = "";
+  let total = 0;
 
-  // ======================================================
-  //  TABLA DE COBRO (EDITABLE)
-  // ======================================================
-  function actualizarTablaCobro() {
-    tablaCobro.innerHTML = "";
-    let total = 0;
+  window.carrito.forEach((item, idx) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>
+        <input type="number"
+               step="${item.tipo === "sueltos" ? "0.001" : "1"}"
+               min="0"
+               value="${item.tipo === "sueltos" ? Number(item.cant).toFixed(3) : Number(item.cant)}"
+               style="width:70px; text-align:center;">
+      </td>
+      <td>${item.nombre}</td>
+      <td>
+        <input type="number"
+               step="0.01"
+               min="0"
+               value="${Number(item.precio).toFixed(2)}"
+               style="width:80px; text-align:right;"
+               ${item.tipo === "stock" ? "disabled" : ""}>
+      </td>
+      <td class="total-item">${(Number(item.cant) * Number(item.precio)).toFixed(2)}</td>
+      <td><button data-idx="${idx}" class="btn-del">❌</button></td>
+    `;
 
-    carrito.forEach((item, idx) => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>
-          <input type="number"
-                 step="${item.tipo === "sueltos" ? "0.001" : "1"}"
-                 min="0"
-                 value="${item.tipo === "sueltos" ? Number(item.cant).toFixed(3) : Number(item.cant)}"
-                 style="width:70px; text-align:center;">
-        </td>
-        <td>${item.nombre}</td>
-        <td>
-          <input type="number"
-                 step="0.01"
-                 min="0"
-                 value="${Number(item.precio).toFixed(2)}"
-                 style="width:80px; text-align:right;"
-                 ${item.tipo === "stock" ? "disabled" : ""}>
-        </td>
-        <td class="total-item">${(Number(item.cant) * Number(item.precio)).toFixed(2)}</td>
-        <td><button data-idx="${idx}" class="btn-del">❌</button></td>
-      `;
+    const inputs = tr.querySelectorAll("input");
+    const inputCant = inputs[0];
+    const inputPrecio = inputs[1];
+    const totalCell = tr.querySelector(".total-item");
 
-      const inputs = tr.querySelectorAll("input");
-      const inputCant = inputs[0];
-      const inputPrecio = inputs[1];
-      const totalCell = tr.querySelector(".total-item");
+    inputCant.addEventListener("input", async () => {
+      let nuevaCant = parseFloat(inputCant.value) || 0;
+      if (nuevaCant < 0) nuevaCant = 0;
 
-      // --- editar cantidad/KG ---
-      inputCant.addEventListener("input", async () => {
-        let nuevaCant = parseFloat(inputCant.value) || 0;
-        if (nuevaCant < 0) nuevaCant = 0;
-
-        const data = await getNode(`/${item.tipo}/${item.id}`);
-        if (!data) return;
-        const disponible = item.tipo === "stock" ? Number(data.cant || 0) : Number(data.kg || 0);
-
-        if (nuevaCant > disponible) {
-          alert("No hay tanta cantidad disponible");
-          nuevaCant = disponible;
-          inputCant.value = item.tipo === "sueltos" ? nuevaCant.toFixed(3) : nuevaCant;
-        }
-
-        carrito[idx].cant = nuevaCant;
-        totalCell.textContent = (Number(carrito[idx].cant) * Number(carrito[idx].precio)).toFixed(2);
-        actualizarTotales();
-      });
-
-      // --- editar precio en sueltos ---
-      if (item.tipo === "sueltos") {
-        inputPrecio.addEventListener("input", () => {
-          const nuevoPrecio = parseFloat(inputPrecio.value) || 0;
-          carrito[idx].precio = nuevoPrecio;
-          totalCell.textContent = (Number(carrito[idx].cant) * Number(carrito[idx].precio)).toFixed(2);
-          actualizarTotales();
-        });
+      const data = await getNode(`/${item.tipo}/${item.id}`);
+      if (!data) return;
+      const disponible = item.tipo === "stock" ? Number(data.cant || 0) : Number(data.kg || 0);
+      if (nuevaCant > disponible) {
+        alert("No hay tanta cantidad disponible");
+        nuevaCant = disponible;
+        inputCant.value = item.tipo === "sueltos" ? nuevaCant.toFixed(3) : nuevaCant;
       }
 
-      // --- eliminar producto ---
-      tr.querySelector(".btn-del").addEventListener("click", () => {
-        carrito.splice(idx, 1);
-        actualizarTablaCobro();
-      });
-
-      tablaCobro.appendChild(tr);
-      total += Number(item.cant) * Number(item.precio);
+      window.carrito[idx].cant = nuevaCant;
+      totalCell.textContent = (Number(window.carrito[idx].cant) * Number(window.carrito[idx].precio)).toFixed(2);
+      actualizarTotales();
     });
 
-    const totalMod = total * (1 + porcentajeFinal / 100);
-    const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-    const pctTxt = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
-    totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalMod.toFixed(2)}</span>${pctTxt}`;
-    btnCobrar.classList.toggle("hidden", carrito.length === 0);
-  }
-  function actualizarTotales() { actualizarTablaCobro(); }
+    if (item.tipo === "sueltos") {
+      inputPrecio.addEventListener("input", () => {
+        const nuevoPrecio = parseFloat(inputPrecio.value) || 0;
+        window.carrito[idx].precio = nuevoPrecio;
+        totalCell.textContent = (Number(window.carrito[idx].cant) * Number(window.carrito[idx].precio)).toFixed(2);
+        actualizarTotales();
+      });
+    }
 
-  // ======================================================
-  //  ESCANEO AUTOMÁTICO (13 dígitos)
-  // ======================================================
+    tr.querySelector(".btn-del").addEventListener("click", () => {
+      window.carrito.splice(idx, 1);
+      actualizarTablaCobro();
+    });
+
+    tbody.appendChild(tr);
+    total += Number(item.cant) * Number(item.precio);
+  });
+
+  const totalMod = total * (1 + (window.porcentajeFinal || 0) / 100);
+  const signo = window.porcentajeFinal > 0 ? "+" : window.porcentajeFinal < 0 ? "-" : "";
+  const pctTxt = window.porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(window.porcentajeFinal)}%)</small>` : "";
+  totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalMod.toFixed(2)}</span>${pctTxt}`;
+  btnCobrar.classList.toggle("hidden", window.carrito.length === 0);
+}
+function actualizarTotales() { actualizarTablaCobro(); }
+
+// --- ESCANEO (13 dígitos) ---
+async function buscarYAgregar(code) {
+  const stock = await getNode(`/stock/${code}`);
+  if (stock) return agregarAlCarrito({ id: code, nombre: stock.nombre, cant: 1, precio: Number(stock.precio || 0), tipo: "stock" });
+  const suelto = await getNode(`/sueltos/${code}`);
+  if (suelto) return agregarAlCarrito({ id: code, nombre: suelto.nombre, cant: 0.100, precio: Number(suelto.precio || 0), tipo: "sueltos" });
+  alert("Producto no encontrado");
+}
+
+// --- MODAL BUSCAR ---
+function abrirModalBuscar() {
+  modalBuscar.style.display = "flex";
+  buscarInput.value = "";
+  const tbody = tablaBuscarResultadosEl.querySelector("tbody");
+  if (tbody) tbody.innerHTML = "";
+  buscarInput.focus();
+}
+function cerrarModalBuscar() {
+  modalBuscar.style.display = "none";
+}
+
+// --- COBRAR / GUARDAR / ACTUALIZAR / IMPRIMIR ---
+async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  try {
+    const signo = window.porcentajeFinal > 0 ? "+" : window.porcentajeFinal < 0 ? "-" : "";
+    const porcentajeTexto = window.porcentajeFinal !== 0 ? ` (${signo}${Math.abs(window.porcentajeFinal)}%)` : "";
+
+    let shopName = "TICKET";
+    let shopLocation = "Sucursal Nueva";
+    let shopCuit = "00000000000";
+    const cfg = await getNode("/config");
+    if (cfg) {
+      shopName = cfg.shopName || shopName;
+      shopLocation = cfg.shopLocation || shopLocation;
+      shopCuit = cfg.shopCuit || shopCuit;
+    }
+
+    const iva = total * 0.21;
+    const contenido = `
+*** CONSUMIDOR FINAL ***
+${shopName.toUpperCase()}
+${shopLocation}
+CUIT: ${shopCuit}
+${ticketID}
+Fecha: ${fecha}
+Cajero: ${cajeroID}
+Pago: ${tipoPago}
+==============================
+
+${items.map(it => `  ${it.nombre}
+  $${window.formatPrecioSimple(Number(it.precio))} (x${it.cant}) = $${window.formatPrecioSimple(Number(it.precio) * Number(it.cant))}
+  =========================`).join("\n")}
+
+TOTAL: $${window.formatPrecioSimple(total)}${porcentajeTexto}
+==============================
+<span>Regimen de Transparencia Fiscal</span>
+<span>al Consumidor Ley 27.743</span>
+<span>IVA Contenido $${window.formatPrecioSimple(iva)}</span>
+<span>Otros impuestos nacionales</span>
+<span>Indirectos</span>
+<span>Imp. Internos importados $0,00</span>
+<span>Los impuestos informados son</span>
+<span>solo los que corresponden</span>
+<span>a nivel nacional</span>
+==============================
+`;
+
+    if (!iframeTicket) {
+      iframeTicket = document.createElement("iframe");
+      iframeTicket.id = "iframe-ticket";
+      iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
+      document.body.appendChild(iframeTicket);
+    }
+
+    const doc = iframeTicket.contentWindow.document;
+    doc.open();
+    doc.write(`
+<html>
+  <head>
+    <style>
+      @page { size: auto; margin: 0; }
+      body {
+        font-family: monospace;
+        font-size: 10px;
+        width: 5cm;
+        margin: 0;
+        padding: 4px;
+        white-space: pre-wrap;
+        line-height: 1.4;
+        text-align: center;
+      }
+      span { display:block; text-align:center; }
+    </style>
+  </head>
+  <body>${contenido}</body>
+</html>`);
+    doc.close();
+
+    setTimeout(() => {
+      const win = iframeTicket.contentWindow;
+      if (win) {
+        win.focus();
+        win.print();
+        setTimeout(() => { try { win.stop(); } catch {} }, 100); // 100 ms fijo
+      }
+    }, 10);
+  } catch (err) {
+    console.error("Error al imprimir ticket:", err);
+  }
+}
+
+// --- INICIALIZACIÓN (no rompe si faltan elementos) ---
+function initCobroUnificado() {
+  // Si la sección COBRO no está montada, solo deja helpers globales disponibles
+  if (!(scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar && tablaBuscarResultadosEl && tablaCobroEl && totalDiv && btnCobrar)) {
+    return;
+  }
+
+  // Descuento / Recargo
+  if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
+  if (inputRecargo)  inputRecargo.addEventListener("input", calcularPorcentajeFinal);
+  calcularPorcentajeFinal();
+
+  // Escaneo 13 dígitos
   scanCodigo.addEventListener("input", async () => {
     const code = scanCodigo.value.trim();
     if (code.length === 13) {
@@ -282,34 +389,15 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
     }
   });
 
-  async function buscarYAgregar(code) {
-    const stock = await getNode(`/stock/${code}`);
-    if (stock) {
-      return agregarAlCarrito({ id: code, nombre: stock.nombre, cant: 1, precio: Number(stock.precio || 0), tipo: "stock" });
-    }
-    const suelto = await getNode(`/sueltos/${code}`);
-    if (suelto) {
-      return agregarAlCarrito({ id: code, nombre: suelto.nombre, cant: 0.100, precio: Number(suelto.precio || 0), tipo: "sueltos" });
-    }
-    alert("Producto no encontrado");
-  }
-
-  // ======================================================
-  //  MODAL DE BÚSQUEDA
-  // ======================================================
-  btnBuscarCobro.addEventListener("click", () => {
-    modalBuscar.style.display = "flex";
-    buscarInput.value = "";
-    tablaBuscarResultados.innerHTML = "";
-    buscarInput.focus();
-  });
-  buscarCancelar.addEventListener("click", () => {
-    modalBuscar.style.display = "none";
-  });
+  // Modal Buscar
+  btnBuscarCobro.addEventListener("click", abrirModalBuscar);
+  buscarCancelar.addEventListener("click", cerrarModalBuscar);
 
   buscarInput.addEventListener("input", async () => {
     const term = buscarInput.value.trim().toLowerCase();
-    tablaBuscarResultados.innerHTML = "";
+    const tbody = tablaBuscarResultadosEl.querySelector("tbody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
     if (term.length < 2) return;
 
     const [stockAll, sueltosAll] = await Promise.all([ getNode("/stock"), getNode("/sueltos") ]);
@@ -333,7 +421,7 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
     }
 
     if (resultados.length === 0) {
-      tablaBuscarResultados.innerHTML = "<tr><td colspan='5'>Sin resultados</td></tr>";
+      tbody.innerHTML = "<tr><td colspan='5'>Sin resultados</td></tr>";
       return;
     }
 
@@ -354,17 +442,15 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
           precio: r.precio,
           tipo: r.tipo
         });
-        modalBuscar.style.display = "none";
+        cerrarModalBuscar();
       });
-      tablaBuscarResultados.appendChild(tr);
+      tbody.appendChild(tr);
     });
   });
 
-  // ======================================================
-  //  COBRAR / GUARDAR / ACTUALIZAR / IMPRIMIR
-  // ======================================================
+  // Cobrar
   btnCobrar.addEventListener("click", async () => {
-    if (!window.currentUser || carrito.length === 0) return;
+    if (!window.currentUser || window.carrito.length === 0) return;
 
     const modal = document.createElement("div");
     modal.style.cssText = `
@@ -389,6 +475,7 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
 
     const allButtons = modal.querySelectorAll("button");
     const disableButtons = () => allButtons.forEach(b => b.disabled = true);
+
     modal.querySelector("#cancelar-pago").addEventListener("click", () => {
       disableButtons();
       modal.remove();
@@ -405,37 +492,37 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
         let ultimoFecha = confVal.ultimoTicketFecha || "";
         if (ultimoFecha !== fechaHoy) ultimoID = 0;
         ultimoID++;
+
         const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
         const fecha = new Date();
         const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-        const totalOriginal = carrito.reduce((a,b) => a + (Number(b.cant) * Number(b.precio)), 0);
-        const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
+        const totalOriginal = window.carrito.reduce((a,b) => a + (Number(b.cant) * Number(b.precio)), 0);
+        const totalFinal = totalOriginal * (1 + (window.porcentajeFinal || 0)/100);
 
         await window.set(window.ref(`/movimientos/${ticketID}`), {
           ticketID,
           cajero: window.currentUser.id,
-          items: carrito,
+          items: window.carrito,
           total: totalFinal,
           fecha: fecha.toISOString(),
           tipo: tipoPago,
           eliminado: false,
-          porcentajeAplicado: porcentajeFinal || 0
+          porcentajeAplicado: window.porcentajeFinal || 0
         });
 
         await window.set(window.ref(`/historial/${ticketID}`), {
           ticketID,
           cajero: window.currentUser.id,
-          items: carrito,
+          items: window.carrito,
           total: totalFinal,
           fecha: fecha.toISOString(),
           tipo: tipoPago,
-          porcentajeAplicado: porcentajeFinal || 0
+          porcentajeAplicado: window.porcentajeFinal || 0
         });
 
         await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
-        // Actualizar existencias
-        for (const item of carrito) {
+        for (const item of window.carrito) {
           const nodo = await getNode(`/${item.tipo}/${item.id}`);
           if (!nodo) continue;
           if (item.tipo === "stock") {
@@ -445,14 +532,13 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
           }
         }
 
-        await imprimirTicket(ticketID, fechaStr, window.currentUser.id, carrito, totalFinal, tipoPago);
+        await imprimirTicket(ticketID, fechaStr, window.currentUser.id, window.carrito, totalFinal, tipoPago);
 
         setTimeout(() => {
           alert("VENTA FINALIZADA");
-          carrito = [];
+          window.carrito = [];
           actualizarTablaCobro();
 
-          // Refrescar otras vistas si existen (no rompe secciones)
           if (typeof window.loadStock === "function") window.loadStock();
           if (typeof window.loadSueltos === "function") window.loadSueltos();
           if (typeof window.loadMovimientos === "function") window.loadMovimientos();
@@ -463,110 +549,10 @@ if (scanCodigo && btnBuscarCobro && modalBuscar && buscarInput && buscarCancelar
       });
     });
   });
-
-  // ======================================================
-  //  IMPRIMIR TICKET (persistente)
-  // ======================================================
-  async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
-    try {
-      const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-      const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
-
-      let shopName = "TICKET";
-      let shopLocation = "Sucursal Nueva";
-      let shopCuit = "00000000000";
-      const cfg = await getNode("/config");
-      if (cfg) {
-        shopName = cfg.shopName || shopName;
-        shopLocation = cfg.shopLocation || shopLocation;
-        shopCuit = cfg.shopCuit || shopCuit;
-      }
-
-      const iva = total * 0.21;
-      const contenido = `
-*** CONSUMIDOR FINAL ***
-${shopName.toUpperCase()}
-${shopLocation}
-CUIT: ${shopCuit}
-${ticketID}
-Fecha: ${fecha}
-Cajero: ${cajeroID}
-Pago: ${tipoPago}
-==============================
-
-${items.map(it => `  ${it.nombre}
-  $${formatPrecioSimple(Number(it.precio))} (x${it.cant}) = $${formatPrecioSimple(Number(it.precio) * Number(it.cant))}
-  =========================`).join("\n")}
-
-TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
-==============================
-<span>Regimen de Transparencia Fiscal</span>
-<span>al Consumidor Ley 27.743</span>
-<span>IVA Contenido $${formatPrecioSimple(iva)}</span>
-<span>Otros impuestos nacionales</span>
-<span>Indirectos</span>
-<span>Imp. Internos importados $0,00</span>
-<span>Los impuestos informados son</span>
-<span>solo los que corresponden</span>
-<span>a nivel nacional</span>
-==============================
-`;
-
-      if (!iframeTicket) {
-        iframeTicket = document.createElement("iframe");
-        iframeTicket.id = "iframe-ticket";
-        iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
-        document.body.appendChild(iframeTicket);
-      }
-
-      const doc = iframeTicket.contentWindow.document;
-      doc.open();
-      doc.write(`
-<html>
-  <head>
-    <style>
-      @page { size: auto; margin: 0; }
-      body {
-        font-family: monospace;
-        font-size: 10px;
-        width: 5cm;
-        margin: 0;
-        padding: 4px;
-        white-space: pre-wrap;
-        line-height: 1.4;
-        text-align: center;
-      }
-      span { display:block; text-align:center; }
-    </style>
-  </head>
-  <body>${contenido}</body>
-</html>`);
-      doc.close();
-
-      setTimeout(() => {
-        const win = iframeTicket.contentWindow;
-        if (win) {
-          win.focus();
-          win.print();
-          setTimeout(() => { try { win.stop(); } catch {} }, 100); // 100 ms fijo
-        }
-      }, 10);
-    } catch (err) {
-      console.error("Error al imprimir ticket:", err);
-    }
-  }
-
-  // Inicializar totales al cargar
-  calcularPorcentajeFinal();
 }
 
-/* IMPORTANTE:
-   - Este bloque NO referencia los IDs antiguos (cobro-productos, cobro-sueltos, etc.)
-   - No encapsula en IIFE para mantener compatibilidad global.
-   - No llama funciones inexistentes sin comprobar (loadStock, loadSueltos, ...).
-   - Evita TypeError en vistas donde COBRO no esté montado.
-*/
-
+// Llamar siempre (no rompe si la vista aún no está visible)
+initCobroUnificado();
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
