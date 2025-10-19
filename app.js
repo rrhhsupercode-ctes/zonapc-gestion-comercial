@@ -182,13 +182,16 @@ inputBusqueda.addEventListener("input", async () => {
   });
 });
 
-// --- Mostrar / cerrar modal ---
+// --- Mostrar / cerrar modal con tus clases CSS ---
+const modalBusquedaOverlay = document.getElementById("modal-busqueda-overlay");
+
 btnBuscarProducto.addEventListener("click", () => {
-  modalBusqueda.classList.remove("hidden");
+  modalBusquedaOverlay.classList.remove("hidden");
   inputBusqueda.focus();
 });
+
 btnCancelarBusqueda.addEventListener("click", () => {
-  modalBusqueda.classList.add("hidden");
+  modalBusquedaOverlay.classList.add("hidden");
   inputBusqueda.value = "";
   tablaResultados.innerHTML = "";
 });
