@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Zona PC V3.8.2</title>
+  <title>Zona PC V3.8.3</title>
   <link rel="stylesheet" href="styles.css">
 
   <!-- Firebase SDK Modular 11.8.1 -->
@@ -46,7 +46,7 @@
 <body>
   <header>
     <img src="https://iili.io/KXkB2Ax.png" alt="ZONAPC" class="banner-img">
-    <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.2</h1>
+    <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.3</h1>
     <nav>
       <button class="nav-btn" data-section="cobro">Cobrar</button>
       <button class="nav-btn" data-section="movimientos">Movimientos</button>
@@ -59,93 +59,85 @@
   </header>
 
   <main>
-    <!-- COBRAR -->
-    <section id="cobro">
-      <div id="login-modal">
-        <h2>👥Cajero(a)</h2>
-        <select id="login-usuario"></select>
-        <input id="login-pass" type="password" placeholder="Contraseña">
-        <button id="btn-login">🔑Ingresar</button>
-        <p id="login-msg" class="msg-error"></p>
+<!-- COBRAR -->
+<section id="cobro">
+  <div id="login-modal">
+    <h2>👥Cajero(a)</h2>
+    <select id="login-usuario"></select>
+    <input id="login-pass" type="password" placeholder="Contraseña">
+    <button id="btn-login">🔑Ingresar</button>
+    <p id="login-msg" class="msg-error"></p>
+  </div>
+
+  <div id="cobro-controles" class="hidden">
+
+    <!-- FILA UNIFICADA (ESCANEO + BUSCAR) -->
+    <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
+      <input id="scan-codigo" placeholder="Escanear código o escribir..." style="flex:1;">
+      <button id="btn-buscar-cobro">🔍Buscar</button>
+    </div>
+
+    <!-- FILA DESCUENTO / RECARGO -->
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
+      <div style="text-align:center;">
+        <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
+        <input id="input-descuento" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
       </div>
-
-      <div id="cobro-controles" class="hidden">
-
-        <!-- UNIFICADO: ESCANEO + BUSCAR -->
-        <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-          <input id="cobro-codigo" placeholder="Escanear código (13 dígitos) o escribir" maxlength="13" style="flex:1;">
-          <button id="btn-buscar-general">🔍Buscar</button>
-        </div>
-
-        <!-- MODAL DE BÚSQUEDA -->
-        <div id="modal-busqueda" class="hidden"
-             style="position:fixed; top:0; left:0; width:100%; height:100%;
-                    background:rgba(0,0,0,0.6); display:flex; justify-content:center; align-items:center; z-index:9999;">
-          <div style="background:#fff; padding:20px; border-radius:10px; max-width:720px; width:92%;">
-            <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
-            <input id="input-busqueda" type="text" maxlength="30"
-                   placeholder="Ingrese nombre o código (mín. 2 caracteres)"
-                   style="width:100%; padding:6px; margin:10px 0;">
-            <div style="text-align:center; margin-bottom:10px;">
-              <button id="btn-cerrar-busqueda" style="background:red; color:#fff; padding:5px 15px;">Cancelar</button>
-            </div>
-            <table id="tabla-resultados-busqueda" style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="text-align:left;">Código</th>
-                  <th style="text-align:left;">Nombre</th>
-                  <th style="text-align:left;">Tipo</th>
-                  <th style="text-align:right;">Cant/Kg</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- DESCUENTO / RECARGO -->
-        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
-          <div style="text-align:center;">
-            <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
-            <input id="input-descuento" type="number" min="0" max="100" value="0"
-                   style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
-          </div>
-          <div style="text-align:center;">
-            <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
-            <input id="input-recargo" type="number" min="0" max="100" value="0"
-                   style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
-          </div>
-        </div>
-
-        <!-- TABLA DE COBRO (editable) -->
-        <table id="tabla-cobro">
-          <thead>
-            <tr>
-              <th>Cant / KG</th>
-              <th>Producto</th>
-              <th>Precio Unidad</th>
-              <th>Total</th>
-              <th>Acción</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-
-        <div id="total-div">TOTAL: $0</div>
-        <button id="btn-cobrar" class="hidden">💸​Cobrar</button>
+      <div style="text-align:center;">
+        <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
+        <input id="input-recargo" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
       </div>
-    </section>
+    </div>
+
+    <!-- TABLA DE COBRO EDITABLE -->
+    <table id="tabla-cobro">
+      <thead>
+        <tr>
+          <th>Cant / KG</th>
+          <th>Producto</th>
+          <th>Precio Unidad</th>
+          <th>Total</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div id="total-div">TOTAL: $0</div>
+    <button id="btn-cobrar" class="hidden">💸Cobrar</button>
+  </div>
+</section>
+
+<!-- MODAL BUSCAR PRODUCTOS -->
+<div id="modal-buscar" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); justify-content:center; align-items:center; z-index:9999;">
+  <div style="background:#fff; padding:20px; border-radius:10px; max-width:600px; width:90%; text-align:center;">
+    <h2 style="margin-bottom:10px;">¿Qué desea buscar?</h2>
+    <input id="buscar-input" maxlength="30" placeholder="Ingrese nombre o código..." style="width:90%; padding:5px; margin-bottom:10px; text-align:center;">
+    <div style="margin-bottom:10px;">
+      <button id="buscar-cancelar" style="background:red; color:white; padding:5px 15px; border:none; border-radius:5px;">Cancelar</button>
+    </div>
+    <table id="tabla-buscar-resultados" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#eee;">
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Cant/Kg</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
 
     <!-- MOVIMIENTOS -->
     <section id="movimientos" class="hidden">
       <h2>Movimientos</h2>
-
       <label for="filtroCajero">Nro Cajero(a):</label>
       <select id="filtroCajero">
         <option value="TODOS">TODOS</option>
       </select>
-
       <button id="btn-tirar-z">📃Tirar Z</button>
       <table id="tabla-movimientos">
         <thead>
@@ -191,7 +183,6 @@
     <!-- SUELTOS -->
     <section id="sueltos" class="hidden">
       <h2>Sueltos</h2>
-
       <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
         <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
         <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
@@ -200,7 +191,6 @@
         <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
         <button id="btn-buscar-suelto">🔍Buscar</button>
       </div>
-
       <table id="tabla-sueltos">
         <thead>
           <tr>
@@ -237,20 +227,16 @@
     <!-- CONFIG -->
     <section id="config" class="hidden">
       <h2>Configuración</h2>
-
       <p class="emoji">Datos de esta sucursal:</p><br>
       <p class="emoji">🔠</p><input id="config-nombre" placeholder="Nombre de Tienda">
       <p class="emoji">📌</p><input id="config-ubicacion" placeholder="Ubicación del comercio">
       <p class="emoji">🔢​</p><input id="config-cuit" placeholder="CUIT">
-
       <div id="admin-pass-config">
         <input id="config-pass-actual" type="password" placeholder="Contraseña actual">
         <input id="config-pass-nueva" type="password" placeholder="Nueva contraseña">
-
-        <button id="guardar-config" class="btn-guardar">✅​Guardar</button>
+        <button id="guardar-config" class="btn-guardar">✅Guardar</button>
         <p id="config-msg" class="msg-error"></p>
       </div>
-
       <input id="master-pass" placeholder="Contraseña Maestra">
       <button id="btn-restaurar" class="btn-restaurar">🔑Restaurar Contraseña</button>
     </section>
