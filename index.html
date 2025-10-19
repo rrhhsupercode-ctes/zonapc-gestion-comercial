@@ -70,39 +70,23 @@
   </div>
 
   <div id="cobro-controles" class="hidden">
-
-    <!-- FILA COBRO NORMAL -->
+    <!-- BARRA DE ESCANEO / BUSCAR -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <select id="cobro-cantidad"></select>
-      <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-productos" style="flex:2;">
-        <option value="">Elija un producto en stock</option>
-      </select>
-      <button id="btn-add-product">OK​</button>
+      <input id="cobro-codigo" placeholder="Escanear código de producto" style="flex:1;">
+      <button id="btn-buscar-producto">🔍Buscar</button>
     </div>
 
-    <!-- FILA SUELTOS (KG + Precio) -->
-    <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
-      <button id="btn-decr-kg" style="width:30px;">-</button>
-      <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
-      <button id="btn-incr-kg" style="width:30px;">+</button>
-      <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
-      <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
-      <select id="cobro-sueltos" style="flex:2;">
-        <option value="">Elija un producto suelto</option>
-      </select>
-      <button id="btn-add-suelto">OK​</button>
-    </div>
-
-    <!-- FILA DESCUENTO / RECARGO -->
+    <!-- DESCUENTO / RECARGO -->
     <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
       <div style="text-align:center;">
         <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
-        <input id="input-descuento" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+        <input id="input-descuento" type="number" min="0" max="100" value="0"
+               style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
       </div>
       <div style="text-align:center;">
         <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
-        <input id="input-recargo" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+        <input id="input-recargo" type="number" min="0" max="100" value="0"
+               style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
       </div>
     </div>
 
@@ -119,8 +103,41 @@
       </thead>
       <tbody></tbody>
     </table>
+
     <div id="total-div">TOTAL: $0</div>
-    <button id="btn-cobrar" class="hidden">💸​Cobrar</button>
+    <button id="btn-cobrar" class="hidden">💸Cobrar</button>
+  </div>
+
+  <!-- MODAL DE BÚSQUEDA -->
+  <div id="modal-busqueda" class="hidden" style="
+       position:fixed; top:0; left:0; width:100%; height:100%;
+       background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center;
+       z-index:9999;">
+    <div style="background:#fff; padding:20px; border-radius:10px; width:90%; max-width:700px;">
+      <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
+      <div style="display:flex; gap:10px; margin-bottom:10px;">
+        <input id="input-busqueda" type="text" maxlength="30"
+               placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
+               style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
+        <button id="btn-cancelar-busqueda"
+                style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
+          Cancelar
+        </button>
+      </div>
+
+      <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="background:#eee;">
+            <th style="padding:5px; border:1px solid #ccc;">Código</th>
+            <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
+            <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
+            <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
+            <th style="padding:5px; border:1px solid #ccc;">Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </div>
 </section>
 
