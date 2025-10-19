@@ -1,86 +1,287 @@
-<!-- COBRAR -->
-<section id="cobro">
-  <div id="login-modal">
-    <h2>👥Cajero(a)</h2>
-    <select id="login-usuario"></select>
-    <input id="login-pass" type="password" placeholder="Contraseña">
-    <button id="btn-login">🔑Ingresar</button>
-    <p id="login-msg" class="msg-error"></p>
-  </div>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Zona PC V3.8.2</title>
+  <link rel="stylesheet" href="styles.css">
 
-  <div id="cobro-controles" class="hidden">
-    <!-- === FILA UNIFICADA (CANTIDAD / KG + CÓDIGO + BUSCAR + AGREGAR) === -->
-    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
-      <select id="cobro-cantidad" title="Cantidad o KG"></select>
-      <input id="cobro-codigo" type="text" maxlength="13" placeholder="Código de barras (13 dígitos)" style="width:180px; text-align:center;">
-      <button id="btn-buscar-producto" style="background:#0984e3;color:#fff;">🔍Buscar</button>
-      <button id="btn-add-product" style="background:#2ecc71;color:#fff;">➕Agregar</button>
-    </div>
+  <!-- Firebase SDK Modular 11.8.1 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
 
-    <!-- === DESCUENTO / RECARGO === -->
-    <div style="display:flex; gap:10px; align-items:center; justify-content:center; margin-bottom:10px;">
-      <div style="text-align:center;">
-        <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
-        <input id="input-descuento" type="number" min="0" max="100" value="0"
-               style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+    // Configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
+      authDomain: "zonapc-actualizado.firebaseapp.com",
+      databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
+      projectId: "zonapc-actualizado",
+      storageBucket: "zonapc-actualizado.firebasestorage.app",
+      messagingSenderId: "837716085875",
+      appId: "1:837716085875:web:198ad1963c42c1105eae06"
+    };
+
+    // Inicialización
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    // Wrappers globales (compatibilidad con init.js y app.js)
+    window.app = app;
+    window.db = db;
+    window.auth = auth;
+    window.ref = (path) => ref(db, path);
+    window.get = async r => get(r);
+    window.set = async (r, val) => set(r, val);
+    window.update = async (r, val) => update(r, val);
+    window.push = r => push(r);
+    window.remove = r => remove(r);
+    window.onValue = (r, cb) => onValue(r, cb);
+    window.onAuthStateChanged = (cb) => onAuthStateChanged(auth, cb);
+    window.signInWithEmailAndPassword = (email, pass) => signInWithEmailAndPassword(auth, email, pass);
+    window.signOut = () => signOut(auth);
+  </script>
+</head>
+<body>
+  <header>
+    <img src="https://iili.io/KXkB2Ax.png" alt="ZONAPC" class="banner-img">
+    <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.2</h1>
+    <nav>
+      <button class="nav-btn" data-section="cobro">Cobrar</button>
+      <button class="nav-btn" data-section="movimientos">Movimientos</button>
+      <button class="nav-btn" data-section="historial">Historial</button>
+      <button class="nav-btn" data-section="stock">Stock</button>
+      <button class="nav-btn" data-section="sueltos">Sueltos</button>
+      <button class="nav-btn" data-section="cajeros">Cajeros</button>
+      <button class="nav-btn" data-section="config">Config</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===================== COBRAR ===================== -->
+    <section id="cobro">
+      <!-- LOGIN CAJERO -->
+      <div id="login-modal">
+        <h2>👥Cajero(a)</h2>
+        <select id="login-usuario"></select>
+        <input id="login-pass" type="password" placeholder="Contraseña">
+        <button id="btn-login">🔑Ingresar</button>
+        <p id="login-msg" class="msg-error"></p>
       </div>
-      <div style="text-align:center;">
-        <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
-        <input id="input-recargo" type="number" min="0" max="100" value="0"
-               style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+
+      <!-- CONTROLES COBRO -->
+      <div id="cobro-controles" class="hidden">
+
+        <!-- FILA COBRO (STOCK) -->
+        <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+          <select id="cobro-cantidad"></select>
+          <input id="cobro-codigo" placeholder="Código producto" style="flex:1;">
+          <select id="cobro-productos" style="flex:2;">
+            <option value="">Elija un producto en stock</option>
+          </select>
+          <button id="btn-add-product">OK​</button>
+          <!-- Botón Buscar (para modal unificado de stock/sueltos) -->
+          <button id="btn-buscar-producto" style="background:#0984e3;color:#fff;">🔍Buscar</button>
+        </div>
+
+        <!-- FILA SUELTOS (KG + Precio) -->
+        <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+          <button id="btn-decr-kg" style="width:30px;">-</button>
+          <input id="input-kg-suelto" type="text" value="0.100" style="width:60px; text-align:center;">
+          <button id="btn-incr-kg" style="width:30px;">+</button>
+          <input id="input-precio-suelto" type="text" value="000" style="width:70px; text-align:right;" maxlength="9">
+          <input id="cobro-codigo-suelto" placeholder="Código producto" style="flex:1;">
+          <select id="cobro-sueltos" style="flex:2;">
+            <option value="">Elija un producto suelto</option>
+          </select>
+          <button id="btn-add-suelto">OK​</button>
+        </div>
+
+        <!-- inputs "fantasma" para compatibilidad con app.js -->
+        <input id="cobro-codigo-precio" type="hidden" value="">
+        <input id="cobro-sueltos-precio" type="hidden" value="">
+
+        <!-- DESCUENTO / RECARGO -->
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; justify-content:center;">
+          <div style="text-align:center;">
+            <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
+            <input id="input-descuento" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+          </div>
+          <div style="text-align:center;">
+            <label for="input-recargo" style="display:block; font-size:13px;">Recargo (%)</label>
+            <input id="input-recargo" type="number" min="0" max="100" value="0" style="width:70px; text-align:center; border:1px solid #ccc; border-radius:5px; padding:3px;">
+          </div>
+        </div>
+
+        <!-- TABLA COBRO -->
+        <table id="tabla-cobro">
+          <thead>
+            <tr>
+              <th>Cant / KG</th>
+              <th>Producto</th>
+              <th>Precio Unidad</th>
+              <th>Total</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div id="total-div">TOTAL: $0</div>
+        <button id="btn-cobrar" class="hidden">💸​Cobrar</button>
       </div>
-    </div>
 
-    <!-- === TABLA COBRO === -->
-    <table id="tabla-cobro">
-      <thead>
-        <tr>
-          <th>Cant / KG</th>
-          <th>Producto</th>
-          <th>Precio Unidad</th>
-          <th>Total</th>
-          <th>Acción</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+      <!-- MODAL DE BÚSQUEDA (ÚNICO) -->
+      <div id="modal-busqueda" class="hidden" style="
+        position:fixed; top:0; left:0; width:100%; height:100%;
+        display:none; justify-content:center; align-items:center;
+        background:rgba(0,0,0,0.7); z-index:9999;">
+        <div style="
+          background:#fff; padding:20px; border-radius:10px;
+          width:90%; max-width:700px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+          <h2 style="text-align:center; margin-top:0;">¿Qué desea buscar?</h2>
+          <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <input id="input-busqueda" type="text" maxlength="30"
+                   placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
+                   style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
+            <button id="btn-cancelar-busqueda"
+                    style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
+              Cancelar
+            </button>
+          </div>
 
-    <!-- === TOTAL Y COBRAR === -->
-    <div id="total-div">TOTAL: $0</div>
-    <button id="btn-cobrar" class="hidden">💸Cobrar</button>
-  </div>
-
-  <!-- === MODAL DE BÚSQUEDA === -->
-  <div id="modal-busqueda" class="hidden" style="
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    display:none; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.7); z-index:9999;">
-    <div style="
-      background:#fff; padding:20px; border-radius:10px;
-      width:90%; max-width:700px; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-      <h2 style="text-align:center; margin-top:0;">🔍 Buscar producto</h2>
-      <div style="display:flex; gap:10px; margin-bottom:10px;">
-        <input id="input-busqueda" type="text" maxlength="30"
-               placeholder="Ingrese nombre o código (mínimo 2 caracteres)"
-               style="flex:1; padding:5px; border:1px solid #ccc; border-radius:5px;">
-        <button id="btn-cancelar-busqueda"
-                style="background:red; color:white; border:none; border-radius:5px; padding:5px 10px;">
-          Cancelar
-        </button>
+          <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#eee;">
+                <th style="padding:5px; border:1px solid #ccc;">Código</th>
+                <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
+                <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
+                <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
+                <th style="padding:5px; border:1px solid #ccc;">Acción</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
+    </section>
 
-      <table id="tabla-resultados" style="width:100%; border-collapse:collapse;">
+    <!-- ===================== MOVIMIENTOS ===================== -->
+    <section id="movimientos" class="hidden">
+      <h2>Movimientos</h2>
+      <label for="filtroCajero">Nro Cajero(a):</label>
+      <select id="filtroCajero">
+        <option value="TODOS">TODOS</option>
+      </select>
+      <button id="btn-tirar-z">📃Tirar Z</button>
+      <table id="tabla-movimientos">
         <thead>
-          <tr style="background:#eee;">
-            <th style="padding:5px; border:1px solid #ccc;">Código</th>
-            <th style="padding:5px; border:1px solid #ccc;">Nombre</th>
-            <th style="padding:5px; border:1px solid #ccc;">Tipo</th>
-            <th style="padding:5px; border:1px solid #ccc;">Cant/Kg</th>
-            <th style="padding:5px; border:1px solid #ccc;">Acción</th>
+          <tr>
+            <th>ID</th><th>Total</th><th>Tipo</th><th>Cajero</th><th>Hora</th><th>Acción</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-    </div>
-  </div>
-</section>
+    </section>
+
+    <!-- ===================== HISTORIAL ===================== -->
+    <section id="historial" class="hidden">
+      <h2>Historial</h2>
+      <p id="historial-info">Acá están todos los movimientos mensuales. Se eliminan el día 15 de cada mes.</p>
+      <table id="tabla-historial">
+        <thead>
+          <tr>
+            <th>ID</th><th>Total</th><th>Tipo</th><th>Cajero</th><th>Fecha</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===================== STOCK ===================== -->
+    <section id="stock" class="hidden">
+      <h2>Stock</h2>
+      <input id="stock-codigo" placeholder="Código producto">
+      <select id="stock-cantidad"></select>
+      <button id="agregar-stock">➕Agregar Stock➕</button>
+      <button id="buscar-stock">🔍Buscar</button>
+      <table id="tabla-stock">
+        <thead>
+          <tr>
+            <th>Código</th><th>Nombre</th><th>Cant</th><th>Fecha</th><th>Precio</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===================== SUELTOS ===================== -->
+    <section id="sueltos" class="hidden">
+      <h2>Sueltos</h2>
+      <div style="display:flex; gap:5px; align-items:center; margin-bottom:5px;">
+        <input id="sueltos-codigo" placeholder="Código producto" style="flex:1;">
+        <input id="sueltos-kg" type="text" value="0.100" style="width:60px; text-align:center;">
+        <button id="sueltos-btn-decr" style="width:30px;">-</button>
+        <button id="sueltos-btn-incr" style="width:30px;">+</button>
+        <button id="btn-agregar-suelto">➕Agregar Suelto➕</button>
+        <button id="btn-buscar-suelto">🔍Buscar</button>
+      </div>
+      <table id="tabla-sueltos">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Nombre</th>
+            <th>KG</th>
+            <th>Fecha</th>
+            <th>Precio</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===================== CAJEROS ===================== -->
+    <section id="cajeros" class="hidden">
+      <h2>Cajeros</h2>
+      <p class="emoji">👥</p><select id="cajero-nro"></select>
+      <p class="emoji">🔠</p><input id="cajero-nombre" placeholder="Nombre">
+      <p class="emoji">🔢</p><input id="cajero-dni" placeholder="DNI">
+      <p class="emoji">🔣</p><input id="cajero-pass" type="password" placeholder="Contraseña">
+      <button id="agregar-cajero">➕Agregar Cajero(a)➕</button>
+      <table id="tabla-cajeros">
+        <thead>
+          <tr>
+            <th>Nro</th><th>Nombre</th><th>DNI</th><th>Acción</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <!-- ===================== CONFIG ===================== -->
+    <section id="config" class="hidden">
+      <h2>Configuración</h2>
+      <p class="emoji">Datos de esta sucursal:</p><br>
+      <p class="emoji">🔠</p><input id="config-nombre" placeholder="Nombre de Tienda">
+      <p class="emoji">📌</p><input id="config-ubicacion" placeholder="Ubicación del comercio">
+      <p class="emoji">🔢​</p><input id="config-cuit" placeholder="CUIT">
+
+      <div id="admin-pass-config">
+        <input id="config-pass-actual" type="password" placeholder="Contraseña actual">
+        <input id="config-pass-nueva" type="password" placeholder="Nueva contraseña">
+        <button id="guardar-config" class="btn-guardar">✅​Guardar</button>
+        <p id="config-msg" class="msg-error"></p>
+      </div>
+
+      <input id="master-pass" placeholder="Contraseña Maestra">
+      <button id="btn-restaurar" class="btn-restaurar">🔑Restaurar Contraseña</button>
+    </section>
+  </main>
+
+  <!-- Scripts modulares -->
+  <script type="module" src="init.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
