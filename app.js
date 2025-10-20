@@ -104,6 +104,13 @@ btnLogin.addEventListener("click", async () => {
     loginModal.classList.add("hidden");
     cobroControles.classList.remove("hidden");
     showSection("cobro");
+
+    // 🔧 FIX: asegurar visibilidad inicial del botón de cobro
+    const btnCobrar = document.getElementById("btn-cobrar");
+    if (btnCobrar) btnCobrar.classList.add("hidden"); // ocúltalo de inicio
+    setTimeout(() => {
+      if (btnCobrar && carrito.length > 0) btnCobrar.classList.remove("hidden");
+    }, 200);
   } else {
     loginMsg.textContent = "Contraseña incorrecta";
   }
