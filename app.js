@@ -623,6 +623,7 @@ btnCobrar.addEventListener("click", async () => {
       let ultimoFecha = confVal.ultimoTicketFecha || "";
       if (ultimoFecha !== fechaHoy) ultimoID = 0;
       ultimoID++;
+      if (ultimoID > 999999) ultimoID = 1; // ROLLOVER: ID_999999 => ID_000001
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
