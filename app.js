@@ -109,7 +109,9 @@ btnLogin.addEventListener("click", async () => {
   }
 });
 
-// --- COBRO ---
+// =========================
+// ========  COBRO  ========
+// =========================
 const cobroProductos = document.getElementById("cobro-productos");
 const cobroSueltos = document.getElementById("cobro-sueltos");
 const cobroCantidad = document.getElementById("cobro-cantidad");
@@ -129,7 +131,7 @@ const cobroSueltosPrecio = document.getElementById("cobro-sueltos-precio");
 const inputDescuento = document.getElementById("input-descuento");
 const inputRecargo = document.getElementById("input-recargo");
 
-// Modal de búsqueda (IDs existentes)
+// Modal búsqueda (IDs existentes)
 const modalBusqueda = document.getElementById("modal-busqueda");
 const btnBuscarProducto = document.getElementById("btn-buscar-producto");
 const btnCancelarBusqueda = document.getElementById("btn-cancelar-busqueda");
@@ -138,49 +140,36 @@ const tablaResultados = document.querySelector("#tabla-resultados tbody");
 
 let carrito = [];
 let porcentajeFinal = 0;
-let precioUnitarioActual = 0; // usado en la UI clásica de sueltos
+let precioUnitarioActual = 0;
 
-// --- Utilidades de formato ---
-function formatPeso(num) {
-  // 1234.5 -> "1.234,50"
-  const entero = Math.floor(Math.abs(num));
-  const dec = Math.round((Math.abs(num) - entero) * 100);
-  const sign = num < 0 ? "-" : "";
-  return `${sign}${entero.toLocaleString("es-AR")},${String(dec).padStart(2, "0")}`;
+// ---------- Helpers ----------
+function formatPrecioSimple(valor) {
+  return valor.toFixed(2).replace('.', ',');
+}
+function enteroConMiles(n) {
+  return Number(n || 0).toLocaleString('es-AR');
+}
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
 }
 
-function formatPesoEntero(num) {
-  // Fuerza centavos ,00 para edición manual de total suelto
-  const entero = Math.round(Math.abs(num));
-  const sign = num < 0 ? "-" : "";
-  return `${sign}${entero.toLocaleString("es-AR")},00`;
-}
-
-function parseEnteroFromMoney(str) {
-  // "1.234" o "1.234,00" -> 1234
-  const raw = (str || "").toString().replace(/\D/g, "");
-  return parseInt(raw || "0", 10);
-}
-
-// Formatea KG estilo balanza (entrada cruda a 0.000–99.000)
-function formatKgFromDigits(rawDigits) {
-  const d = rawDigits.replace(/\D/g, "").slice(0, 5); // máx 5 dígitos -> 99.999 (limitamos a 99.000 luego)
+// Mapea texto tipo balanza -> 0.000..99.000
+function parseKgBalanza(rawDigits) {
+  const s = (rawDigits || "").replace(/\D/g, "").slice(0, 5); // hasta 5 dígitos => 99.000 máx
   let val = 0;
-  switch (d.length) {
+  switch (s.length) {
     case 0: val = 0.000; break;
-    case 1: val = parseFloat("0.00" + d); break;
-    case 2: val = parseFloat("0.0" + d); break;
-    case 3: val = parseFloat("0." + d); break;
-    case 4: val = parseFloat(d[0] + "." + d.slice(1, 4)); break;
-    default: val = parseFloat(d.slice(0, 2) + "." + d.slice(2, 5)); break;
+    case 1: val = parseFloat("0.00" + s); break;
+    case 2: val = parseFloat("0.0" + s); break;
+    case 3: val = parseFloat("0." + s); break;
+    case 4: val = parseFloat(s[0] + "." + s.slice(1, 4)); break;
+    default: val = parseFloat(s.slice(0, 2) + "." + s.slice(2, 5)); break;
   }
-  if (isNaN(val)) val = 0.000;
-  if (val < 0) val = 0.000;
-  if (val > 99) val = 99.000;
-  return val.toFixed(3);
+  if (isNaN(val)) val = 0;
+  return clamp(Number(val.toFixed(3)), 0, 99);
 }
 
-// --- Funciones de carga ---
+// ---------- Carga inicial de selects ----------
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
   cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
@@ -214,53 +203,79 @@ async function loadProductos() {
   inputCodigoPrecio.value = "";
   inputPrecioSuelto.value = "000";
 }
+(async function inicializarCobro(){ await loadProductos(); })();
 
-// --- Inicialización ---
-async function inicializarCobro() {
-  await loadProductos();
-}
-inicializarCobro();
-
-// --- Descuento/Recargo ---
+// ---------- Descuento / Recargo ----------
 function calcularPorcentajeFinal() {
-  const desc = Math.min(Math.max(Number(inputDescuento.value) || 0, 0), 100);
-  const rec = Math.min(Math.max(Number(inputRecargo.value) || 0, 0), 100);
-  inputDescuento.value = String(Math.round(desc));
-  inputRecargo.value = String(Math.round(rec));
+  const desc = clamp(Math.round(Number(inputDescuento.value) || 0), 0, 100);
+  const rec = clamp(Math.round(Number(inputRecargo.value) || 0), 0, 100);
+  inputDescuento.value = String(desc);
+  inputRecargo.value = String(rec);
   porcentajeFinal = rec - desc;
   actualizarTabla();
 }
 if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
 if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
 
-// --- Carrito ---
+// ---------- Carrito ----------
 async function agregarAlCarrito(nuevoItem) {
-  // nuevoItem: {id, nombre, cant, precio, tipo}  (precio = unitario)
   const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
+
   const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
   let totalCant = nuevoItem.cant;
   if (idx >= 0) totalCant += carrito[idx].cant;
 
-  if ((nuevoItem.tipo === "stock" && totalCant > (data.cant || 0)) ||
-      (nuevoItem.tipo === "sueltos" && totalCant > (data.kg || 0))) {
-    return alert("STOCK INSUFICIENTE");
-  }
+  const disponible = nuevoItem.tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
+  if (totalCant > disponible) return alert("STOCK INSUFICIENTE");
 
   if (idx >= 0) {
     carrito[idx].cant += nuevoItem.cant;
   } else {
-    // Para sueltos guardo además el precioUnit como copia por claridad (precio ya es unitario)
+    // Guardamos el precio unitario (para sueltos es $/kg) y nombre
     carrito.push({
-      ...nuevoItem,
-      precioUnit: nuevoItem.precio
+      id: nuevoItem.id,
+      nombre: data.nombre,
+      cant: nuevoItem.cant,
+      precio: data.precio,    // unitario
+      tipo: nuevoItem.tipo
     });
   }
   actualizarTabla();
 }
 
-// --- Botones AGREGAR (UI clásica) ---
+// ---------- Escaneo unificado por código en el input principal ----------
+inputCodigoProducto.addEventListener("input", async () => {
+  const codigo = inputCodigoProducto.value.trim();
+  if (codigo.length !== 13) return;
+
+  // 1) Intentar sueltos
+  const snapS = await window.get(window.ref(`/sueltos/${codigo}`));
+  if (snapS.exists()) {
+    const data = snapS.val();
+    if ((data.kg || 0) >= 0) {
+      await agregarAlCarrito({ id: codigo, cant: 0.000, tipo: "sueltos" });
+    } else alert("Stock insuficiente en sueltos");
+    inputCodigoProducto.value = "";
+    return;
+  }
+
+  // 2) Intentar stock
+  const snapP = await window.get(window.ref(`/stock/${codigo}`));
+  if (snapP.exists()) {
+    const data = snapP.val();
+    if ((data.cant || 0) > 0) {
+      await agregarAlCarrito({ id: codigo, cant: 1, tipo: "stock" });
+    } else alert("Stock insuficiente en stock");
+  } else {
+    alert("Producto no encontrado");
+  }
+
+  inputCodigoProducto.value = "";
+});
+
+// ---------- Botones AGREGAR (selects antiguos aún activos) ----------
 btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
@@ -269,310 +284,382 @@ btnAddProduct.addEventListener("click", async () => {
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
   if (cant > (data.cant || 0)) return alert("STOCK INSUFICIENTE");
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
+  agregarAlCarrito({ id, cant, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
 
-// --- SUELTOS KG <-> PRECIO (UI clásica) ---
-async function actualizarPrecioUnitario() {
-  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
-  if (!id) return;
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return;
-  precioUnitarioActual = snap.val().precio;
-  let precio = Math.round(parseFloat(inputKgSuelto.value) * precioUnitarioActual);
-  if (precio > 9999999) precio = 9999999;
-  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
-}
-
-async function actualizarKgSegunPrecio() {
-  if (!precioUnitarioActual) return;
-  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
-  let precio = parseInt(raw) || 0; // total redondo manual
-  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
-  inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
-}
-
-// Escuchas sueltos/precio (UI clásica)
-if (inputPrecioSuelto) inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
-if (cobroSueltos) cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
-if (inputCodigoSuelto) inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
-
-// Formateo KG (UI clásica)
-const msgKgCobro = document.createElement("p");
-msgKgCobro.style.color = "red";
-msgKgCobro.style.margin = "4px 0 0 0";
-msgKgCobro.style.fontSize = "0.9em";
-if (inputKgSuelto && inputKgSuelto.parentNode) {
-  inputKgSuelto.parentNode.appendChild(msgKgCobro);
-  inputKgSuelto.value = "0.000";
-}
-
-function formatearKgCobro(inputElement, msgElement, delta = 0) {
-  if (!inputElement) return;
-  let raw = inputElement.value.replace(/\D/g, "");
-  if (delta !== 0) {
-    let val = parseFloat(inputElement.value) || 0;
-    val = Math.min(99.000, Math.max(0.000, val + delta));
-    inputElement.value = val.toFixed(3);
-    if (msgElement) msgElement.textContent = "";
-    actualizarPrecioUnitario();
-    return;
-  }
-  inputElement.value = formatKgFromDigits(raw);
-  if (msgElement) msgElement.textContent = "";
-  actualizarPrecioUnitario();
-}
-
-// Botones + / - KG (UI clásica)
-if (btnKgMas) btnKgMas.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, 0.100));
-if (btnKgMenos) btnKgMenos.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, -0.100));
-if (inputKgSuelto) {
-  inputKgSuelto.addEventListener("input", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-  inputKgSuelto.addEventListener("blur", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-}
-
-// Agregar suelto (UI clásica)
-if (btnAddSuelto) btnAddSuelto.addEventListener("click", async () => {
+btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
   const snap = await window.get(window.ref(`/sueltos/${id}`));
   if (!snap.exists()) return alert("Producto no encontrado");
   const data = snap.val();
   let cant = parseFloat(inputKgSuelto.value) || 0;
-  if (cant < 0) return alert("Cantidad inválida");
+  if (cant <= 0) return alert("Cantidad inválida");
   if (cant > (data.kg || 0)) return alert("STOCK INSUFICIENTE");
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
+  agregarAlCarrito({ id, cant, tipo: "sueltos" });
   inputKgSuelto.value = "0.100";
   inputPrecioSuelto.value = "000";
   inputCodigoSuelto.value = "";
 });
 
-// --- Escaneo unificado para stock y sueltos (lector de barras) ---
-inputCodigoProducto.addEventListener("input", async () => {
-  const codigo = inputCodigoProducto.value.trim();
-  if (codigo.length !== 13) return;
-
-  // Primero SUELTOS
-  const snapSuelto = await window.get(window.ref(`/sueltos/${codigo}`));
-  if (snapSuelto.exists()) {
-    const data = snapSuelto.val();
-    if ((data.kg || 0) >= 0) {
-      agregarAlCarrito({
-        id: codigo,
-        nombre: data.nombre,
-        cant: 0.000, // entra con 0 kg para editar desde tabla
-        precio: data.precio,
-        tipo: "sueltos"
-      });
-    } else {
-      alert("Stock insuficiente en sueltos");
-    }
-    inputCodigoProducto.value = "";
-    return;
-  }
-
-  // Luego STOCK
-  const snapStock = await window.get(window.ref(`/stock/${codigo}`));
-  if (snapStock.exists()) {
-    const data = snapStock.val();
-    if ((data.cant || 0) > 0) {
-      agregarAlCarrito({
-        id: codigo,
-        nombre: data.nombre,
-        cant: 1,
-        precio: data.precio,
-        tipo: "stock"
-      });
-    } else {
-      alert("Stock insuficiente en stock");
-    }
-  } else {
-    alert("Producto no encontrado");
-  }
-  inputCodigoProducto.value = "";
-});
-
-// --- Tabla de cobro (EDITABLE) ---
-async function validarStockItem(item) {
-  const snap = await window.get(window.ref(`/${item.tipo}/${item.id}`));
-  if (!snap.exists()) return item;
-  const data = snap.val();
-  const disponible = item.tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
-  if (item.cant > disponible) {
-    alert("No hay tanta cantidad disponible");
-    item.cant = disponible;
-  }
-  return item;
-}
-
+// ---------- Tabla COBRO (editable) ----------
 function actualizarTabla() {
   tablaCobro.innerHTML = "";
   let total = 0;
 
   carrito.forEach((item, idx) => {
+    // total ítem (antes de %)
+    const totalItem = Number(item.cant) * Number(item.precio);
+    total += totalItem;
+
     const tr = document.createElement("tr");
 
-    // celdas: Cant/KG (editable), Producto, Precio Unidad (readonly sueltos / disabled stock), Total (editable solo sueltos manual), Acción
-    // Para stock: cantidad number min=1, precioUnidad fijo (disabled), total calculado
-    // Para sueltos: input KG + input Total (vinculados), precioUnidad fijo (disabled)
-
-    let celdaCant, celdaProd, celdaPU, celdaTotal, celdaAcc;
-    celdaCant = document.createElement("td");
-    celdaProd = document.createElement("td");
-    celdaPU = document.createElement("td");
-    celdaTotal = document.createElement("td");
-    celdaAcc = document.createElement("td");
-
-    // PRODUCTO
-    celdaProd.textContent = item.nombre;
-
-    // PRECIO UNIDAD (muestra de base)
-    const inputPU = document.createElement("input");
-    inputPU.type = "number";
-    inputPU.step = "0.01";
-    inputPU.value = item.precio.toFixed(2);
-    inputPU.disabled = true; // Fijo para ambos (así lo pediste). En sueltos muestra el original de la base.
-    inputPU.style.width = "90px";
-    celdaPU.appendChild(inputPU);
-
+    // Columna 1: Cant / KG (input editable)
+    //   - stock => cantidad entera min 1
+    //   - sueltos => input “balanza”
+    const colCant = document.createElement("td");
     if (item.tipo === "stock") {
-      // CANTIDAD
-      const inputCant = document.createElement("input");
-      inputCant.type = "number";
-      inputCant.min = "1";
-      inputCant.max = "999";
-      inputCant.value = item.cant;
-      inputCant.style.width = "70px";
-      celdaCant.appendChild(inputCant);
-
-      // TOTAL (solo visual)
-      const spanTotal = document.createElement("span");
-      spanTotal.textContent = (item.cant * item.precio).toFixed(2);
-      celdaTotal.appendChild(spanTotal);
-
-      // eventos
-      inputCant.addEventListener("input", async () => {
-        let v = parseInt(inputCant.value) || 1;
-        if (v < 1) v = 1;
-        if (v > 999) v = 999;
-        item.cant = v;
-        await validarStockItem(item);
-        spanTotal.textContent = (item.cant * item.precio).toFixed(2);
-        renderTotalGeneral();
+      const inCant = document.createElement("input");
+      inCant.type = "number";
+      inCant.min = "1";
+      inCant.max = "999";
+      inCant.value = String(Math.max(1, Math.floor(item.cant)));
+      inCant.style.width = "70px";
+      inCant.style.textAlign = "center";
+      inCant.addEventListener("input", async () => {
+        let nueva = parseInt(inCant.value) || 1;
+        if (nueva < 1) nueva = 1;
+        // Validar contra stock vivo
+        const snap = await window.get(window.ref(`/stock/${item.id}`));
+        const disponible = snap.exists() ? (snap.val().cant || 0) : 0;
+        if (nueva > disponible) {
+          alert("No hay tanta cantidad disponible");
+          nueva = disponible || 1;
+        }
+        item.cant = nueva;
+        actualizarTabla();
       });
-
+      colCant.appendChild(inCant);
     } else {
-      // SUELTOS
-      // KG (editable con formato balanza)
-      const inputKG = document.createElement("input");
-      inputKG.type = "text";
-      inputKG.value = (item.cant || 0).toFixed(3);
-      inputKG.style.width = "70px";
-      inputKG.style.textAlign = "center";
+      // sueltos: KG balanza
+      const inKg = document.createElement("input");
+      inKg.type = "text";
+      inKg.value = (Number(item.cant) || 0).toFixed(3);
+      inKg.style.width = "70px";
+      inKg.style.textAlign = "center";
 
-      // TOTAL (editable redondo manual)
-      const inputTot = document.createElement("input");
-      inputTot.type = "text";
-      const totalActual = item.cant * item.precio; // puede tener centavos si viene de KG
-      inputTot.value = formatPesoEntero(totalActual); // se muestra ,00
-      inputTot.style.width = "90px";
-      inputTot.style.textAlign = "right";
+      // TOTAL editable (enteros) + span de centavos
+      const colTotal = document.createElement("td"); // la usaremos luego
+      const inTotalEntero = document.createElement("input");
+      inTotalEntero.type = "text";
+      inTotalEntero.style.width = "90px";
+      inTotalEntero.style.textAlign = "right";
+      inTotalEntero.inputMode = "numeric";
 
-      celdaCant.appendChild(inputKG);
-      celdaTotal.appendChild(inputTot);
+      const spanCent = document.createElement("span");
+      spanCent.style.marginLeft = "2px";
 
-      // Vinculación KG -> Total (real, con centavos)
-      inputKG.addEventListener("input", async () => {
-        const rawDigits = inputKG.value.replace(/\D/g, "");
-        const kgStr = formatKgFromDigits(rawDigits);
-        inputKG.value = kgStr;
-        item.cant = parseFloat(kgStr) || 0;
+      // Sincronización KG -> Total (real con centavos)
+      function syncDesdeKg() {
+        const kg = parseKgBalanza(inKg.value);
+        inKg.value = kg.toFixed(3);
 
-        await validarStockItem(item);
+        const totalReal = kg * Number(item.precio || 0); // con centavos reales
+        const entero = Math.floor(totalReal);
+        const cent = Math.round((totalReal - entero) * 100);
 
-        // Si cambia KG, el total se calcula real (puede tener centavos)
-        const totalCalc = item.cant * item.precio; // precio unit por kg
-        inputTot.value = formatPeso(totalCalc);
-        renderTotalGeneral();
-      });
+        inTotalEntero.value = enteroConMiles(entero);
+        spanCent.textContent = `,${String(cent).padStart(2, "0")}`;
 
-      inputKG.addEventListener("blur", async () => {
-        // confirmar formato al salir
-        const rawDigits = inputKG.value.replace(/\D/g, "");
-        const kgStr = formatKgFromDigits(rawDigits);
-        inputKG.value = kgStr;
-        item.cant = parseFloat(kgStr) || 0;
-        await validarStockItem(item);
-        const totalCalc = item.cant * item.precio;
-        inputTot.value = formatPeso(totalCalc);
-        renderTotalGeneral();
-      });
+        item.cant = kg; // guardamos kg reales
+        actualizarTotalesGeneralesSolo();
+      }
 
-      // Vinculación Total (manual, redondo) -> KG
-      inputTot.addEventListener("input", async () => {
-        const entero = parseEnteroFromMoney(inputTot.value); // solo enteros
-        inputTot.value = formatPesoEntero(entero); // fuerza ,00
+      // Sincronización Total (enteros) -> KG (sin centavos al editar total)
+      async function syncDesdeTotalEntero() {
+        // Tomar solo dígitos
+        const raw = inTotalEntero.value.replace(/\D/g, "").slice(0, 9);
+        const entero = parseInt(raw) || 0;
+        inTotalEntero.value = enteroConMiles(entero);
+        spanCent.textContent = ",00"; // fijo cuando se edita total
 
-        const nuevoKg = (entero / item.precio) || 0;
-        // recorte a 3 decimales
-        item.cant = Math.min(99.000, Math.max(0, parseFloat(nuevoKg.toFixed(3))));
-        inputKG.value = item.cant.toFixed(3);
+        // kg = totalEntero / precioUnitario
+        const unit = Number(item.precio || 0);
+        const kgCalc = unit > 0 ? clamp(Number((entero / unit).toFixed(3)), 0, 99) : 0;
 
-        await validarStockItem(item);
+        // validar contra stock vivo sueltos
+        const snap = await window.get(window.ref(`/sueltos/${item.id}`));
+        const disponibleKg = snap.exists() ? (snap.val().kg || 0) : 0;
+        let finalKg = kgCalc;
+        if (finalKg > disponibleKg) {
+          alert("No hay tantos KG disponibles");
+          finalKg = disponibleKg;
+          // Ajustar el total enteros según el tope
+          const enteroTope = Math.floor(finalKg * unit);
+          inTotalEntero.value = enteroConMiles(enteroTope);
+        }
 
-        // al tocar total manual, se mantiene ,00 (no recalc centavos acá)
-        inputTot.value = formatPesoEntero(Math.round(item.cant * item.precio));
-        renderTotalGeneral();
-      });
+        inKg.value = finalKg.toFixed(3);
+        item.cant = finalKg;
+        actualizarTotalesGeneralesSolo();
+      }
+
+      // Entradas KG
+      inKg.addEventListener("input", syncDesdeKg);
+      inKg.addEventListener("blur", syncDesdeKg);
+
+      colCant.appendChild(inKg);
+
+      // guardamos referencias en el item para reutilizar si hace falta
+      item._ui = item._ui || {};
+      item._ui.inKg = inKg;
+      item._ui.inTotalEntero = inTotalEntero;
+      item._ui.spanCent = spanCent;
+
+      // Inicialización de total mostrado (concentados reales)
+      const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
+      const enteroIni = Math.floor(totalReal);
+      const centIni = Math.round((totalReal - enteroIni) * 100);
+      inTotalEntero.value = enteroConMiles(enteroIni);
+      spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
+
+      // Escucha del totalEntero (solo enteros)
+      inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
+
+      // guardamos temporalmente para añadir la celda más abajo
+      item._ui.colTotal = colTotal;
+      item._ui.colTotal_inTotalEntero = inTotalEntero;
+      item._ui.colTotal_spanCent = spanCent;
     }
 
-    // ACCIÓN (eliminar)
+    // Columna 2: Producto
+    const colNombre = document.createElement("td");
+    colNombre.textContent = item.nombre;
+
+    // Columna 3: Precio Unidad (mostrar siempre el unitario real)
+    const colPU = document.createElement("td");
+    colPU.textContent = Number(item.precio || 0).toFixed(2);
+
+    // Columna 4: Total (para stock es label; para sueltos: input + span)
+    let colTotalFinal;
+    if (item.tipo === "stock") {
+      colTotalFinal = document.createElement("td");
+      colTotalFinal.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
+    } else {
+      colTotalFinal = item._ui.colTotal;
+      // anexar input y span
+      colTotalFinal.innerHTML = "";
+      colTotalFinal.appendChild(item._ui.colTotal_inTotalEntero);
+      colTotalFinal.appendChild(item._ui.colTotal_spanCent);
+    }
+
+    // Columna 5: Acción (eliminar)
+    const colAcc = document.createElement("td");
     const btnDel = document.createElement("button");
     btnDel.textContent = "❌";
     btnDel.addEventListener("click", () => {
       carrito.splice(idx, 1);
       actualizarTabla();
     });
-    celdaAcc.appendChild(btnDel);
+    colAcc.appendChild(btnDel);
 
-    tr.appendChild(celdaCant);
-    tr.appendChild(celdaProd);
-    tr.appendChild(celdaPU);
-    tr.appendChild(celdaTotal);
-    tr.appendChild(celdaAcc);
+    // Armar fila
+    tr.appendChild(colCant);
+    tr.appendChild(colNombre);
+    tr.appendChild(colPU);
+    tr.appendChild(colTotalFinal);
+    tr.appendChild(colAcc);
+
     tablaCobro.appendChild(tr);
-
-    total += item.cant * item.precio;
   });
 
-  // total con descuento/recargo
-  renderTotalGeneral();
+  // Total + % final
+  const totalModificado = total * (1 + porcentajeFinal / 100);
+  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+  const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
+  totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
+  btnCobrar.classList.toggle("hidden", carrito.length === 0);
+}
 
-  function renderTotalGeneral() {
-    const subtotal = carrito.reduce((a, it) => a + it.cant * it.precio, 0);
-    const totalModificado = subtotal * (1 + porcentajeFinal / 100);
+// Recalcula solo el total general (para no reconstruir inputs mientras tipeás)
+function actualizarTotalesGeneralesSolo() {
+  let total = 0;
+  carrito.forEach(it => { total += Number(it.cant) * Number(it.precio); });
+  const totalModificado = total * (1 + porcentajeFinal / 100);
+  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+  const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
+  totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
+  btnCobrar.classList.toggle("hidden", carrito.length === 0);
+}
+
+// ---------- IMPRIMIR TICKET ----------
+let iframeTicket = null;
+async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  try {
     const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-    const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
-    totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
-    btnCobrar.classList.toggle("hidden", carrito.length === 0);
+    const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
+    let shopName = "TICKET", shopLocation = "Sucursal Nueva", shopCuit = "00000000000";
+    try {
+      const snap = await window.get(window.ref("/config"));
+      if (snap.exists()) {
+        const val = snap.val();
+        shopName = val.shopName || shopName;
+        shopLocation = val.shopLocation || shopLocation;
+        shopCuit = val.shopCuit || shopCuit;
+      }
+    } catch (e) { console.error("Error al cargar configuración de tienda:", e); }
+
+    const iva = total * 0.21;
+    const contenido = `
+*** CONSUMIDOR FINAL ***
+${shopName.toUpperCase()}
+${shopLocation}
+CUIT: ${shopCuit}
+${ticketID}
+Fecha: ${fecha}
+Cajero: ${cajeroID}
+Pago: ${tipoPago}
+==============================
+
+${items.map(it => `  ${it.nombre}
+  $${formatPrecioSimple(it.precio)} (x${it.tipo === "stock" ? it.cant : Number(it.cant).toFixed(3)}) = $${formatPrecioSimple(it.precio * it.cant)}
+  =========================`).join("\n")}
+
+TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
+==============================
+<span>Regimen de Transparencia Fiscal</span>
+<span>al Consumidor Ley 27.743</span>
+<span>IVA Contenido $${formatPrecioSimple(iva)}</span>
+==============================
+`;
+
+    if (!iframeTicket) {
+      iframeTicket = document.createElement("iframe");
+      iframeTicket.id = "iframe-ticket";
+      iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
+      document.body.appendChild(iframeTicket);
+    }
+
+    const doc = iframeTicket.contentWindow.document;
+    doc.open();
+    doc.write(`<html><body style="font-family:monospace;font-size:10px;width:5cm;">${contenido}</body></html>`);
+    doc.close();
+
+    setTimeout(() => {
+      const win = iframeTicket.contentWindow;
+      if (win) {
+        win.focus();
+        win.print();
+        setTimeout(() => { try { win.stop(); } catch {} }, 100);
+      }
+    }, 10);
+  } catch (err) {
+    console.error("Error al imprimir ticket:", err);
   }
 }
 
-// --- MODAL DE BÚSQUEDA UNIFICADO (SIN DUPLICADOS) ---
+// ---------- COBRAR ----------
+btnCobrar.addEventListener("click", async () => {
+  if (!currentUser || carrito.length === 0) return;
+
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    display:flex;justify-content:center;align-items:center;
+    background:rgba(0,0,0,0.7);z-index:9999;`;
+  modal.innerHTML = `
+    <div style="background:#fff;padding:20px;border-radius:10px;text-align:center;">
+      <h2>¿Cómo Pagará el Cliente?</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:10px 0;">
+        <button data-pay="Efectivo">💵Efectivo</button>
+        <button data-pay="Tarjeta">💳Tarjeta</button>
+        <button data-pay="QR">📲QR</button>
+        <button data-pay="Electronico">📳Electronico</button>
+        <button data-pay="Otro">💰Otro</button>
+      </div>
+      <button id="cancelar-pago" style="background:red;color:#fff;padding:5px 15px;">Cancelar</button>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const allButtons = modal.querySelectorAll("button");
+  const disableButtons = () => allButtons.forEach(b => b.disabled = true);
+  document.getElementById("cancelar-pago").addEventListener("click", () => { disableButtons(); modal.remove(); });
+
+  modal.querySelectorAll("button[data-pay]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      disableButtons();
+      const tipoPago = btn.dataset.pay;
+      const fechaHoy = new Date().toISOString().split("T")[0];
+      const confSnap = await window.get(window.ref("/config"));
+      const confVal = confSnap.exists() ? confSnap.val() : {};
+      let ultimoID = confVal.ultimoTicketID || 0;
+      let ultimoFecha = confVal.ultimoTicketFecha || "";
+      if (ultimoFecha !== fechaHoy) ultimoID = 0;
+      ultimoID++;
+      const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
+      const fecha = new Date();
+      const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')})`;
+
+      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
+
+      await window.set(window.ref(`/movimientos/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        eliminado: false, porcentajeAplicado: porcentajeFinal || 0
+      });
+      await window.set(window.ref(`/historial/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        porcentajeAplicado: porcentajeFinal || 0
+      });
+      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
+
+      // Descontar stock/sueltos
+      for (const it of carrito) {
+        const snapItem = await window.get(window.ref(`/${it.tipo}/${it.id}`));
+        if (snapItem.exists()) {
+          const data = snapItem.val();
+          if (it.tipo === "stock") {
+            await window.update(window.ref(`/${it.tipo}/${it.id}`), { cant: (data.cant || 0) - it.cant });
+          } else {
+            await window.update(window.ref(`/${it.tipo}/${it.id}`), { kg: (data.kg || 0) - it.cant });
+          }
+        }
+      }
+
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
+
+      setTimeout(() => {
+        alert("VENTA FINALIZADA");
+        carrito = [];
+        actualizarTabla();
+        loadStock && loadStock();
+        loadSueltos && loadSueltos();
+        loadMovimientos && loadMovimientos();
+        loadHistorial && loadHistorial();
+        modal.remove();
+      }, 500);
+    });
+  });
+});
+
+// ---------- MODAL DE BÚSQUEDA UNIFICADO ----------
 btnBuscarProducto.addEventListener("click", () => {
+  tablaResultados.innerHTML = "";            // limpiar siempre
+  inputBusqueda.value = "";                  // limpiar siempre
   modalBusqueda.style.display = "flex";
   modalBusqueda.classList.remove("hidden");
   inputBusqueda.focus();
 });
-
 btnCancelarBusqueda.addEventListener("click", () => {
   modalBusqueda.style.display = "none";
   modalBusqueda.classList.add("hidden");
   inputBusqueda.value = "";
   tablaResultados.innerHTML = "";
 });
-
 inputBusqueda.addEventListener("input", async () => {
   const q = inputBusqueda.value.trim().toLowerCase();
   tablaResultados.innerHTML = "";
@@ -583,40 +670,41 @@ inputBusqueda.addEventListener("input", async () => {
     window.get(window.ref("/sueltos"))
   ]);
 
-  const dedup = new Map(); // clave = tipo|id
+  const res = [];
   if (stockSnap.exists()) {
     for (const [id, data] of Object.entries(stockSnap.val())) {
-      const match = id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q);
-      if (match) dedup.set(`stock|${id}`, { id, tipo: "stock", nombre: data.nombre, disp: data.cant || 0, precio: data.precio });
+      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+        res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
     }
   }
   if (sueltosSnap.exists()) {
     for (const [id, data] of Object.entries(sueltosSnap.val())) {
-      const match = id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q);
-      if (match) dedup.set(`sueltos|${id}`, { id, tipo: "sueltos", nombre: data.nombre, disp: data.kg || 0, precio: data.precio });
+      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+        res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
     }
   }
 
-  dedup.forEach(r => {
+  res.forEach(item => {
+    const disponible = item.tipo === "stock" ? item.cant : item.kg;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${r.id}</td>
-      <td>${r.nombre}</td>
-      <td>${r.tipo}</td>
-      <td>${r.disp}</td>
-      <td><button ${r.disp <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
-    tr.querySelector("button").addEventListener("click", async () => {
-      const snap = await window.get(window.ref(`/${r.tipo}/${r.id}`));
+      <td>${item.id}</td>
+      <td>${item.nombre}</td>
+      <td>${item.tipo}</td>
+      <td>${disponible}</td>
+      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
+    tr.querySelector("button").addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.id;
+      const tipo = e.currentTarget.dataset.tipo;
+      const snap = await window.get(window.ref(`/${tipo}/${id}`));
       if (!snap.exists()) return alert("Producto no encontrado");
       const data = snap.val();
-      const disponible = r.tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
-      if (disponible <= 0) return alert("Producto sin disponibilidad");
-      agregarAlCarrito({
-        id: r.id,
-        nombre: data.nombre,
-        cant: r.tipo === "stock" ? 1 : 0.000, // suelto entra a 0 para que lo editen en tabla
-        precio: data.precio,
-        tipo: r.tipo
+      const disp = tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
+      if (disp <= 0) return alert("Producto sin disponibilidad");
+      await agregarAlCarrito({
+        id,
+        cant: tipo === "stock" ? 1 : 0.000,
+        tipo
       });
       modalBusqueda.style.display = "none";
       modalBusqueda.classList.add("hidden");
@@ -626,20 +714,6 @@ inputBusqueda.addEventListener("input", async () => {
     tablaResultados.appendChild(tr);
   });
 });
-
-// --- Submit automático stock/sueltos de la UI clásica ---
-inputCodigoProducto.addEventListener("input", () => {
-  // ya manejado arriba para 13 dígitos (lector)
-  // acá no repetimos nada
-});
-if (inputCodigoSuelto) {
-  inputCodigoSuelto.addEventListener("input", () => {
-    if (inputCodigoSuelto.value.trim().length === 13) {
-      btnAddSuelto?.click();
-      inputCodigoSuelto.value = "";
-    }
-  });
-}
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
