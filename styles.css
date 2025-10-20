@@ -399,3 +399,19 @@ blockquote {
   color: #333;
   font-size:12px;
 }
+
+/* ===========================
+   EFECTO PARPADEO ROJO (3s)
+   =========================== */
+@keyframes flashRojo {
+  0%   { background-color: #ff4d4d; }
+  25%  { background-color: #ff9999; }
+  50%  { background-color: #ffffff; }
+  75%  { background-color: #ff9999; }
+  100% { background-color: #ffffff; }
+}
+
+.flash-rojo {
+  animation: flashRojo 3s ease-in-out;
+  transition: background-color 0.3s ease-in-out;
+}
