@@ -231,105 +231,53 @@ async function agregarAlCarrito(nuevoItem) {
   actualizarTabla();
 }
 
-// --- Botones AGREGAR ---
-btnAddProduct.addEventListener("click", async () => {
-  let id = cobroProductos.value || inputCodigoProducto.value.trim();
-  let cant = parseInt(cobroCantidad.value);
-  if (!id || cant <= 0) return;
-  const snap = await window.get(window.ref(`/stock/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-  if (cant > data.cant) return alert("STOCK INSUFICIENTE");
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "stock" });
+// --- Escaneo unificado para stock y sueltos ---
+inputCodigoProducto.addEventListener("input", async () => {
+  const codigo = inputCodigoProducto.value.trim();
+  if (codigo.length !== 13) return;
+
+  // Verificar primero si es SUELTO
+  const snapSuelto = await window.get(window.ref(`/sueltos/${codigo}`));
+  if (snapSuelto.exists()) {
+    const data = snapSuelto.val();
+    if (data.kg > 0) {
+      agregarAlCarrito({
+        id: codigo,
+        nombre: data.nombre,
+        cant: 0.000,
+        precio: data.precio,
+        tipo: "sueltos"
+      });
+    } else {
+      alert("Stock insuficiente en sueltos");
+    }
+    inputCodigoProducto.value = "";
+    return;
+  }
+
+  // Si no era suelto, intentar STOCK
+  const snapStock = await window.get(window.ref(`/stock/${codigo}`));
+  if (snapStock.exists()) {
+    const data = snapStock.val();
+    if (data.cant > 0) {
+      agregarAlCarrito({
+        id: codigo,
+        nombre: data.nombre,
+        cant: 1,
+        precio: data.precio,
+        tipo: "stock"
+      });
+    } else {
+      alert("Stock insuficiente en stock");
+    }
+  } else {
+    alert("Producto no encontrado");
+  }
+
   inputCodigoProducto.value = "";
 });
 
-// --- SUELTOS KG <-> PRECIO ---
-async function actualizarPrecioUnitario() {
-  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
-  if (!id) return;
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return;
-  precioUnitarioActual = snap.val().precio;
-  let precio = Math.round(parseFloat(inputKgSuelto.value) * precioUnitarioActual);
-  if (precio > 9999999) precio = 9999999;
-  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
-}
-
-async function actualizarKgSegunPrecio() {
-  if (!precioUnitarioActual) return;
-  let raw = inputPrecioSuelto.value.replace(/\D/g, '').slice(0, 9);
-  let precio = parseInt(raw) || 0;
-  inputPrecioSuelto.value = precio.toLocaleString('es-AR');
-  inputKgSuelto.value = (precio / precioUnitarioActual).toFixed(3);
-}
-
-// --- Escuchas sueltos/precio ---
-inputPrecioSuelto.addEventListener("input", actualizarKgSegunPrecio);
-cobroSueltos.addEventListener("change", actualizarPrecioUnitario);
-inputCodigoSuelto.addEventListener("change", actualizarPrecioUnitario);
-
-// --- Formateo KG ---
-const msgKgCobro = document.createElement("p");
-msgKgCobro.style.color = "red";
-msgKgCobro.style.margin = "4px 0 0 0";
-msgKgCobro.style.fontSize = "0.9em";
-inputKgSuelto.parentNode.appendChild(msgKgCobro);
-inputKgSuelto.value = "0.000";
-
-function formatearKgCobro(inputElement, msgElement, delta = 0) {
-  let raw = inputElement.value.replace(/\D/g, "");
-  if (delta !== 0) {
-    let val = parseFloat(inputElement.value) || 0;
-    val = Math.min(99.000, Math.max(0.000, val + delta));
-    inputElement.value = val.toFixed(3);
-    if (msgElement) msgElement.textContent = "";
-    actualizarPrecioUnitario();
-    return;
-  }
-  let val;
-  switch (raw.length) {
-    case 0: val = 0.000; break;
-    case 1: val = parseFloat("0.00" + raw); break;
-    case 2: val = parseFloat("0.0" + raw); break;
-    case 3: val = parseFloat("0." + raw); break;
-    case 4: val = parseFloat(raw[0] + "." + raw.slice(1, 4)); break;
-    case 5: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-    default: val = parseFloat(raw.slice(0, 2) + "." + raw.slice(2, 5)); break;
-  }
-  if (isNaN(val) || val < 0.000 || val > 99) {
-    msgElement.textContent = "KG inválido: ejemplo 1.250 kg";
-    inputElement.value = "0.000";
-  } else {
-    inputElement.value = val.toFixed(3);
-    msgElement.textContent = "";
-  }
-  actualizarPrecioUnitario();
-}
-
-// --- Botones + / - KG ---
-btnKgMas.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, 0.100));
-btnKgMenos.addEventListener("click", () => formatearKgCobro(inputKgSuelto, msgKgCobro, -0.100));
-inputKgSuelto.addEventListener("input", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-inputKgSuelto.addEventListener("blur", () => formatearKgCobro(inputKgSuelto, msgKgCobro));
-
-// --- Botón agregar suelto ---
-btnAddSuelto.addEventListener("click", async () => {
-  let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
-  if (!id) return alert("Seleccione un producto suelto");
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-  let cant = parseFloat(inputKgSuelto.value) || 0.000;
-  if (cant < 0) return alert("Cantidad inválida");
-  if (cant > data.kg) return alert("STOCK INSUFICIENTE");
-  agregarAlCarrito({ id, nombre: data.nombre, cant, precio: data.precio, tipo: "sueltos" });
-  inputKgSuelto.value = "0.000";
-  inputPrecioSuelto.value = "000";
-  inputCodigoSuelto.value = "";
-});
-
-// --- Formateo precio ---
+// --- Formateo precio simple ---
 function formatPrecioSimple(valor) {
   return valor.toFixed(2).replace('.', ',');
 }
@@ -340,17 +288,17 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
   try {
     const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
     const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
-
     let shopName = "TICKET", shopLocation = "Sucursal Nueva", shopCuit = "00000000000";
+
     try {
       const snap = await window.get(window.ref("/config"));
       if (snap.exists()) {
         const val = snap.val();
-        shopName = val.shopName || "TICKET";
-        shopLocation = val.shopLocation || "Sucursal Nueva";
-        shopCuit = val.shopCuit || "00000000000";
+        shopName = val.shopName || shopName;
+        shopLocation = val.shopLocation || shopLocation;
+        shopCuit = val.shopCuit || shopCuit;
       }
-    } catch (e) { console.error("Error al cargar configuración de tienda:", e); }
+    } catch (e) { console.error("Error al cargar configuración:", e); }
 
     const iva = total * 0.21;
     const contenido = `
@@ -363,9 +311,11 @@ Fecha: ${fecha}
 Cajero: ${cajeroID}
 Pago: ${tipoPago}
 ==============================
+
 ${items.map(it => `  ${it.nombre}
   $${formatPrecioSimple(it.precio)} (x${it.cant}) = $${formatPrecioSimple(it.precio * it.cant)}
   =========================`).join("\n")}
+
 TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 ==============================
 <span>Regimen de Transparencia Fiscal</span>
@@ -394,14 +344,20 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
         setTimeout(() => { try { win.stop(); } catch {} }, 100);
       }
     }, 10);
-  } catch (err) { console.error("Error al imprimir ticket:", err); }
+  } catch (err) {
+    console.error("Error al imprimir ticket:", err);
+  }
 }
 
 // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
+
   const modal = document.createElement("div");
-  modal.style.cssText = `position:fixed;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;background:rgba(0,0,0,0.7);z-index:9999;`;
+  modal.style.cssText = `
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    display:flex;justify-content:center;align-items:center;
+    background:rgba(0,0,0,0.7);z-index:9999;`;
   modal.innerHTML = `
     <div style="background:#fff;padding:20px;border-radius:10px;text-align:center;">
       <h2>¿Cómo Pagará el Cliente?</h2>
@@ -410,14 +366,14 @@ btnCobrar.addEventListener("click", async () => {
         <button data-pay="Tarjeta">💳Tarjeta</button>
         <button data-pay="QR">📱QR</button>
         <button data-pay="Electronico">💻Electronico</button>
-        <button data-pay="Otro">🔄Otro</button>
+        <button data-pay="Otro">🧾Otro</button>
       </div>
       <button id="cancelar-pago" style="background:red;color:#fff;padding:5px 15px;">Cancelar</button>
     </div>`;
   document.body.appendChild(modal);
 
   const allButtons = modal.querySelectorAll("button");
-  function disableButtons() { allButtons.forEach(b => b.disabled = true); }
+  const disableButtons = () => allButtons.forEach(b => b.disabled = true);
   document.getElementById("cancelar-pago").addEventListener("click", () => { disableButtons(); modal.remove(); });
 
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
@@ -427,17 +383,26 @@ btnCobrar.addEventListener("click", async () => {
       const fechaHoy = new Date().toISOString().split("T")[0];
       const confSnap = await window.get(window.ref("/config"));
       const confVal = confSnap.exists() ? confSnap.val() : {};
-      let ultimoID = confVal.ultimoTicketID || 0, ultimoFecha = confVal.ultimoTicketFecha || "";
+      let ultimoID = confVal.ultimoTicketID || 0;
+      let ultimoFecha = confVal.ultimoTicketFecha || "";
       if (ultimoFecha !== fechaHoy) ultimoID = 0;
       ultimoID++;
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
       const fecha = new Date();
-      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
-      const totalOriginal = carrito.reduce((a,b) => a+b.cant*b.precio,0);
-      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
+      const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')})`;
+      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
 
-      await window.set(window.ref(`/movimientos/${ticketID}`), { ticketID, cajero: currentUser.id, items: carrito, total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago, eliminado: false, porcentajeAplicado: porcentajeFinal||0 });
-      await window.set(window.ref(`/historial/${ticketID}`), { ticketID, cajero: currentUser.id, items: carrito, total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago, porcentajeAplicado: porcentajeFinal||0 });
+      await window.set(window.ref(`/movimientos/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        eliminado: false, porcentajeAplicado: porcentajeFinal || 0
+      });
+      await window.set(window.ref(`/historial/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
+        porcentajeAplicado: porcentajeFinal || 0
+      });
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
       for (const item of carrito) {
@@ -450,17 +415,19 @@ btnCobrar.addEventListener("click", async () => {
       }
 
       imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
-      setTimeout(() => { alert("VENTA FINALIZADA"); carrito = []; actualizarTabla(); loadStock(); loadSueltos(); loadMovimientos(); loadHistorial(); modal.remove(); }, 500);
+
+      setTimeout(() => {
+        alert("VENTA FINALIZADA");
+        carrito = [];
+        actualizarTabla();
+        loadStock();
+        loadSueltos();
+        loadMovimientos();
+        loadHistorial();
+        modal.remove();
+      }, 500);
     });
   });
-});
-
-// --- Submit automático stock/sueltos ---
-inputCodigoProducto.addEventListener("input", () => {
-  if (inputCodigoProducto.value.trim().length === 13) { btnAddProduct.click(); inputCodigoProducto.value = ""; }
-});
-inputCodigoSuelto.addEventListener("input", () => {
-  if (inputCodigoSuelto.value.trim().length === 13) { btnAddSuelto.click(); inputCodigoSuelto.value = ""; }
 });
 
 // --- MODAL DE BÚSQUEDA UNIFICADO ---
@@ -483,48 +450,45 @@ btnCancelarBusqueda.addEventListener("click", () => {
   tablaResultados.innerHTML = "";
 });
 
-let busquedaToken = 0; // evita duplicados asincrónicos
 inputBusqueda.addEventListener("input", async () => {
   const q = inputBusqueda.value.trim().toLowerCase();
   tablaResultados.innerHTML = "";
   if (q.length < 2) return;
 
-  const thisToken = ++busquedaToken;
   const stockSnap = await window.get(window.ref("/stock"));
   const sueltosSnap = await window.get(window.ref("/sueltos"));
-  if (thisToken !== busquedaToken) return;
-
   const res = [];
+
   if (stockSnap.exists()) {
     for (const [id, data] of Object.entries(stockSnap.val())) {
       if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "stock", nombre: data.nombre, disp: data.cant || 0, precio: data.precio });
+        res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
     }
   }
   if (sueltosSnap.exists()) {
     for (const [id, data] of Object.entries(sueltosSnap.val())) {
       if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "sueltos", nombre: data.nombre, disp: data.kg || 0, precio: data.precio });
+        res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
     }
   }
-  if (thisToken !== busquedaToken) return;
 
-  for (const item of res) {
+  res.forEach(item => {
+    const disponible = item.tipo === "stock" ? item.cant : item.kg;
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${item.id}</td>
       <td>${item.nombre}</td>
       <td>${item.tipo}</td>
-      <td>${item.disp}</td>
-      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${item.disp <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
+      <td>${disponible}</td>
+      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
     tr.querySelector("button").addEventListener("click", async (e) => {
       const id = e.currentTarget.dataset.id;
       const tipo = e.currentTarget.dataset.tipo;
       const snap = await window.get(window.ref(`/${tipo}/${id}`));
       if (!snap.exists()) return alert("Producto no encontrado");
       const data = snap.val();
-      const disp = tipo === "stock" ? data.cant : data.kg;
-      if (disp <= 0) return alert("Producto sin disponibilidad");
+      const disponible = tipo === "stock" ? data.cant : data.kg;
+      if (disponible <= 0) return alert("Producto sin disponibilidad");
       agregarAlCarrito({
         id,
         nombre: data.nombre,
@@ -536,7 +500,7 @@ inputBusqueda.addEventListener("input", async () => {
       modalBusqueda.classList.add("hidden");
     });
     tablaResultados.appendChild(tr);
-  }
+  });
 });
 
 // --- MOVIMIENTOS ---
