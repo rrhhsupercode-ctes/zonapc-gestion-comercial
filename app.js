@@ -1703,65 +1703,127 @@ btnAgregarCajero.addEventListener("click", () => {
 
 loadCajeroSelectOptions();
 
-// --- CONFIG ---
-const configNombre = document.getElementById("config-nombre");
-const configUbicacion = document.getElementById("config-ubicacion");
-const configCuit = document.getElementById("config-cuit");
-const configPassActual = document.getElementById("config-pass-actual");
-const configPassNueva = document.getElementById("config-pass-nueva");
-const guardarConfig = document.getElementById("guardar-config");
-const configMsg = document.getElementById("config-msg");
-const masterPassInput = document.getElementById("master-pass");
-const btnRestaurar = document.getElementById("btn-restaurar");
+// ===============================
+// === CONSOLA GLOBAL DEL SISTEMA (con historial diario) ===
+// ===============================
+(function crearConsolaGlobal(){
+  // Crear contenedor debajo del bloque CONFIG
+  let consola = document.getElementById("consola-global");
+  if (!consola) {
+    consola = document.createElement("div");
+    consola.id = "consola-global";
+    consola.style.cssText = `
+      margin-top:20px;
+      background:#000;
+      color:#0f0;
+      font-family:monospace;
+      font-size:12px;
+      line-height:1.4;
+      padding:8px;
+      border-radius:6px;
+      height:180px;
+      overflow-y:auto;
+      white-space:pre-wrap;
+      box-shadow:inset 0 0 8px rgba(0,255,0,0.2);
+    `;
 
-async function loadConfig() {
-  const snap = await window.get(window.ref("/config"));
-  if (snap.exists()) {
-    const val = snap.val();
-    configNombre.value = val.shopName || "";
-    configUbicacion.value = val.shopLocation || "Sucursal Nueva";
-    configCuit.value = val.shopCuit || "00000000000";
+    // Insertar debajo de los botones de restaurar
+    const parent = btnRestaurar?.parentNode || document.body;
+    parent.appendChild(consola);
+
+    // Botón limpiar
+    const btnClear = document.createElement("button");
+    btnClear.textContent = "🧹 Limpiar consola global";
+    btnClear.style.cssText = `
+      margin-top:6px;
+      background:#222;
+      color:#fff;
+      border:none;
+      border-radius:4px;
+      padding:4px 8px;
+      cursor:pointer;
+      font-size:11px;
+    `;
+    btnClear.addEventListener("click", limpiarConsolaManual);
+    parent.appendChild(btnClear);
   }
-}
 
-guardarConfig.addEventListener("click", async () => {
-  const snap = await window.get(window.ref("/config"));
-  if (!snap.exists()) return;
-  const val = snap.val();
+  // Claves y carga inicial desde localStorage
+  const claveHistorial = "consolaHistorial";
+  const claveFecha = "consolaFecha";
+  const hoy = new Date().toLocaleDateString("es-AR");
 
-  // --- Contraseñas ---
-  const passAdmin = val.passAdmin || "1918";
-  const masterPass = "1409"; // fija
-
-  if (configPassActual.value !== passAdmin && configPassActual.value !== masterPass) {
-    configMsg.textContent = "Contraseña incorrecta";
-    return;
+  // Si la fecha guardada es distinta, limpiar
+  if (localStorage.getItem(claveFecha) !== hoy) {
+    localStorage.removeItem(claveHistorial);
+    localStorage.setItem(claveFecha, hoy);
   }
 
-  let cuitValue = configCuit.value.replace(/\D/g, '').padStart(11, '0').slice(0,11);
+  // Restaurar historial previo
+  const historialPrevio = localStorage.getItem(claveHistorial);
+  if (historialPrevio) consola.innerHTML = historialPrevio;
 
-  await window.update(window.ref("/config"), {
-    shopName: configNombre.value,
-    shopLocation: configUbicacion.value || "Sucursal Nueva",
-    shopCuit: cuitValue,
-    passAdmin: configPassNueva.value || passAdmin
-  });
-
-  configMsg.textContent = "✅ Configuración guardada";
-  configPassActual.value = configPassNueva.value = "";
-});
-
-btnRestaurar.addEventListener("click", async () => {
-  const masterPass = "1409"; // fija
-  if (masterPassInput.value === masterPass) {
-    await window.update(window.ref("/config"), { passAdmin: "1918" });
-    alert("✅ Contraseña restaurada al valor inicial");
-    masterPassInput.value = "";
-  } else {
-    alert("❌ Contraseña maestra incorrecta");
+  // Guardar línea en localStorage (hasta 500 líneas máx)
+  function guardarHistorial() {
+    const lineas = consola.innerHTML.split("<div").slice(-500);
+    localStorage.setItem(claveHistorial, "<div" + lineas.join("<div"));
   }
-});
 
+  // Limpieza manual
+  function limpiarConsolaManual() {
+    consola.innerHTML = "";
+    localStorage.removeItem(claveHistorial);
+    console.log("🧹 Consola limpiada manualmente.");
+  }
+
+  // Limpieza automática diaria a las 23:59
+  function programarLimpiezaDiaria() {
+    const ahora = new Date();
+    const mañana = new Date(ahora);
+    mañana.setHours(23, 59, 0, 0);
+    const ms = mañana.getTime() - ahora.getTime();
+    setTimeout(() => {
+      consola.innerHTML = "";
+      localStorage.removeItem(claveHistorial);
+      localStorage.setItem(claveFecha, new Date().toLocaleDateString("es-AR"));
+      console.log("🕛 Consola limpiada automáticamente a las 23:59.");
+      programarLimpiezaDiaria(); // reprogramar para el siguiente día
+    }, ms > 0 ? ms : 1000 * 60 * 60 * 24);
+  }
+  programarLimpiezaDiaria();
+
+  // Escribir línea en consola visual y guardar
+  function escribir(tipo, msg, color){
+    const hora = new Date().toLocaleTimeString();
+    const linea = document.createElement("div");
+    linea.style.color = color;
+    linea.textContent = `[${hora}] ${tipo.toUpperCase()}: ${msg}`;
+    consola.appendChild(linea);
+    consola.scrollTop = consola.scrollHeight;
+    guardarHistorial();
+  }
+
+  // Guardar funciones originales
+  const logOrig = console.log;
+  const warnOrig = console.warn;
+  const errOrig = console.error;
+
+  // Redefinir consola global
+  console.log = (...args)=>{
+    logOrig(...args);
+    escribir("log", args.map(a=>typeof a==="object"?JSON.stringify(a):a).join(" "), "#0f0");
+  };
+  console.warn = (...args)=>{
+    warnOrig(...args);
+    escribir("warn", args.map(a=>typeof a==="object"?JSON.stringify(a):a).join(" "), "#ff0");
+  };
+  console.error = (...args)=>{
+    errOrig(...args);
+    escribir("error", args.map(a=>typeof a==="object"?JSON.stringify(a):a).join(" "), "#f66");
+  };
+
+  console.log("🟢 Consola global del sistema activada. Recibiendo logs de todos los módulos...");
+})();
 
   // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
 const adminActionModal = document.createElement("div");
@@ -1896,91 +1958,6 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
     }
   });
 });
-
-// =========================
-// === NORMALIZAR NOMBRES TRAS SET/UPDATE (acentos/ñ) ===
-// =========================
-(function hookNormalizadorNombres(){
-  // Normaliza: acentos fuera + ñ→n, Ñ→N
-  function normalizarTexto(txt){
-    if (typeof txt !== "string") return txt;
-    return txt
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/ñ/g, "n")
-      .replace(/Ñ/g, "N")
-      .trim();
-  }
-
-  // Obtiene URL/Path legible de un ref de Firebase (tolerante a distintas impls)
-  function refToPath(ref){
-    try {
-      if (typeof ref.toString === "function") return ref.toString();     // URL completa
-    } catch {}
-    try {
-      if (ref?.key && ref?.parent?.toString) return ref.parent.toString() + "/" + ref.key;
-    } catch {}
-    // fallback: no deberíamos llegar acá en Firebase real, pero evitamos crash
-    return String(ref || "");
-  }
-
-  // ¿Es /stock/<id> o /sueltos/<id> exactamente?
-  function esRutaProducto(pathStr){
-    // Matchea .../stock/<algo> o .../sueltos/<algo> sin segmentos extra
-    return /\/(stock|sueltos)\/[^/]+$/i.test(pathStr);
-  }
-
-  // Mapa para debouncing por referencia (evita duplicados si llegan set y update seguidos)
-  const timersPorRef = new Map();
-
-  // Agenda la normalización con 2000ms
-  function agendarNormalizacion(ref){
-    const key = refToPath(ref);
-    // si no es de interés, salir
-    if (!esRutaProducto(key)) return;
-
-    // limpiar timer previo y agendar nuevo
-    if (timersPorRef.has(key)) clearTimeout(timersPorRef.get(key));
-    const t = setTimeout(async () => {
-      timersPorRef.delete(key);
-      try {
-        const snap = await window.get(ref);
-        if (!snap?.exists?.()) return;
-        const data = snap.val() || {};
-        if (!("nombre" in data)) return;
-
-        const original = data.nombre;
-        const limpio = normalizarTexto(original);
-        if (original !== limpio) {
-          await window.update(ref, { nombre: limpio });
-          // console.log(`Nombre normalizado en ${key}: "${original}" → "${limpio}"`);
-        }
-      } catch (err) {
-        console.error("Error normalizando nombre en", key, err);
-      }
-    }, 2000);
-    timersPorRef.set(key, t);
-  }
-
-  // Monkey-patch seguro de set/update
-  const _set = window.set;
-  const _update = window.update;
-
-  window.set = async function(ref, value){
-    const res = await _set(ref, value);
-    try { agendarNormalizacion(ref); } catch(e){ /* no-op */ }
-    return res;
-  };
-
-  window.update = async function(ref, value){
-    const res = await _update(ref, value);
-    try { agendarNormalizacion(ref); } catch(e){ /* no-op */ }
-    return res;
-  };
-
-  // Listo
-  // console.log("🧹 Normalizador de nombres enganchado a set/update de /stock y /sueltos");
-})();
 
   // --- Inicialización ---
   (async () => {
