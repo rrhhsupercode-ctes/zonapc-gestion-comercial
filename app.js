@@ -156,6 +156,14 @@ function enteroConMiles(n) {
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
+// Evita ,100 en centavos: convierte a enteros de centavos y devuelve {entero, cent}
+function splitEnteroCentavos(monto) {
+  let totalCents = Math.round((Number(monto) + Number.EPSILON) * 100);
+  if (!Number.isFinite(totalCents) || totalCents < 0) totalCents = 0;
+  const entero = Math.floor(totalCents / 100);
+  const cent = totalCents % 100; // 0..99 garantizado
+  return { entero, cent };
+}
 
 // Mapea texto tipo balanza -> 0.000..99.000
 function parseKgBalanza(rawDigits) {
@@ -245,74 +253,89 @@ async function agregarAlCarrito(nuevoItem) {
   if (idx >= 0) {
     carrito[idx].cant += nuevoItem.cant;
   } else {
-    // Guardamos el precio unitario (para sueltos es $/kg) y nombre
     carrito.push({
       id: nuevoItem.id,
       nombre: data.nombre,
       cant: nuevoItem.cant,
-      precio: data.precio,    // unitario
+      precio: data.precio,
       tipo: nuevoItem.tipo,
-      _ui: {}                 // refs UI por fila
+      _ui: {}
     });
   }
   actualizarTabla();
 }
 
-// ---------- Escaneo unificado por código en el input principal ----------
-inputCodigoProducto.addEventListener("input", async () => {
-  const codigo = inputCodigoProducto.value.trim();
-  if (codigo.length !== 13) return;
+// ---------- Procesamiento de código (13 dígitos o Enter) ----------
+async function procesarCodigo(codigo) {
+  const code = (codigo || "").trim();
+  if (!code) return;
 
-  // 1) Intentar sueltos (usar cache si está)
-  let dataS = sueltosData[codigo];
+  // Intentar sueltos (cache primero)
+  let dataS = sueltosData[code];
   if (!dataS) {
-    const snapS = await window.get(window.ref(`/sueltos/${codigo}`));
+    const snapS = await window.get(window.ref(`/sueltos/${code}`));
     if (snapS.exists()) {
       dataS = snapS.val();
-      sueltosData[codigo] = dataS;
+      sueltosData[code] = dataS;
     }
   }
   if (dataS) {
     if ((dataS.kg || 0) >= 0) {
-      await agregarAlCarrito({ id: codigo, cant: 0.000, tipo: "sueltos" });
+      await agregarAlCarrito({ id: code, cant: 0.000, tipo: "sueltos" });
     } else alert("Stock insuficiente en sueltos");
     inputCodigoProducto.value = "";
     return;
   }
 
-  // 2) Intentar stock (usar cache si está)
-  let dataP = stockData[codigo];
+  // Intentar stock (cache primero)
+  let dataP = stockData[code];
   if (!dataP) {
-    const snapP = await window.get(window.ref(`/stock/${codigo}`));
+    const snapP = await window.get(window.ref(`/stock/${code}`));
     if (snapP.exists()) {
       dataP = snapP.val();
-      stockData[codigo] = dataP;
+      stockData[code] = dataP;
     }
   }
   if (dataP) {
     if ((dataP.cant || 0) > 0) {
-      await agregarAlCarrito({ id: codigo, cant: 1, tipo: "stock" });
+      await agregarAlCarrito({ id: code, cant: 1, tipo: "stock" });
     } else alert("Stock insuficiente en stock");
   } else {
     alert("Producto no encontrado");
   }
 
   inputCodigoProducto.value = "";
+}
+
+// Auto por 13 dígitos
+inputCodigoProducto.addEventListener("input", async () => {
+  const codigo = inputCodigoProducto.value.trim();
+  if (codigo.length === 13) await procesarCodigo(codigo);
+});
+// También por Enter
+inputCodigoProducto.addEventListener("keydown", async (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const codigo = inputCodigoProducto.value.trim();
+    await procesarCodigo(codigo);
+  }
 });
 
-// ---------- Botones AGREGAR (selects antiguos aún activos) ----------
+// ---------- Botones AGREGAR ----------
 btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
 
-  const data = stockData[id];
-  if (!data) {
+  const data = stockData[id] || (await (async () => {
     const snap = await window.get(window.ref(`/stock/${id}`));
-    if (!snap.exists()) return alert("Producto no encontrado");
+    if (!snap.exists()) return null;
     stockData[id] = snap.val();
-  }
-  const disp = stockData[id]?.cant || 0;
+    return stockData[id];
+  })());
+  if (!data) return alert("Producto no encontrado");
+
+  const disp = data.cant || 0;
   if (cant > disp) return alert("STOCK INSUFICIENTE");
   agregarAlCarrito({ id, cant, tipo: "stock" });
   inputCodigoProducto.value = "";
@@ -345,15 +368,12 @@ function actualizarTabla() {
   let total = 0;
 
   carrito.forEach((item, idx) => {
-    // total ítem (antes de %)
     const totalItem = Number(item.cant) * Number(item.precio);
     total += totalItem;
 
     const tr = document.createElement("tr");
 
-    // Columna 1: Cant / KG (input editable)
-    //   - stock => cantidad entera min 1 (formato 3 dígitos 001..999, validado contra cache de stock)
-    //   - sueltos => input “balanza” (valida en tiempo real contra cache de kg disponible)
+    // Columna 1: Cant / KG
     const colCant = document.createElement("td");
     if (item.tipo === "stock") {
       const inCant = document.createElement("input");
@@ -364,7 +384,6 @@ function actualizarTabla() {
       inCant.style.textAlign = "center";
       inCant.inputMode = "numeric";
 
-      // Evitar reconstruir la fila en cada tecla: solo actualizar totales + celda total
       inCant.addEventListener("input", () => {
         let nueva = parseInt(inCant.value.replace(/\D/g, "")) || 1;
         nueva = clamp(nueva, 1, 999);
@@ -384,66 +403,54 @@ function actualizarTabla() {
       colCant.appendChild(inCant);
       item._ui.inCant = inCant;
     } else {
-      // sueltos: KG balanza
       const inKg = document.createElement("input");
       inKg.type = "text";
       inKg.value = (Number(item.cant) || 0).toFixed(3);
       inKg.style.width = "70px";
       inKg.style.textAlign = "center";
 
-      // TOTAL editable (enteros) + span de centavos
-      const colTotal = document.createElement("td"); // la usaremos luego
+      const colTotal = document.createElement("td");
       const inTotalEntero = document.createElement("input");
       inTotalEntero.type = "text";
       inTotalEntero.style.width = "90px";
       inTotalEntero.style.textAlign = "right";
       inTotalEntero.inputMode = "numeric";
-
       const spanCent = document.createElement("span");
       spanCent.style.marginLeft = "2px";
 
-      // Sincronización KG -> Total (real con centavos) + validación stock sueltos en tiempo real (cache)
       function syncDesdeKg() {
         const kg = parseKgBalanza(inKg.value);
         const disponibleKg = sueltosData[item.id]?.kg || 0;
-
         let finalKg = kg;
         if (finalKg > disponibleKg) {
           alert("No hay suficiente");
           finalKg = disponibleKg;
         }
-
         inKg.value = finalKg.toFixed(3);
 
-        const totalReal = finalKg * Number(item.precio || 0); // con centavos reales
-        const entero = Math.floor(totalReal);
-        const cent = Math.round((totalReal - entero) * 100);
-
+        const totalReal = finalKg * Number(item.precio || 0);
+        const { entero, cent } = splitEnteroCentavos(totalReal);
         inTotalEntero.value = enteroConMiles(entero);
         spanCent.textContent = `,${String(cent).padStart(2, "0")}`;
 
-        item.cant = finalKg; // guardamos kg reales
+        item.cant = finalKg;
         actualizarTotalesGeneralesSolo();
       }
 
-      // Sincronización Total (enteros) -> KG (sin centavos al editar total)
       function syncDesdeTotalEntero() {
         const raw = inTotalEntero.value.replace(/\D/g, "").slice(0, 9);
         const entero = parseInt(raw) || 0;
         inTotalEntero.value = enteroConMiles(entero);
         spanCent.textContent = ",00"; // fijo cuando se edita total
 
-        // kg = totalEntero / precioUnitario
         const unit = Number(item.precio || 0);
         const kgCalc = unit > 0 ? clamp(Number((entero / unit).toFixed(3)), 0, 99) : 0;
 
-        // validar contra stock vivo sueltos (desde cache)
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kgCalc;
         if (finalKg > disponibleKg) {
           alert("No hay tantos KG disponibles");
           finalKg = disponibleKg;
-          // Ajustar el total enteros según el tope
           const enteroTope = Math.floor(finalKg * unit);
           inTotalEntero.value = enteroConMiles(enteroTope);
         }
@@ -457,9 +464,9 @@ function actualizarTabla() {
       inKg.addEventListener("blur", syncDesdeKg);
       inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
 
+      // Inicialización total mostrado con centavos correctos (0..99)
       const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
-      const enteroIni = Math.floor(totalReal);
-      const centIni = Math.round((totalReal - enteroIni) * 100);
+      const { entero: enteroIni, cent: centIni } = splitEnteroCentavos(totalReal);
       inTotalEntero.value = enteroConMiles(enteroIni);
       spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
 
@@ -477,21 +484,21 @@ function actualizarTabla() {
     const colNombre = document.createElement("td");
     colNombre.textContent = item.nombre;
 
-    // Columna 3: Precio Unidad (mostrar siempre el unitario real)
+    // Columna 3: Precio Unidad
     const colPU = document.createElement("td");
     colPU.textContent = Number(item.precio || 0).toFixed(2);
 
-    // Columna 4: Total (para stock es label; para sueltos: input + span)
+    // Columna 4: Total
     let colTotalFinal;
     if (item.tipo === "stock") {
       colTotalFinal = document.createElement("td");
       colTotalFinal.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
-      item._ui.totalCell = colTotalFinal; // para actualizar sin reconstruir
+      item._ui.totalCell = colTotalFinal;
     } else {
       colTotalFinal = item._ui.colTotal;
     }
 
-    // Columna 5: Acción (eliminar)
+    // Columna 5: Acción
     const colAcc = document.createElement("td");
     const btnDel = document.createElement("button");
     btnDel.textContent = "❌";
@@ -501,7 +508,6 @@ function actualizarTabla() {
     });
     colAcc.appendChild(btnDel);
 
-    // Armar fila
     tr.appendChild(colCant);
     tr.appendChild(colNombre);
     tr.appendChild(colPU);
@@ -511,7 +517,6 @@ function actualizarTabla() {
     tablaCobro.appendChild(tr);
   });
 
-  // Total + % final
   const totalModificado = total * (1 + porcentajeFinal / 100);
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
@@ -519,7 +524,7 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-// Recalcula solo el total general (para no reconstruir inputs mientras tipeás)
+// Recalcula solo el total general
 function actualizarTotalesGeneralesSolo() {
   let total = 0;
   carrito.forEach(it => { total += Number(it.cant) * Number(it.precio); });
@@ -601,6 +606,13 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
 
+  // Bloqueo de sueltos con 0.000 KG
+  const sueltoCero = carrito.find(it => it.tipo === "sueltos" && Number(it.cant) === 0);
+  if (sueltoCero) {
+    alert("No se puede vender un suelto con 0.000 KG");
+    return;
+  }
+
   const modal = document.createElement("div");
   modal.style.cssText = `
     position:fixed;top:0;left:0;width:100%;height:100%;
@@ -664,12 +676,12 @@ btnCobrar.addEventListener("click", async () => {
             const nuevo = (data.cant || 0) - it.cant;
             await window.update(window.ref(path), { cant: nuevo });
             if (!stockData[it.id]) stockData[it.id] = data;
-            stockData[it.id].cant = nuevo; // actualizar cache
+            stockData[it.id].cant = nuevo;
           } else {
             const nuevo = (data.kg || 0) - it.cant;
             await window.update(window.ref(path), { kg: nuevo });
             if (!sueltosData[it.id]) sueltosData[it.id] = data;
-            sueltosData[it.id].kg = nuevo; // actualizar cache
+            sueltosData[it.id].kg = nuevo;
           }
         }
       }
@@ -680,7 +692,6 @@ btnCobrar.addEventListener("click", async () => {
         alert("VENTA FINALIZADA");
         carrito = [];
         actualizarTabla();
-        // Refrescos opcionales de UI externa
         loadStock && loadStock();
         loadSueltos && loadSueltos();
         loadMovimientos && loadMovimientos();
@@ -693,8 +704,8 @@ btnCobrar.addEventListener("click", async () => {
 
 // ---------- MODAL DE BÚSQUEDA UNIFICADO ----------
 btnBuscarProducto.addEventListener("click", () => {
-  tablaResultados.innerHTML = "";            // limpiar siempre
-  inputBusqueda.value = "";                  // limpiar siempre
+  tablaResultados.innerHTML = "";
+  inputBusqueda.value = "";
   modalBusqueda.style.display = "flex";
   modalBusqueda.classList.remove("hidden");
   inputBusqueda.focus();
@@ -710,7 +721,6 @@ inputBusqueda.addEventListener("input", async () => {
   tablaResultados.innerHTML = "";
   if (q.length < 2) return;
 
-  // usar cache si está, y si no, completar desde base UNA vez
   if (!Object.keys(stockData).length) {
     const s = await window.get(window.ref("/stock"));
     stockData = s.exists() ? (s.val() || {}) : {};
