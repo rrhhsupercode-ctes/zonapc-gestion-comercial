@@ -104,6 +104,10 @@ btnLogin.addEventListener("click", async () => {
     loginModal.classList.add("hidden");
     cobroControles.classList.remove("hidden");
     showSection("cobro");
+  } else {
+    loginMsg.textContent = "Contraseña incorrecta";
+  }
+});
 
 // =========================
 // ========  COBRO  ========
@@ -152,7 +156,7 @@ function enteroConMiles(n) {
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
-// Centavos 0..99 (evita ,100)
+// Evita ,100 en centavos
 function splitEnteroCentavos(monto) {
   let totalCents = Math.round((Number(monto) + Number.EPSILON) * 100);
   if (!Number.isFinite(totalCents) || totalCents < 0) totalCents = 0;
@@ -175,27 +179,6 @@ function parseKgBalanza(rawDigits) {
   }
   if (isNaN(val)) val = 0;
   return clamp(Number(val.toFixed(3)), 0, 99);
-}
-
-// Efecto visual: parpadeo y scroll instantáneo
-function flashAndScrollRow(item) {
-  if (!item || !item._ui || !item._ui.tr) return;
-  const tr = item._ui.tr;
-
-  // Reiniciar posible estado previo
-  tr.classList.remove('flash-rojo');
-  // forzar reflow para permitir repetir animación
-  void tr.offsetWidth;
-
-  tr.classList.add('flash-rojo');
-  // scroll instantáneo (sin animación)
-  tr.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-  // al finalizar los 3s, quitar la clase y dejar tono leve
-  setTimeout(() => {
-    tr.classList.remove('flash-rojo');
-    tr.style.backgroundColor = '#fff5f5';
-  }, 3000);
 }
 
 // ---------- Carga inicial de selects ----------
@@ -270,8 +253,7 @@ async function agregarAlCarrito(nuevoItem) {
   if (idx >= 0) {
     carrito[idx].cant += nuevoItem.cant;
   } else {
-    // 🔼 NUEVO: recientes arriba
-    carrito.unshift({
+    carrito.push({
       id: nuevoItem.id,
       nombre: data.nombre,
       cant: nuevoItem.cant,
@@ -282,17 +264,6 @@ async function agregarAlCarrito(nuevoItem) {
   }
   actualizarTabla();
 }
-
-     // 🔧 FIX: asegurar visibilidad inicial del botón de cobro
-    const btnCobrar = document.getElementById("btn-cobrar");
-    if (btnCobrar) btnCobrar.classList.add("hidden"); // ocúltalo de inicio
-    setTimeout(() => {
-      if (btnCobrar && carrito.length > 0) btnCobrar.classList.remove("hidden");
-    }, 200);
-  } else {
-    loginMsg.textContent = "Contraseña incorrecta";
-  }
-});
 
 // ---------- Procesamiento de código (13 dígitos o Enter) ----------
 async function procesarCodigo(codigo) {
@@ -366,7 +337,7 @@ btnAddProduct.addEventListener("click", async () => {
 
   const disp = data.cant || 0;
   if (cant > disp) return alert("STOCK INSUFICIENTE");
-  await agregarAlCarrito({ id, cant, tipo: "stock" });
+  agregarAlCarrito({ id, cant, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
 
@@ -385,7 +356,7 @@ btnAddSuelto.addEventListener("click", async () => {
   let cant = parseFloat(inputKgSuelto.value) || 0;
   if (cant <= 0) return alert("Cantidad inválida");
   if (cant > (data.kg || 0)) return alert("STOCK INSUFICIENTE");
-  await agregarAlCarrito({ id, cant, tipo: "sueltos" });
+  agregarAlCarrito({ id, cant, tipo: "sueltos" });
   inputKgSuelto.value = "0.100";
   inputPrecioSuelto.value = "000";
   inputCodigoSuelto.value = "";
@@ -402,9 +373,6 @@ function actualizarTabla() {
 
     const tr = document.createElement("tr");
 
-    // Guardar ref de fila para efectos
-    item._ui.tr = tr;
-
     // Columna 1: Cant / KG
     const colCant = document.createElement("td");
     if (item.tipo === "stock") {
@@ -420,13 +388,9 @@ function actualizarTabla() {
         let nueva = parseInt(inCant.value.replace(/\D/g, "")) || 1;
         nueva = clamp(nueva, 1, 999);
         const disponible = stockData[item.id]?.cant || 0;
-
-        // exceso -> clamp, efecto fila y scroll
         if (nueva > disponible) {
-          nueva = Math.max(1, disponible);
-          flashAndScrollRow(item);
+          nueva = Math.max(1, disponible); // clamp silencioso al máximo
         }
-
         item.cant = nueva;
         inCant.value = String(nueva).padStart(3, "0");
         if (item._ui && item._ui.totalCell) {
@@ -457,12 +421,9 @@ function actualizarTabla() {
         const kg = parseKgBalanza(inKg.value);
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kg;
-
         if (finalKg > disponibleKg) {
-          finalKg = disponibleKg;             // clamp silencioso al máximo
-          flashAndScrollRow(item);            // efecto + scroll
+          finalKg = disponibleKg; // clamp silencioso al máximo
         }
-
         inKg.value = finalKg.toFixed(3);
 
         const totalReal = finalKg * Number(item.precio || 0);
@@ -486,10 +447,9 @@ function actualizarTabla() {
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kgCalc;
         if (finalKg > disponibleKg) {
-          finalKg = disponibleKg;             // clamp silencioso al máximo
+          finalKg = disponibleKg; // clamp silencioso al máximo
           const enteroTope = Math.floor(finalKg * unit);
           inTotalEntero.value = enteroConMiles(enteroTope);
-          flashAndScrollRow(item);            // efecto + scroll
         }
 
         inKg.value = finalKg.toFixed(3);
@@ -804,6 +764,7 @@ inputBusqueda.addEventListener("input", async () => {
     tablaResultados.appendChild(tr);
   });
 });
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
