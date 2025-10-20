@@ -105,17 +105,6 @@ btnLogin.addEventListener("click", async () => {
     cobroControles.classList.remove("hidden");
     showSection("cobro");
 
-    // 🔧 FIX: asegurar visibilidad inicial del botón de cobro
-    const btnCobrar = document.getElementById("btn-cobrar");
-    if (btnCobrar) btnCobrar.classList.add("hidden"); // ocúltalo de inicio
-    setTimeout(() => {
-      if (btnCobrar && carrito.length > 0) btnCobrar.classList.remove("hidden");
-    }, 200);
-  } else {
-    loginMsg.textContent = "Contraseña incorrecta";
-  }
-});
-
 // =========================
 // ========  COBRO  ========
 // =========================
@@ -293,6 +282,17 @@ async function agregarAlCarrito(nuevoItem) {
   }
   actualizarTabla();
 }
+
+     // 🔧 FIX: asegurar visibilidad inicial del botón de cobro
+    const btnCobrar = document.getElementById("btn-cobrar");
+    if (btnCobrar) btnCobrar.classList.add("hidden"); // ocúltalo de inicio
+    setTimeout(() => {
+      if (btnCobrar && carrito.length > 0) btnCobrar.classList.remove("hidden");
+    }, 200);
+  } else {
+    loginMsg.textContent = "Contraseña incorrecta";
+  }
+});
 
 // ---------- Procesamiento de código (13 dígitos o Enter) ----------
 async function procesarCodigo(codigo) {
