@@ -1897,51 +1897,89 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   });
 });
 
-  // =========================
-// === LIMPIEZA AUTOMÁTICA DE NOMBRES (acentos/ñ) ===
 // =========================
-(function limpiarNombresAuto() {
-  // --- Función normalizadora ---
-  function normalizarTexto(txt) {
+// === NORMALIZAR NOMBRES TRAS SET/UPDATE (acentos/ñ) ===
+// =========================
+(function hookNormalizadorNombres(){
+  // Normaliza: acentos fuera + ñ→n, Ñ→N
+  function normalizarTexto(txt){
     if (typeof txt !== "string") return txt;
     return txt
-      .normalize("NFD")                       // separa acentos
-      .replace(/[\u0300-\u036f]/g, "")        // elimina acentos
-      .replace(/ñ/g, "n")                     // ñ → n
-      .replace(/Ñ/g, "N")                     // Ñ → N
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ñ/g, "n")
+      .replace(/Ñ/g, "N")
       .trim();
   }
 
-  // --- Observa nuevas entradas en una rama ---
-  async function observarRama(ruta) {
-    const refRuta = window.ref(ruta);
-    window.onChildAdded(refRuta, async (snap) => {
-      try {
-        if (!snap.exists()) return;
-        const id = snap.key;
-        const data = snap.val();
-        if (!data || !data.nombre) return;
-
-        // Esperar 2000 ms antes de limpiar
-        await new Promise(res => setTimeout(res, 2000));
-
-        const nombreOriginal = data.nombre;
-        const nombreLimpio = normalizarTexto(nombreOriginal);
-        if (nombreOriginal !== nombreLimpio) {
-          await window.update(window.ref(`${ruta}/${id}`), { nombre: nombreLimpio });
-          console.log(`Nombre corregido en ${ruta}/${id}: "${nombreOriginal}" → "${nombreLimpio}"`);
-        }
-      } catch (err) {
-        console.error("Error al limpiar nombre en", ruta, err);
-      }
-    });
+  // Obtiene URL/Path legible de un ref de Firebase (tolerante a distintas impls)
+  function refToPath(ref){
+    try {
+      if (typeof ref.toString === "function") return ref.toString();     // URL completa
+    } catch {}
+    try {
+      if (ref?.key && ref?.parent?.toString) return ref.parent.toString() + "/" + ref.key;
+    } catch {}
+    // fallback: no deberíamos llegar acá en Firebase real, pero evitamos crash
+    return String(ref || "");
   }
 
-  // --- Activar escuchas en stock y sueltos ---
-  observarRama("/stock");
-  observarRama("/sueltos");
+  // ¿Es /stock/<id> o /sueltos/<id> exactamente?
+  function esRutaProducto(pathStr){
+    // Matchea .../stock/<algo> o .../sueltos/<algo> sin segmentos extra
+    return /\/(stock|sueltos)\/[^/]+$/i.test(pathStr);
+  }
 
-  console.log("🔎 Limpieza automática de nombres activada (stock + sueltos)");
+  // Mapa para debouncing por referencia (evita duplicados si llegan set y update seguidos)
+  const timersPorRef = new Map();
+
+  // Agenda la normalización con 2000ms
+  function agendarNormalizacion(ref){
+    const key = refToPath(ref);
+    // si no es de interés, salir
+    if (!esRutaProducto(key)) return;
+
+    // limpiar timer previo y agendar nuevo
+    if (timersPorRef.has(key)) clearTimeout(timersPorRef.get(key));
+    const t = setTimeout(async () => {
+      timersPorRef.delete(key);
+      try {
+        const snap = await window.get(ref);
+        if (!snap?.exists?.()) return;
+        const data = snap.val() || {};
+        if (!("nombre" in data)) return;
+
+        const original = data.nombre;
+        const limpio = normalizarTexto(original);
+        if (original !== limpio) {
+          await window.update(ref, { nombre: limpio });
+          // console.log(`Nombre normalizado en ${key}: "${original}" → "${limpio}"`);
+        }
+      } catch (err) {
+        console.error("Error normalizando nombre en", key, err);
+      }
+    }, 2000);
+    timersPorRef.set(key, t);
+  }
+
+  // Monkey-patch seguro de set/update
+  const _set = window.set;
+  const _update = window.update;
+
+  window.set = async function(ref, value){
+    const res = await _set(ref, value);
+    try { agendarNormalizacion(ref); } catch(e){ /* no-op */ }
+    return res;
+  };
+
+  window.update = async function(ref, value){
+    const res = await _update(ref, value);
+    try { agendarNormalizacion(ref); } catch(e){ /* no-op */ }
+    return res;
+  };
+
+  // Listo
+  // console.log("🧹 Normalizador de nombres enganchado a set/update de /stock y /sueltos");
 })();
 
   // --- Inicialización ---
