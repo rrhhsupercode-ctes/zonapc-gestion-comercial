@@ -316,20 +316,20 @@ function actualizarTabla() {
     const tr = document.createElement("tr");
 
     // Columna 1: Cant / KG (input editable)
-    //   - stock => cantidad entera min 1
-    //   - sueltos => input “balanza”
+    //   - stock => cantidad entera min 1 (formato 3 dígitos 001..999, validado contra stock vivo)
+    //   - sueltos => input “balanza” (valida en tiempo real contra kg disponible)
     const colCant = document.createElement("td");
     if (item.tipo === "stock") {
       const inCant = document.createElement("input");
-      inCant.type = "number";
-      inCant.min = "1";
-      inCant.max = "999";
-      inCant.value = String(Math.max(1, Math.floor(item.cant)));
+      inCant.type = "text";
+      inCant.maxLength = 3;
+      inCant.value = String(Math.max(1, Math.floor(item.cant))).padStart(3, "0");
       inCant.style.width = "70px";
       inCant.style.textAlign = "center";
+      inCant.inputMode = "numeric";
       inCant.addEventListener("input", async () => {
-        let nueva = parseInt(inCant.value) || 1;
-        if (nueva < 1) nueva = 1;
+        let nueva = parseInt(inCant.value.replace(/\D/g, "")) || 1;
+        nueva = clamp(nueva, 1, 999);
         // Validar contra stock vivo
         const snap = await window.get(window.ref(`/stock/${item.id}`));
         const disponible = snap.exists() ? (snap.val().cant || 0) : 0;
@@ -338,6 +338,7 @@ function actualizarTabla() {
           nueva = disponible || 1;
         }
         item.cant = nueva;
+        inCant.value = String(nueva).padStart(3, "0");
         actualizarTabla();
       });
       colCant.appendChild(inCant);
@@ -360,19 +361,30 @@ function actualizarTabla() {
       const spanCent = document.createElement("span");
       spanCent.style.marginLeft = "2px";
 
-      // Sincronización KG -> Total (real con centavos)
-      function syncDesdeKg() {
+      // Sincronización KG -> Total (real con centavos) + validación stock sueltos en tiempo real
+      async function syncDesdeKg() {
         const kg = parseKgBalanza(inKg.value);
-        inKg.value = kg.toFixed(3);
 
-        const totalReal = kg * Number(item.precio || 0); // con centavos reales
+        // validar contra stock vivo sueltos
+        const snap = await window.get(window.ref(`/sueltos/${item.id}`));
+        const disponibleKg = snap.exists() ? (snap.val().kg || 0) : 0;
+
+        let finalKg = kg;
+        if (finalKg > disponibleKg) {
+          alert("No hay suficiente");
+          finalKg = disponibleKg;
+        }
+
+        inKg.value = finalKg.toFixed(3);
+
+        const totalReal = finalKg * Number(item.precio || 0); // con centavos reales
         const entero = Math.floor(totalReal);
         const cent = Math.round((totalReal - entero) * 100);
 
         inTotalEntero.value = enteroConMiles(entero);
         spanCent.textContent = `,${String(cent).padStart(2, "0")}`;
 
-        item.cant = kg; // guardamos kg reales
+        item.cant = finalKg; // guardamos kg reales
         actualizarTotalesGeneralesSolo();
       }
 
@@ -409,6 +421,16 @@ function actualizarTabla() {
       inKg.addEventListener("input", syncDesdeKg);
       inKg.addEventListener("blur", syncDesdeKg);
 
+      // Escucha del totalEntero (solo enteros)
+      inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
+
+      // Inicialización de total mostrado (con centavos reales)
+      const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
+      const enteroIni = Math.floor(totalReal);
+      const centIni = Math.round((totalReal - enteroIni) * 100);
+      inTotalEntero.value = enteroConMiles(enteroIni);
+      spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
+
       colCant.appendChild(inKg);
 
       // guardamos referencias en el item para reutilizar si hace falta
@@ -416,16 +438,6 @@ function actualizarTabla() {
       item._ui.inKg = inKg;
       item._ui.inTotalEntero = inTotalEntero;
       item._ui.spanCent = spanCent;
-
-      // Inicialización de total mostrado (concentados reales)
-      const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
-      const enteroIni = Math.floor(totalReal);
-      const centIni = Math.round((totalReal - enteroIni) * 100);
-      inTotalEntero.value = enteroConMiles(enteroIni);
-      spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
-
-      // Escucha del totalEntero (solo enteros)
-      inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
 
       // guardamos temporalmente para añadir la celda más abajo
       item._ui.colTotal = colTotal;
