@@ -156,18 +156,15 @@ function enteroConMiles(n) {
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
-// Centavos 0..99 (evita ,100)
 function splitEnteroCentavos(monto) {
   let totalCents = Math.round((Number(monto) + Number.EPSILON) * 100);
   if (!Number.isFinite(totalCents) || totalCents < 0) totalCents = 0;
   const entero = Math.floor(totalCents / 100);
-  const cent = totalCents % 100; // 0..99
+  const cent = totalCents % 100;
   return { entero, cent };
 }
-
-// Mapea texto tipo balanza -> 0.000..99.000
 function parseKgBalanza(rawDigits) {
-  const s = (rawDigits || "").replace(/\D/g, "").slice(0, 5); // hasta 5 dígitos => 99.000 máx
+  const s = (rawDigits || "").replace(/\D/g, "").slice(0, 5);
   let val = 0;
   switch (s.length) {
     case 0: val = 0.000; break;
@@ -180,29 +177,20 @@ function parseKgBalanza(rawDigits) {
   if (isNaN(val)) val = 0;
   return clamp(Number(val.toFixed(3)), 0, 99);
 }
-
-// Efecto visual: parpadeo y scroll instantáneo
 function flashAndScrollRow(item) {
   if (!item || !item._ui || !item._ui.tr) return;
   const tr = item._ui.tr;
-
-  // Reiniciar posible estado previo
   tr.classList.remove('flash-rojo');
-  // forzar reflow para permitir repetir animación
   void tr.offsetWidth;
-
   tr.classList.add('flash-rojo');
-  // scroll instantáneo (sin animación)
   tr.scrollIntoView({ behavior: 'auto', block: 'center' });
-
-  // al finalizar los 3s, quitar la clase y dejar tono leve
   setTimeout(() => {
     tr.classList.remove('flash-rojo');
     tr.style.backgroundColor = '#fff5f5';
   }, 3000);
 }
 
-// ---------- Carga inicial de selects ----------
+// ---------- Carga inicial ----------
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
   stockData = snap.exists() ? (snap.val() || {}) : {};
@@ -254,7 +242,6 @@ if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal
 
 // ---------- Carrito ----------
 async function agregarAlCarrito(nuevoItem) {
-  // Usar cache local; si no existe, traer una vez y cachear
   let data = (nuevoItem.tipo === "stock" ? stockData[nuevoItem.id] : sueltosData[nuevoItem.id]);
   if (!data) {
     const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
@@ -263,78 +250,46 @@ async function agregarAlCarrito(nuevoItem) {
     if (nuevoItem.tipo === "stock") stockData[nuevoItem.id] = data;
     else sueltosData[nuevoItem.id] = data;
   }
-
   const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
   let totalCant = nuevoItem.cant;
   if (idx >= 0) totalCant += carrito[idx].cant;
-
   const disponible = nuevoItem.tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
   if (totalCant > disponible) return alert("STOCK INSUFICIENTE");
-
-  if (idx >= 0) {
-    carrito[idx].cant += nuevoItem.cant;
-  } else {
-    // 🔼 NUEVO: recientes arriba
-    carrito.unshift({
-      id: nuevoItem.id,
-      nombre: data.nombre,
-      cant: nuevoItem.cant,
-      precio: data.precio,
-      tipo: nuevoItem.tipo,
-      _ui: {}
-    });
-  }
+  if (idx >= 0) carrito[idx].cant += nuevoItem.cant;
+  else carrito.unshift({ id: nuevoItem.id, nombre: data.nombre, cant: nuevoItem.cant, precio: data.precio, tipo: nuevoItem.tipo, _ui: {} });
   actualizarTabla();
 }
 
-// ---------- Procesamiento de código (13 dígitos o Enter) ----------
+// ---------- Procesamiento de código ----------
 async function procesarCodigo(codigo) {
   const code = (codigo || "").trim();
   if (!code) return;
-
-  // Intentar sueltos (cache primero)
   let dataS = sueltosData[code];
   if (!dataS) {
     const snapS = await window.get(window.ref(`/sueltos/${code}`));
-    if (snapS.exists()) {
-      dataS = snapS.val();
-      sueltosData[code] = dataS;
-    }
+    if (snapS.exists()) { dataS = snapS.val(); sueltosData[code] = dataS; }
   }
   if (dataS) {
-    if ((dataS.kg || 0) >= 0) {
-      await agregarAlCarrito({ id: code, cant: 0.000, tipo: "sueltos" });
-    } else alert("Stock insuficiente en sueltos");
+    if ((dataS.kg || 0) >= 0) await agregarAlCarrito({ id: code, cant: 0.000, tipo: "sueltos" });
+    else alert("Stock insuficiente en sueltos");
     inputCodigoProducto.value = "";
     return;
   }
-
-  // Intentar stock (cache primero)
   let dataP = stockData[code];
   if (!dataP) {
     const snapP = await window.get(window.ref(`/stock/${code}`));
-    if (snapP.exists()) {
-      dataP = snapP.val();
-      stockData[code] = dataP;
-    }
+    if (snapP.exists()) { dataP = snapP.val(); stockData[code] = dataP; }
   }
   if (dataP) {
-    if ((dataP.cant || 0) > 0) {
-      await agregarAlCarrito({ id: code, cant: 1, tipo: "stock" });
-    } else alert("Stock insuficiente en stock");
-  } else {
-    alert("Producto no encontrado");
-  }
-
+    if ((dataP.cant || 0) > 0) await agregarAlCarrito({ id: code, cant: 1, tipo: "stock" });
+    else alert("Stock insuficiente en stock");
+  } else alert("Producto no encontrado");
   inputCodigoProducto.value = "";
 }
-
-// Auto por 13 dígitos
 inputCodigoProducto.addEventListener("input", async () => {
   const codigo = inputCodigoProducto.value.trim();
   if (codigo.length === 13) await procesarCodigo(codigo);
 });
-// También por Enter
 inputCodigoProducto.addEventListener("keydown", async (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
@@ -348,7 +303,6 @@ btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
-
   const data = stockData[id] || (await (async () => {
     const snap = await window.get(window.ref(`/stock/${id}`));
     if (!snap.exists()) return null;
@@ -356,17 +310,14 @@ btnAddProduct.addEventListener("click", async () => {
     return stockData[id];
   })());
   if (!data) return alert("Producto no encontrado");
-
   const disp = data.cant || 0;
   if (cant > disp) return alert("STOCK INSUFICIENTE");
   await agregarAlCarrito({ id, cant, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
-
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
-
   const data = sueltosData[id] || (await (async () => {
     const snap = await window.get(window.ref(`/sueltos/${id}`));
     if (!snap.exists()) return null;
@@ -374,7 +325,6 @@ btnAddSuelto.addEventListener("click", async () => {
     return sueltosData[id];
   })());
   if (!data) return alert("Producto no encontrado");
-
   let cant = parseFloat(inputKgSuelto.value) || 0;
   if (cant <= 0) return alert("Cantidad inválida");
   if (cant > (data.kg || 0)) return alert("STOCK INSUFICIENTE");
@@ -392,36 +342,49 @@ function actualizarTabla() {
   carrito.forEach((item, idx) => {
     const totalItem = Number(item.cant) * Number(item.precio);
     total += totalItem;
-
     const tr = document.createElement("tr");
-
-    // Guardar ref de fila para efectos
     item._ui.tr = tr;
-
-    // Columna 1: Cant / KG
     const colCant = document.createElement("td");
+
+    // ✅ STOCK: cantidad editable hasta 3 dígitos
     if (item.tipo === "stock") {
       const inCant = document.createElement("input");
       inCant.type = "text";
       inCant.maxLength = 3;
-      inCant.value = String(Math.max(1, Math.floor(item.cant))).padStart(3, "0");
+      inCant.value = String(Math.max(1, Math.floor(item.cant)));
       inCant.style.width = "70px";
       inCant.style.textAlign = "center";
       inCant.inputMode = "numeric";
 
       inCant.addEventListener("input", () => {
-        let nueva = parseInt(inCant.value.replace(/\D/g, "")) || 1;
+        let raw = inCant.value.replace(/\D/g, "").slice(0, 3);
+        if (raw === "") raw = "1";
+        let nueva = parseInt(raw, 10);
         nueva = clamp(nueva, 1, 999);
         const disponible = stockData[item.id]?.cant || 0;
-
-        // exceso -> clamp, efecto fila y scroll
         if (nueva > disponible) {
           nueva = Math.max(1, disponible);
           flashAndScrollRow(item);
         }
-
         item.cant = nueva;
-        inCant.value = String(nueva).padStart(3, "0");
+        inCant.value = raw;
+        if (item._ui && item._ui.totalCell) {
+          item._ui.totalCell.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
+        }
+        actualizarTotalesGeneralesSolo();
+      });
+
+      inCant.addEventListener("blur", () => {
+        let val = parseInt(inCant.value.replace(/\D/g, ""), 10);
+        if (!val || val < 1) val = 1;
+        val = clamp(val, 1, 999);
+        const disp = stockData[item.id]?.cant || 0;
+        if (val > disp) {
+          val = Math.max(1, disp);
+          flashAndScrollRow(item);
+        }
+        inCant.value = String(val);
+        item.cant = val;
         if (item._ui && item._ui.totalCell) {
           item._ui.totalCell.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
         }
@@ -430,13 +393,15 @@ function actualizarTabla() {
 
       colCant.appendChild(inCant);
       item._ui.inCant = inCant;
-    } else {
+    }
+
+    // ✅ SUELTOS (sin cambios)
+    else {
       const inKg = document.createElement("input");
       inKg.type = "text";
       inKg.value = (Number(item.cant) || 0).toFixed(3);
       inKg.style.width = "70px";
       inKg.style.textAlign = "center";
-
       const colTotal = document.createElement("td");
       const inTotalEntero = document.createElement("input");
       inTotalEntero.type = "text";
@@ -445,80 +410,61 @@ function actualizarTabla() {
       inTotalEntero.inputMode = "numeric";
       const spanCent = document.createElement("span");
       spanCent.style.marginLeft = "2px";
-
       function syncDesdeKg() {
         const kg = parseKgBalanza(inKg.value);
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kg;
-
         if (finalKg > disponibleKg) {
-          finalKg = disponibleKg;             // clamp silencioso al máximo
-          flashAndScrollRow(item);            // efecto + scroll
+          finalKg = disponibleKg;
+          flashAndScrollRow(item);
         }
-
         inKg.value = finalKg.toFixed(3);
-
         const totalReal = finalKg * Number(item.precio || 0);
         const { entero, cent } = splitEnteroCentavos(totalReal);
         inTotalEntero.value = enteroConMiles(entero);
         spanCent.textContent = `,${String(cent).padStart(2, "0")}`;
-
         item.cant = finalKg;
         actualizarTotalesGeneralesSolo();
       }
-
       function syncDesdeTotalEntero() {
         const raw = inTotalEntero.value.replace(/\D/g, "").slice(0, 9);
         const entero = parseInt(raw) || 0;
         inTotalEntero.value = enteroConMiles(entero);
-        spanCent.textContent = ",00"; // fijo cuando se edita total
-
+        spanCent.textContent = ",00";
         const unit = Number(item.precio || 0);
         const kgCalc = unit > 0 ? clamp(Number((entero / unit).toFixed(3)), 0, 99) : 0;
-
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kgCalc;
         if (finalKg > disponibleKg) {
-          finalKg = disponibleKg;             // clamp silencioso al máximo
+          finalKg = disponibleKg;
           const enteroTope = Math.floor(finalKg * unit);
           inTotalEntero.value = enteroConMiles(enteroTope);
-          flashAndScrollRow(item);            // efecto + scroll
+          flashAndScrollRow(item);
         }
-
         inKg.value = finalKg.toFixed(3);
         item.cant = finalKg;
         actualizarTotalesGeneralesSolo();
       }
-
       inKg.addEventListener("input", syncDesdeKg);
       inKg.addEventListener("blur", syncDesdeKg);
       inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
-
-      // Inicialización total mostrado con centavos correctos (0..99)
       const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
       const { entero: enteroIni, cent: centIni } = splitEnteroCentavos(totalReal);
       inTotalEntero.value = enteroConMiles(enteroIni);
       spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
-
       colCant.appendChild(inKg);
       colTotal.appendChild(inTotalEntero);
       colTotal.appendChild(spanCent);
-
       item._ui.inKg = inKg;
       item._ui.inTotalEntero = inTotalEntero;
       item._ui.spanCent = spanCent;
       item._ui.colTotal = colTotal;
     }
 
-    // Columna 2: Producto
     const colNombre = document.createElement("td");
     colNombre.textContent = item.nombre;
-
-    // Columna 3: Precio Unidad
     const colPU = document.createElement("td");
     colPU.textContent = Number(item.precio || 0).toFixed(2);
-
-    // Columna 4: Total
     let colTotalFinal;
     if (item.tipo === "stock") {
       colTotalFinal = document.createElement("td");
@@ -527,8 +473,6 @@ function actualizarTabla() {
     } else {
       colTotalFinal = item._ui.colTotal;
     }
-
-    // Columna 5: Acción
     const colAcc = document.createElement("td");
     const btnDel = document.createElement("button");
     btnDel.textContent = "❌";
@@ -537,13 +481,11 @@ function actualizarTabla() {
       actualizarTabla();
     });
     colAcc.appendChild(btnDel);
-
     tr.appendChild(colCant);
     tr.appendChild(colNombre);
     tr.appendChild(colPU);
     tr.appendChild(colTotalFinal);
     tr.appendChild(colAcc);
-
     tablaCobro.appendChild(tr);
   });
 
@@ -553,8 +495,6 @@ function actualizarTabla() {
   totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalModificado.toFixed(2)}</span>${porcentajeTexto}`;
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
-
-// Recalcula solo el total general
 function actualizarTotalesGeneralesSolo() {
   let total = 0;
   carrito.forEach(it => { total += Number(it.cant) * Number(it.precio); });
@@ -569,7 +509,6 @@ function actualizarTotalesGeneralesSolo() {
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
   const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
   const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
-
   let shopName = "TICKET";
   let shopLocation = "Sucursal Nueva";
   let shopCuit = "00000000000";
@@ -581,12 +520,8 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
       shopLocation = val.shopLocation || "Sucursal Nueva";
       shopCuit = val.shopCuit || "00000000000";
     }
-  } catch (e) {
-    console.error("Error al cargar configuración de tienda:", e);
-  }
-
+  } catch (e) { console.error("Error al cargar configuración de tienda:", e); }
   const iva = total * 0.21;
-
   const contenido = `
 *** CONSUMIDOR FINAL ***
 ${shopName.toUpperCase()}
@@ -615,14 +550,12 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 <span>a nivel nacional</span>
 ==============================
 `;
-
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.width = "0";
   iframe.style.height = "0";
   iframe.style.border = "0";
   document.body.appendChild(iframe);
-
   const doc = iframe.contentWindow.document;
   doc.open();
   doc.write(`
@@ -640,17 +573,14 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
         line-height: 1.4;
         text-align: center;
       }
-      body span.sep { display: block; text-align: center; }
       span { display:block; text-align:center; }
     </style>
   </head>
   <body>
 ${contenido}
   </body>
-</html>
-  `);
+</html>`);
   doc.close();
-
   iframe.contentWindow.focus();
   iframe.contentWindow.print();
   setTimeout(() => iframe.remove(), 2000);
@@ -659,14 +589,8 @@ ${contenido}
 // ---------- COBRAR ----------
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
-
-  // Bloqueo de sueltos con 0.000 KG
   const sueltoCero = carrito.find(it => it.tipo === "sueltos" && Number(it.cant) === 0);
-  if (sueltoCero) {
-    alert("No se puede vender un suelto con 0.000 KG");
-    return;
-  }
-
+  if (sueltoCero) return alert("No se puede vender un suelto con 0.000 KG");
   const modal = document.createElement("div");
   modal.style.cssText = `
     position:fixed;top:0;left:0;width:100%;height:100%;
@@ -685,11 +609,9 @@ btnCobrar.addEventListener("click", async () => {
       <button id="cancelar-pago" style="background:red;color:#fff;padding:5px 15px;">Cancelar</button>
     </div>`;
   document.body.appendChild(modal);
-
   const allButtons = modal.querySelectorAll("button");
   const disableButtons = () => allButtons.forEach(b => b.disabled = true);
   document.getElementById("cancelar-pago").addEventListener("click", () => { disableButtons(); modal.remove(); });
-
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
     btn.addEventListener("click", async () => {
       disableButtons();
@@ -703,120 +625,99 @@ btnCobrar.addEventListener("click", async () => {
       ultimoID++;
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
       const fecha = new Date();
-      const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')})`;
-
-      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
-      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
-
-      await window.set(window.ref(`/movimientos/${ticketID}`), {
-        ticketID, cajero: currentUser.id, items: carrito,
-        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        eliminado: false, porcentajeAplicado: porcentajeFinal || 0
-      });
-      await window.set(window.ref(`/historial/${ticketID}`), {
-        ticketID, cajero: currentUser.id, items: carrito,
-        total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        porcentajeAplicado: porcentajeFinal || 0
-      });
-      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
-
-      // Descontar stock/sueltos en la base y ACTUALIZAR cache local inmediatamente
-      for (const it of carrito) {
-        const path = `/${it.tipo}/${it.id}`;
-        const snapItem = await window.get(window.ref(path));
-        if (snapItem.exists()) {
-          const data = snapItem.val();
-          if (it.tipo === "stock") {
-            const nuevo = (data.cant || 0) - it.cant;
-            await window.update(window.ref(path), { cant: nuevo });
-            if (!stockData[it.id]) stockData[it.id] = data;
-            stockData[it.id].cant = nuevo;
-          } else {
-            const nuevo = (data.kg || 0) - it.cant;
-            await window.update(window.ref(path), { kg: nuevo });
-            if (!sueltosData[it.id]) sueltosData[it.id] = data;
-            sueltosData[it.id].kg = nuevo;
+      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
+      const totalOriginal = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
+      const totalFinal = totalOriginal*(1+(porcentajeFinal||0)/100);
+      await window.set(window.ref(`/movimientos/${ticketID}`),{ticketID,cajero:currentUser.id,items:carrito,total:totalFinal,fecha:fecha.toISOString(),tipo:tipoPago,eliminado:false,porcentajeAplicado:porcentajeFinal||0});
+      await window.set(window.ref(`/historial/${ticketID}`),{ticketID,cajero:currentUser.id,items:carrito,total:totalFinal,fecha:fecha.toISOString(),tipo:tipoPago,porcentajeAplicado:porcentajeFinal||0});
+      await window.update(window.ref("/config"),{ultimoTicketID:ultimoID,ultimoTicketFecha:fechaHoy});
+      for(const it of carrito){
+        const path=`/${it.tipo}/${it.id}`;
+        const snapItem=await window.get(window.ref(path));
+        if(snapItem.exists()){
+          const data=snapItem.val();
+          if(it.tipo==="stock"){
+            const nuevo=(data.cant||0)-it.cant;
+            await window.update(window.ref(path),{cant:nuevo});
+            if(!stockData[it.id])stockData[it.id]=data;
+            stockData[it.id].cant=nuevo;
+          }else{
+            const nuevo=(data.kg||0)-it.cant;
+            await window.update(window.ref(path),{kg:nuevo});
+            if(!sueltosData[it.id])sueltosData[it.id]=data;
+            sueltosData[it.id].kg=nuevo;
           }
         }
       }
-
-      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
-
-      setTimeout(() => {
+      imprimirTicket(ticketID,fechaStr,currentUser.id,carrito,totalFinal,tipoPago);
+      setTimeout(()=>{
         alert("VENTA FINALIZADA");
-        carrito = [];
+        carrito=[];
         actualizarTabla();
-        loadStock && loadStock();
-        loadSueltos && loadSueltos();
-        loadMovimientos && loadMovimientos();
-        loadHistorial && loadHistorial();
+        loadStock&&loadStock();
+        loadSueltos&&loadSueltos();
+        loadMovimientos&&loadMovimientos();
+        loadHistorial&&loadHistorial();
         modal.remove();
-      }, 500);
+      },500);
     });
   });
 });
 
-// ---------- MODAL DE BÚSQUEDA UNIFICADO ----------
-btnBuscarProducto.addEventListener("click", () => {
-  tablaResultados.innerHTML = "";
-  inputBusqueda.value = "";
-  modalBusqueda.style.display = "flex";
+// ---------- MODAL DE BÚSQUEDA ----------
+btnBuscarProducto.addEventListener("click",()=>{
+  tablaResultados.innerHTML="";
+  inputBusqueda.value="";
+  modalBusqueda.style.display="flex";
   modalBusqueda.classList.remove("hidden");
   inputBusqueda.focus();
 });
-btnCancelarBusqueda.addEventListener("click", () => {
-  modalBusqueda.style.display = "none";
+btnCancelarBusqueda.addEventListener("click",()=>{
+  modalBusqueda.style.display="none";
   modalBusqueda.classList.add("hidden");
-  inputBusqueda.value = "";
-  tablaResultados.innerHTML = "";
+  inputBusqueda.value="";
+  tablaResultados.innerHTML="";
 });
-inputBusqueda.addEventListener("input", async () => {
-  const q = inputBusqueda.value.trim().toLowerCase();
-  tablaResultados.innerHTML = "";
-  if (q.length < 2) return;
-
-  if (!Object.keys(stockData).length) {
-    const s = await window.get(window.ref("/stock"));
-    stockData = s.exists() ? (s.val() || {}) : {};
+inputBusqueda.addEventListener("input",async()=>{
+  const q=inputBusqueda.value.trim().toLowerCase();
+  tablaResultados.innerHTML="";
+  if(q.length<2)return;
+  if(!Object.keys(stockData).length){
+    const s=await window.get(window.ref("/stock"));
+    stockData=s.exists()?(s.val()||{}):{};
   }
-  if (!Object.keys(sueltosData).length) {
-    const s = await window.get(window.ref("/sueltos"));
-    sueltosData = s.exists() ? (s.val() || {}) : {};
+  if(!Object.keys(sueltosData).length){
+    const s=await window.get(window.ref("/sueltos"));
+    sueltosData=s.exists()?(s.val()||{}):{};
   }
-
-  const res = [];
-  for (const [id, data] of Object.entries(stockData)) {
-    if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-      res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
+  const res=[];
+  for(const [id,data] of Object.entries(stockData)){
+    if(id.toLowerCase().includes(q)||(data.nombre||"").toLowerCase().includes(q))
+      res.push({id,tipo:"stock",nombre:data.nombre,cant:data.cant||0,precio:data.precio});
   }
-  for (const [id, data] of Object.entries(sueltosData)) {
-    if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-      res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
+  for(const [id,data] of Object.entries(sueltosData)){
+    if(id.toLowerCase().includes(q)||(data.nombre||"").toLowerCase().includes(q))
+      res.push({id,tipo:"sueltos",nombre:data.nombre,kg:data.kg||0,precio:data.precio});
   }
-
-  res.forEach(item => {
-    const disponible = item.tipo === "stock" ? item.cant : item.kg;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+  res.forEach(item=>{
+    const disponible=item.tipo==="stock"?item.cant:item.kg;
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
       <td>${item.id}</td>
       <td>${item.nombre}</td>
       <td>${item.tipo}</td>
       <td>${disponible}</td>
-      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
-    tr.querySelector("button").addEventListener("click", async (e) => {
-      const id = e.currentTarget.dataset.id;
-      const tipo = e.currentTarget.dataset.tipo;
-      const disp = tipo === "stock" ? (stockData[id]?.cant || 0) : (sueltosData[id]?.kg || 0);
-      if (disp <= 0) return alert("Producto sin disponibilidad");
-      await agregarAlCarrito({
-        id,
-        cant: tipo === "stock" ? 1 : 0.000,
-        tipo
-      });
-      modalBusqueda.style.display = "none";
+      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible<=0?"disabled style='opacity:0.5;'":""}>Agregar</button></td>`;
+    tr.querySelector("button").addEventListener("click",async(e)=>{
+      const id=e.currentTarget.dataset.id;
+      const tipo=e.currentTarget.dataset.tipo;
+      const disp=tipo==="stock"?(stockData[id]?.cant||0):(sueltosData[id]?.kg||0);
+      if(disp<=0)return alert("Producto sin disponibilidad");
+      await agregarAlCarrito({id,cant:tipo==="stock"?1:0.000,tipo});
+      modalBusqueda.style.display="none";
       modalBusqueda.classList.add("hidden");
-      inputBusqueda.value = "";
-      tablaResultados.innerHTML = "";
+      inputBusqueda.value="";
+      tablaResultados.innerHTML="";
     });
     tablaResultados.appendChild(tr);
   });
