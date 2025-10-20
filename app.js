@@ -156,12 +156,12 @@ function enteroConMiles(n) {
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
-// Evita ,100 en centavos: convierte a enteros de centavos y devuelve {entero, cent}
+// Evita ,100 en centavos
 function splitEnteroCentavos(monto) {
   let totalCents = Math.round((Number(monto) + Number.EPSILON) * 100);
   if (!Number.isFinite(totalCents) || totalCents < 0) totalCents = 0;
   const entero = Math.floor(totalCents / 100);
-  const cent = totalCents % 100; // 0..99 garantizado
+  const cent = totalCents % 100; // 0..99
   return { entero, cent };
 }
 
@@ -233,7 +233,7 @@ if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal
 
 // ---------- Carrito ----------
 async function agregarAlCarrito(nuevoItem) {
-  // Usar cache local; si no existe, intentar traer una sola vez y cachear
+  // Usar cache local; si no existe, traer una vez y cachear
   let data = (nuevoItem.tipo === "stock" ? stockData[nuevoItem.id] : sueltosData[nuevoItem.id]);
   if (!data) {
     const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
@@ -389,8 +389,7 @@ function actualizarTabla() {
         nueva = clamp(nueva, 1, 999);
         const disponible = stockData[item.id]?.cant || 0;
         if (nueva > disponible) {
-          alert("No hay tanta cantidad disponible");
-          nueva = Math.max(1, disponible);
+          nueva = Math.max(1, disponible); // clamp silencioso al máximo
         }
         item.cant = nueva;
         inCant.value = String(nueva).padStart(3, "0");
@@ -423,8 +422,7 @@ function actualizarTabla() {
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kg;
         if (finalKg > disponibleKg) {
-          alert("No hay suficiente");
-          finalKg = disponibleKg;
+          finalKg = disponibleKg; // clamp silencioso al máximo
         }
         inKg.value = finalKg.toFixed(3);
 
@@ -449,8 +447,7 @@ function actualizarTabla() {
         const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kgCalc;
         if (finalKg > disponibleKg) {
-          alert("No hay tantos KG disponibles");
-          finalKg = disponibleKg;
+          finalKg = disponibleKg; // clamp silencioso al máximo
           const enteroTope = Math.floor(finalKg * unit);
           inTotalEntero.value = enteroConMiles(enteroTope);
         }
@@ -767,6 +764,7 @@ inputBusqueda.addEventListener("input", async () => {
     tablaResultados.appendChild(tr);
   });
 });
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
