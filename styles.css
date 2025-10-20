@@ -415,3 +415,42 @@ blockquote {
   animation: flashRojo 3s ease-in-out;
   transition: background-color 0.3s ease-in-out;
 }
+
+/* ===== Scroll vertical en el modal de búsqueda ===== */
+#modal-busqueda {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#modal-busqueda table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 700px; /* opcional, ajustá según tu diseño */
+}
+
+/* --- Clave: contenedor con scroll vertical --- */
+#modal-busqueda tbody {
+  display: block;
+  max-height: calc(10 * 2.4em); /* ≈10 filas visibles */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Mantener encabezado fijo y columnas alineadas */
+#modal-busqueda thead,
+#modal-busqueda tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+/* Estilo visual */
+#modal-busqueda th,
+#modal-busqueda td {
+  padding: 6px;
+  text-align: left;
+  border-bottom: 1px solid #ccc;
+  font-size: 14px;
+}
+
