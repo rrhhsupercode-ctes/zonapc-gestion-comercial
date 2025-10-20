@@ -142,6 +142,10 @@ let carrito = [];
 let porcentajeFinal = 0;
 let precioUnitarioActual = 0;
 
+// Cache local para evitar lag en edición
+let stockData = {};
+let sueltosData = {};
+
 // ---------- Helpers ----------
 function formatPrecioSimple(valor) {
   return valor.toFixed(2).replace('.', ',');
@@ -172,8 +176,9 @@ function parseKgBalanza(rawDigits) {
 // ---------- Carga inicial de selects ----------
 async function loadProductos() {
   const snap = await window.get(window.ref("/stock"));
+  stockData = snap.exists() ? (snap.val() || {}) : {};
   cobroProductos.innerHTML = '<option value="">Elija un Item</option>';
-  if (snap.exists()) Object.entries(snap.val()).forEach(([k, v]) => {
+  if (snap.exists()) Object.entries(stockData).forEach(([k, v]) => {
     const opt = document.createElement("option");
     opt.value = k;
     opt.textContent = v.nombre;
@@ -181,8 +186,9 @@ async function loadProductos() {
   });
 
   const sueltosSnap = await window.get(window.ref("/sueltos"));
+  sueltosData = sueltosSnap.exists() ? (sueltosSnap.val() || {}) : {};
   cobroSueltos.innerHTML = '<option value="">Elija un Item (Sueltos)</option>';
-  if (sueltosSnap.exists()) Object.entries(sueltosSnap.val()).forEach(([k, v]) => {
+  if (sueltosSnap.exists()) Object.entries(sueltosData).forEach(([k, v]) => {
     const opt = document.createElement("option");
     opt.value = k;
     opt.textContent = v.nombre;
@@ -212,16 +218,22 @@ function calcularPorcentajeFinal() {
   inputDescuento.value = String(desc);
   inputRecargo.value = String(rec);
   porcentajeFinal = rec - desc;
-  actualizarTabla();
+  actualizarTotalesGeneralesSolo();
 }
 if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
 if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
 
 // ---------- Carrito ----------
 async function agregarAlCarrito(nuevoItem) {
-  const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
+  // Usar cache local; si no existe, intentar traer una sola vez y cachear
+  let data = (nuevoItem.tipo === "stock" ? stockData[nuevoItem.id] : sueltosData[nuevoItem.id]);
+  if (!data) {
+    const snap = await window.get(window.ref(`/${nuevoItem.tipo}/${nuevoItem.id}`));
+    if (!snap.exists()) return alert("Producto no encontrado");
+    data = snap.val();
+    if (nuevoItem.tipo === "stock") stockData[nuevoItem.id] = data;
+    else sueltosData[nuevoItem.id] = data;
+  }
 
   const idx = carrito.findIndex(it => it.id === nuevoItem.id && it.tipo === nuevoItem.tipo);
   let totalCant = nuevoItem.cant;
@@ -239,7 +251,8 @@ async function agregarAlCarrito(nuevoItem) {
       nombre: data.nombre,
       cant: nuevoItem.cant,
       precio: data.precio,    // unitario
-      tipo: nuevoItem.tipo
+      tipo: nuevoItem.tipo,
+      _ui: {}                 // refs UI por fila
     });
   }
   actualizarTabla();
@@ -250,22 +263,34 @@ inputCodigoProducto.addEventListener("input", async () => {
   const codigo = inputCodigoProducto.value.trim();
   if (codigo.length !== 13) return;
 
-  // 1) Intentar sueltos
-  const snapS = await window.get(window.ref(`/sueltos/${codigo}`));
-  if (snapS.exists()) {
-    const data = snapS.val();
-    if ((data.kg || 0) >= 0) {
+  // 1) Intentar sueltos (usar cache si está)
+  let dataS = sueltosData[codigo];
+  if (!dataS) {
+    const snapS = await window.get(window.ref(`/sueltos/${codigo}`));
+    if (snapS.exists()) {
+      dataS = snapS.val();
+      sueltosData[codigo] = dataS;
+    }
+  }
+  if (dataS) {
+    if ((dataS.kg || 0) >= 0) {
       await agregarAlCarrito({ id: codigo, cant: 0.000, tipo: "sueltos" });
     } else alert("Stock insuficiente en sueltos");
     inputCodigoProducto.value = "";
     return;
   }
 
-  // 2) Intentar stock
-  const snapP = await window.get(window.ref(`/stock/${codigo}`));
-  if (snapP.exists()) {
-    const data = snapP.val();
-    if ((data.cant || 0) > 0) {
+  // 2) Intentar stock (usar cache si está)
+  let dataP = stockData[codigo];
+  if (!dataP) {
+    const snapP = await window.get(window.ref(`/stock/${codigo}`));
+    if (snapP.exists()) {
+      dataP = snapP.val();
+      stockData[codigo] = dataP;
+    }
+  }
+  if (dataP) {
+    if ((dataP.cant || 0) > 0) {
       await agregarAlCarrito({ id: codigo, cant: 1, tipo: "stock" });
     } else alert("Stock insuficiente en stock");
   } else {
@@ -280,10 +305,15 @@ btnAddProduct.addEventListener("click", async () => {
   let id = cobroProductos.value || inputCodigoProducto.value.trim();
   let cant = parseInt(cobroCantidad.value);
   if (!id || cant <= 0) return;
-  const snap = await window.get(window.ref(`/stock/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
-  if (cant > (data.cant || 0)) return alert("STOCK INSUFICIENTE");
+
+  const data = stockData[id];
+  if (!data) {
+    const snap = await window.get(window.ref(`/stock/${id}`));
+    if (!snap.exists()) return alert("Producto no encontrado");
+    stockData[id] = snap.val();
+  }
+  const disp = stockData[id]?.cant || 0;
+  if (cant > disp) return alert("STOCK INSUFICIENTE");
   agregarAlCarrito({ id, cant, tipo: "stock" });
   inputCodigoProducto.value = "";
 });
@@ -291,9 +321,15 @@ btnAddProduct.addEventListener("click", async () => {
 btnAddSuelto.addEventListener("click", async () => {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return alert("Seleccione un producto suelto");
-  const snap = await window.get(window.ref(`/sueltos/${id}`));
-  if (!snap.exists()) return alert("Producto no encontrado");
-  const data = snap.val();
+
+  const data = sueltosData[id] || (await (async () => {
+    const snap = await window.get(window.ref(`/sueltos/${id}`));
+    if (!snap.exists()) return null;
+    sueltosData[id] = snap.val();
+    return sueltosData[id];
+  })());
+  if (!data) return alert("Producto no encontrado");
+
   let cant = parseFloat(inputKgSuelto.value) || 0;
   if (cant <= 0) return alert("Cantidad inválida");
   if (cant > (data.kg || 0)) return alert("STOCK INSUFICIENTE");
@@ -316,8 +352,8 @@ function actualizarTabla() {
     const tr = document.createElement("tr");
 
     // Columna 1: Cant / KG (input editable)
-    //   - stock => cantidad entera min 1 (formato 3 dígitos 001..999, validado contra stock vivo)
-    //   - sueltos => input “balanza” (valida en tiempo real contra kg disponible)
+    //   - stock => cantidad entera min 1 (formato 3 dígitos 001..999, validado contra cache de stock)
+    //   - sueltos => input “balanza” (valida en tiempo real contra cache de kg disponible)
     const colCant = document.createElement("td");
     if (item.tipo === "stock") {
       const inCant = document.createElement("input");
@@ -327,21 +363,26 @@ function actualizarTabla() {
       inCant.style.width = "70px";
       inCant.style.textAlign = "center";
       inCant.inputMode = "numeric";
-      inCant.addEventListener("input", async () => {
+
+      // Evitar reconstruir la fila en cada tecla: solo actualizar totales + celda total
+      inCant.addEventListener("input", () => {
         let nueva = parseInt(inCant.value.replace(/\D/g, "")) || 1;
         nueva = clamp(nueva, 1, 999);
-        // Validar contra stock vivo
-        const snap = await window.get(window.ref(`/stock/${item.id}`));
-        const disponible = snap.exists() ? (snap.val().cant || 0) : 0;
+        const disponible = stockData[item.id]?.cant || 0;
         if (nueva > disponible) {
           alert("No hay tanta cantidad disponible");
-          nueva = disponible || 1;
+          nueva = Math.max(1, disponible);
         }
         item.cant = nueva;
         inCant.value = String(nueva).padStart(3, "0");
-        actualizarTabla();
+        if (item._ui && item._ui.totalCell) {
+          item._ui.totalCell.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
+        }
+        actualizarTotalesGeneralesSolo();
       });
+
       colCant.appendChild(inCant);
+      item._ui.inCant = inCant;
     } else {
       // sueltos: KG balanza
       const inKg = document.createElement("input");
@@ -361,13 +402,10 @@ function actualizarTabla() {
       const spanCent = document.createElement("span");
       spanCent.style.marginLeft = "2px";
 
-      // Sincronización KG -> Total (real con centavos) + validación stock sueltos en tiempo real
-      async function syncDesdeKg() {
+      // Sincronización KG -> Total (real con centavos) + validación stock sueltos en tiempo real (cache)
+      function syncDesdeKg() {
         const kg = parseKgBalanza(inKg.value);
-
-        // validar contra stock vivo sueltos
-        const snap = await window.get(window.ref(`/sueltos/${item.id}`));
-        const disponibleKg = snap.exists() ? (snap.val().kg || 0) : 0;
+        const disponibleKg = sueltosData[item.id]?.kg || 0;
 
         let finalKg = kg;
         if (finalKg > disponibleKg) {
@@ -389,8 +427,7 @@ function actualizarTabla() {
       }
 
       // Sincronización Total (enteros) -> KG (sin centavos al editar total)
-      async function syncDesdeTotalEntero() {
-        // Tomar solo dígitos
+      function syncDesdeTotalEntero() {
         const raw = inTotalEntero.value.replace(/\D/g, "").slice(0, 9);
         const entero = parseInt(raw) || 0;
         inTotalEntero.value = enteroConMiles(entero);
@@ -400,9 +437,8 @@ function actualizarTabla() {
         const unit = Number(item.precio || 0);
         const kgCalc = unit > 0 ? clamp(Number((entero / unit).toFixed(3)), 0, 99) : 0;
 
-        // validar contra stock vivo sueltos
-        const snap = await window.get(window.ref(`/sueltos/${item.id}`));
-        const disponibleKg = snap.exists() ? (snap.val().kg || 0) : 0;
+        // validar contra stock vivo sueltos (desde cache)
+        const disponibleKg = sueltosData[item.id]?.kg || 0;
         let finalKg = kgCalc;
         if (finalKg > disponibleKg) {
           alert("No hay tantos KG disponibles");
@@ -417,14 +453,10 @@ function actualizarTabla() {
         actualizarTotalesGeneralesSolo();
       }
 
-      // Entradas KG
       inKg.addEventListener("input", syncDesdeKg);
       inKg.addEventListener("blur", syncDesdeKg);
-
-      // Escucha del totalEntero (solo enteros)
       inTotalEntero.addEventListener("input", syncDesdeTotalEntero);
 
-      // Inicialización de total mostrado (con centavos reales)
       const totalReal = Number(item.cant || 0) * Number(item.precio || 0);
       const enteroIni = Math.floor(totalReal);
       const centIni = Math.round((totalReal - enteroIni) * 100);
@@ -432,17 +464,13 @@ function actualizarTabla() {
       spanCent.textContent = `,${String(centIni).padStart(2, "0")}`;
 
       colCant.appendChild(inKg);
+      colTotal.appendChild(inTotalEntero);
+      colTotal.appendChild(spanCent);
 
-      // guardamos referencias en el item para reutilizar si hace falta
-      item._ui = item._ui || {};
       item._ui.inKg = inKg;
       item._ui.inTotalEntero = inTotalEntero;
       item._ui.spanCent = spanCent;
-
-      // guardamos temporalmente para añadir la celda más abajo
       item._ui.colTotal = colTotal;
-      item._ui.colTotal_inTotalEntero = inTotalEntero;
-      item._ui.colTotal_spanCent = spanCent;
     }
 
     // Columna 2: Producto
@@ -458,12 +486,9 @@ function actualizarTabla() {
     if (item.tipo === "stock") {
       colTotalFinal = document.createElement("td");
       colTotalFinal.textContent = (Number(item.cant) * Number(item.precio)).toFixed(2);
+      item._ui.totalCell = colTotalFinal; // para actualizar sin reconstruir
     } else {
       colTotalFinal = item._ui.colTotal;
-      // anexar input y span
-      colTotalFinal.innerHTML = "";
-      colTotalFinal.appendChild(item._ui.colTotal_inTotalEntero);
-      colTotalFinal.appendChild(item._ui.colTotal_spanCent);
     }
 
     // Columna 5: Acción (eliminar)
@@ -629,15 +654,22 @@ btnCobrar.addEventListener("click", async () => {
       });
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
 
-      // Descontar stock/sueltos
+      // Descontar stock/sueltos en la base y ACTUALIZAR cache local inmediatamente
       for (const it of carrito) {
-        const snapItem = await window.get(window.ref(`/${it.tipo}/${it.id}`));
+        const path = `/${it.tipo}/${it.id}`;
+        const snapItem = await window.get(window.ref(path));
         if (snapItem.exists()) {
           const data = snapItem.val();
           if (it.tipo === "stock") {
-            await window.update(window.ref(`/${it.tipo}/${it.id}`), { cant: (data.cant || 0) - it.cant });
+            const nuevo = (data.cant || 0) - it.cant;
+            await window.update(window.ref(path), { cant: nuevo });
+            if (!stockData[it.id]) stockData[it.id] = data;
+            stockData[it.id].cant = nuevo; // actualizar cache
           } else {
-            await window.update(window.ref(`/${it.tipo}/${it.id}`), { kg: (data.kg || 0) - it.cant });
+            const nuevo = (data.kg || 0) - it.cant;
+            await window.update(window.ref(path), { kg: nuevo });
+            if (!sueltosData[it.id]) sueltosData[it.id] = data;
+            sueltosData[it.id].kg = nuevo; // actualizar cache
           }
         }
       }
@@ -648,6 +680,7 @@ btnCobrar.addEventListener("click", async () => {
         alert("VENTA FINALIZADA");
         carrito = [];
         actualizarTabla();
+        // Refrescos opcionales de UI externa
         loadStock && loadStock();
         loadSueltos && loadSueltos();
         loadMovimientos && loadMovimientos();
@@ -677,23 +710,24 @@ inputBusqueda.addEventListener("input", async () => {
   tablaResultados.innerHTML = "";
   if (q.length < 2) return;
 
-  const [stockSnap, sueltosSnap] = await Promise.all([
-    window.get(window.ref("/stock")),
-    window.get(window.ref("/sueltos"))
-  ]);
+  // usar cache si está, y si no, completar desde base UNA vez
+  if (!Object.keys(stockData).length) {
+    const s = await window.get(window.ref("/stock"));
+    stockData = s.exists() ? (s.val() || {}) : {};
+  }
+  if (!Object.keys(sueltosData).length) {
+    const s = await window.get(window.ref("/sueltos"));
+    sueltosData = s.exists() ? (s.val() || {}) : {};
+  }
 
   const res = [];
-  if (stockSnap.exists()) {
-    for (const [id, data] of Object.entries(stockSnap.val())) {
-      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
-    }
+  for (const [id, data] of Object.entries(stockData)) {
+    if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+      res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
   }
-  if (sueltosSnap.exists()) {
-    for (const [id, data] of Object.entries(sueltosSnap.val())) {
-      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
-    }
+  for (const [id, data] of Object.entries(sueltosData)) {
+    if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+      res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
   }
 
   res.forEach(item => {
@@ -708,10 +742,7 @@ inputBusqueda.addEventListener("input", async () => {
     tr.querySelector("button").addEventListener("click", async (e) => {
       const id = e.currentTarget.dataset.id;
       const tipo = e.currentTarget.dataset.tipo;
-      const snap = await window.get(window.ref(`/${tipo}/${id}`));
-      if (!snap.exists()) return alert("Producto no encontrado");
-      const data = snap.val();
-      const disp = tipo === "stock" ? (data.cant || 0) : (data.kg || 0);
+      const disp = tipo === "stock" ? (stockData[id]?.cant || 0) : (sueltosData[id]?.kg || 0);
       if (disp <= 0) return alert("Producto sin disponibilidad");
       await agregarAlCarrito({
         id,
