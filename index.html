@@ -102,9 +102,12 @@
       </div>
     </div>
     <!-- Botón + leyenda cobrar (precio total) -->
-    <div id="total-div" style="margin-top:10px;"><button id="btn-cobrar" class="hidden">💸 Cobrar</button> TOTAL: $0</div>
+<div id="total-div" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#f9f9f9;">
+  <button id="btn-cobrar" class="hidden" style="background:green;color:#fff;border:none;padding:8px 20px;border-radius:5px;font-weight:bold;cursor:pointer;">💸 Cobrar</button>
+  <span style="font-size:18px;font-weight:bold;color:red;">TOTAL: $0</span>
+</div>
 
-    <!-- TABLA COBRO -->
+<!-- TABLA COBRO -->
     <table id="tabla-cobro">
       <thead>
         <tr>
