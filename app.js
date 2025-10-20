@@ -1897,6 +1897,53 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   });
 });
 
+  // =========================
+// === LIMPIEZA AUTOMÁTICA DE NOMBRES (acentos/ñ) ===
+// =========================
+(function limpiarNombresAuto() {
+  // --- Función normalizadora ---
+  function normalizarTexto(txt) {
+    if (typeof txt !== "string") return txt;
+    return txt
+      .normalize("NFD")                       // separa acentos
+      .replace(/[\u0300-\u036f]/g, "")        // elimina acentos
+      .replace(/ñ/g, "n")                     // ñ → n
+      .replace(/Ñ/g, "N")                     // Ñ → N
+      .trim();
+  }
+
+  // --- Observa nuevas entradas en una rama ---
+  async function observarRama(ruta) {
+    const refRuta = window.ref(ruta);
+    window.onChildAdded(refRuta, async (snap) => {
+      try {
+        if (!snap.exists()) return;
+        const id = snap.key;
+        const data = snap.val();
+        if (!data || !data.nombre) return;
+
+        // Esperar 2000 ms antes de limpiar
+        await new Promise(res => setTimeout(res, 2000));
+
+        const nombreOriginal = data.nombre;
+        const nombreLimpio = normalizarTexto(nombreOriginal);
+        if (nombreOriginal !== nombreLimpio) {
+          await window.update(window.ref(`${ruta}/${id}`), { nombre: nombreLimpio });
+          console.log(`Nombre corregido en ${ruta}/${id}: "${nombreOriginal}" → "${nombreLimpio}"`);
+        }
+      } catch (err) {
+        console.error("Error al limpiar nombre en", ruta, err);
+      }
+    });
+  }
+
+  // --- Activar escuchas en stock y sueltos ---
+  observarRama("/stock");
+  observarRama("/sueltos");
+
+  console.log("🔎 Limpieza automática de nombres activada (stock + sueltos)");
+})();
+
   // --- Inicialización ---
   (async () => {
     await loadCajeros();
