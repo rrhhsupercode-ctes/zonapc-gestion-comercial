@@ -212,7 +212,6 @@ function actualizarTabla() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-// --- Escuchar cambios descuento/recargo ---
 if (inputDescuento) inputDescuento.addEventListener("input", calcularPorcentajeFinal);
 if (inputRecargo) inputRecargo.addEventListener("input", calcularPorcentajeFinal);
 
@@ -231,56 +230,31 @@ async function agregarAlCarrito(nuevoItem) {
   actualizarTabla();
 }
 
-// --- Escaneo unificado para stock y sueltos ---
+// --- Escaneo unificado ---
 inputCodigoProducto.addEventListener("input", async () => {
   const codigo = inputCodigoProducto.value.trim();
   if (codigo.length !== 13) return;
 
-  // Verificar primero si es SUELTO
   const snapSuelto = await window.get(window.ref(`/sueltos/${codigo}`));
   if (snapSuelto.exists()) {
     const data = snapSuelto.val();
     if (data.kg > 0) {
-      agregarAlCarrito({
-        id: codigo,
-        nombre: data.nombre,
-        cant: 0.000,
-        precio: data.precio,
-        tipo: "sueltos"
-      });
-    } else {
-      alert("Stock insuficiente en sueltos");
-    }
+      agregarAlCarrito({ id: codigo, nombre: data.nombre, cant: 0.000, precio: data.precio, tipo: "sueltos" });
+    } else alert("Stock insuficiente en sueltos");
     inputCodigoProducto.value = "";
     return;
   }
 
-  // Si no era suelto, intentar STOCK
   const snapStock = await window.get(window.ref(`/stock/${codigo}`));
   if (snapStock.exists()) {
     const data = snapStock.val();
     if (data.cant > 0) {
-      agregarAlCarrito({
-        id: codigo,
-        nombre: data.nombre,
-        cant: 1,
-        precio: data.precio,
-        tipo: "stock"
-      });
-    } else {
-      alert("Stock insuficiente en stock");
-    }
-  } else {
-    alert("Producto no encontrado");
-  }
+      agregarAlCarrito({ id: codigo, nombre: data.nombre, cant: 1, precio: data.precio, tipo: "stock" });
+    } else alert("Stock insuficiente en stock");
+  } else alert("Producto no encontrado");
 
   inputCodigoProducto.value = "";
 });
-
-// --- Formateo precio simple ---
-function formatPrecioSimple(valor) {
-  return valor.toFixed(2).replace('.', ',');
-}
 
 // --- IMPRIMIR TICKET ---
 let iframeTicket = null;
@@ -289,7 +263,6 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
     const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
     const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
     let shopName = "TICKET", shopLocation = "Sucursal Nueva", shopCuit = "00000000000";
-
     try {
       const snap = await window.get(window.ref("/config"));
       if (snap.exists()) {
@@ -298,7 +271,7 @@ async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago)
         shopLocation = val.shopLocation || shopLocation;
         shopCuit = val.shopCuit || shopCuit;
       }
-    } catch (e) { console.error("Error al cargar configuración:", e); }
+    } catch (e) {}
 
     const iva = total * 0.21;
     const contenido = `
@@ -313,46 +286,30 @@ Pago: ${tipoPago}
 ==============================
 
 ${items.map(it => `  ${it.nombre}
-  $${formatPrecioSimple(it.precio)} (x${it.cant}) = $${formatPrecioSimple(it.precio * it.cant)}
+  $${it.precio.toFixed(2)} (x${it.cant}) = $${(it.precio * it.cant).toFixed(2)}
   =========================`).join("\n")}
 
-TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
+TOTAL: $${total.toFixed(2)}${porcentajeTexto}
 ==============================
-<span>Regimen de Transparencia Fiscal</span>
-<span>al Consumidor Ley 27.743</span>
-<span>IVA Contenido $${formatPrecioSimple(iva)}</span>
+IVA Contenido $${iva.toFixed(2)}
 ==============================
 `;
-
     if (!iframeTicket) {
       iframeTicket = document.createElement("iframe");
-      iframeTicket.id = "iframe-ticket";
       iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
       document.body.appendChild(iframeTicket);
     }
-
     const doc = iframeTicket.contentWindow.document;
     doc.open();
     doc.write(`<html><body style="font-family:monospace;font-size:10px;width:5cm;">${contenido}</body></html>`);
     doc.close();
-
-    setTimeout(() => {
-      const win = iframeTicket.contentWindow;
-      if (win) {
-        win.focus();
-        win.print();
-        setTimeout(() => { try { win.stop(); } catch {} }, 100);
-      }
-    }, 10);
-  } catch (err) {
-    console.error("Error al imprimir ticket:", err);
-  }
+    setTimeout(() => { iframeTicket.contentWindow.print(); }, 10);
+  } catch (err) {}
 }
 
 // --- COBRAR ---
 btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
-
   const modal = document.createElement("div");
   modal.style.cssText = `
     position:fixed;top:0;left:0;width:100%;height:100%;
@@ -364,9 +321,9 @@ btnCobrar.addEventListener("click", async () => {
       <div style="display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:10px 0;">
         <button data-pay="Efectivo">💵Efectivo</button>
         <button data-pay="Tarjeta">💳Tarjeta</button>
-        <button data-pay="QR">📱QR</button>
-        <button data-pay="Electronico">💻Electronico</button>
-        <button data-pay="Otro">🧾Otro</button>
+        <button data-pay="QR">📲QR</button>
+        <button data-pay="Electronico">📳Electronico</button>
+        <button data-pay="Otro">💰Otro</button>
       </div>
       <button id="cancelar-pago" style="background:red;color:#fff;padding:5px 15px;">Cancelar</button>
     </div>`;
@@ -389,22 +346,20 @@ btnCobrar.addEventListener("click", async () => {
       ultimoID++;
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
       const fecha = new Date();
-      const fechaStr = `${fecha.getDate().toString().padStart(2, '0')}/${(fecha.getMonth() + 1).toString().padStart(2, '0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2, '0')}:${fecha.getMinutes().toString().padStart(2, '0')})`;
-      const totalOriginal = carrito.reduce((a, b) => a + b.cant * b.precio, 0);
-      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0) / 100);
-
+      const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
+      const totalOriginal = carrito.reduce((a,b) => a+b.cant*b.precio,0);
+      const totalFinal = totalOriginal * (1 + (porcentajeFinal || 0)/100);
       await window.set(window.ref(`/movimientos/${ticketID}`), {
         ticketID, cajero: currentUser.id, items: carrito,
         total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        eliminado: false, porcentajeAplicado: porcentajeFinal || 0
+        eliminado: false, porcentajeAplicado: porcentajeFinal||0
       });
       await window.set(window.ref(`/historial/${ticketID}`), {
         ticketID, cajero: currentUser.id, items: carrito,
         total: totalFinal, fecha: fecha.toISOString(), tipo: tipoPago,
-        porcentajeAplicado: porcentajeFinal || 0
+        porcentajeAplicado: porcentajeFinal||0
       });
       await window.update(window.ref("/config"), { ultimoTicketID: ultimoID, ultimoTicketFecha: fechaHoy });
-
       for (const item of carrito) {
         const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
         if (snapItem.exists()) {
@@ -413,9 +368,7 @@ btnCobrar.addEventListener("click", async () => {
           else await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: data.kg - item.cant });
         }
       }
-
       imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
-
       setTimeout(() => {
         alert("VENTA FINALIZADA");
         carrito = [];
@@ -430,12 +383,14 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-// --- MODAL DE BÚSQUEDA UNIFICADO ---
+// --- MODAL DE BÚSQUEDA UNIFICADO (sin duplicados visuales) ---
 const modalBusqueda = document.getElementById("modal-busqueda");
 const btnBuscarProducto = document.getElementById("btn-buscar-producto");
 const btnCancelarBusqueda = document.getElementById("btn-cancelar-busqueda");
 const inputBusqueda = document.getElementById("input-busqueda");
 const tablaResultados = document.querySelector("#tabla-resultados tbody");
+
+let busquedaEnProgreso = false;
 
 btnBuscarProducto.addEventListener("click", () => {
   modalBusqueda.style.display = "flex";
@@ -451,56 +406,72 @@ btnCancelarBusqueda.addEventListener("click", () => {
 });
 
 inputBusqueda.addEventListener("input", async () => {
+  if (busquedaEnProgreso) return;
+  busquedaEnProgreso = true;
+
   const q = inputBusqueda.value.trim().toLowerCase();
   tablaResultados.innerHTML = "";
-  if (q.length < 2) return;
-
-  const stockSnap = await window.get(window.ref("/stock"));
-  const sueltosSnap = await window.get(window.ref("/sueltos"));
-  const res = [];
-
-  if (stockSnap.exists()) {
-    for (const [id, data] of Object.entries(stockSnap.val())) {
-      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
-    }
-  }
-  if (sueltosSnap.exists()) {
-    for (const [id, data] of Object.entries(sueltosSnap.val())) {
-      if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
-        res.push({ id, tipo: "sueltos", nombre: data.nombre, kg: data.kg || 0, precio: data.precio });
-    }
+  if (q.length < 2) {
+    busquedaEnProgreso = false;
+    return;
   }
 
-  res.forEach(item => {
-    const disponible = item.tipo === "stock" ? item.cant : item.kg;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${item.id}</td>
-      <td>${item.nombre}</td>
-      <td>${item.tipo}</td>
-      <td>${disponible}</td>
-      <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
-    tr.querySelector("button").addEventListener("click", async (e) => {
-      const id = e.currentTarget.dataset.id;
-      const tipo = e.currentTarget.dataset.tipo;
-      const snap = await window.get(window.ref(`/${tipo}/${id}`));
-      if (!snap.exists()) return alert("Producto no encontrado");
-      const data = snap.val();
-      const disponible = tipo === "stock" ? data.cant : data.kg;
-      if (disponible <= 0) return alert("Producto sin disponibilidad");
-      agregarAlCarrito({
-        id,
-        nombre: data.nombre,
-        cant: tipo === "stock" ? 1 : 0.000,
-        precio: data.precio,
-        tipo
+  try {
+    const [stockSnap, sueltosSnap] = await Promise.all([
+      window.get(window.ref("/stock")),
+      window.get(window.ref("/sueltos"))
+    ]);
+
+    const resultados = [];
+
+    if (stockSnap.exists()) {
+      for (const [id, data] of Object.entries(stockSnap.val())) {
+        if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+          resultados.push({ id, tipo: "stock", nombre: data.nombre, cant: data.cant || 0, precio: data.precio });
+      }
+    }
+
+    if (sueltosSnap.exists()) {
+      for (const [id, data] of Object.entries(sueltosSnap.val())) {
+        if (id.toLowerCase().includes(q) || (data.nombre || "").toLowerCase().includes(q))
+          resultados.push({ id, tipo: "sueltos", nombre: data.nombre, cant: data.kg || 0, precio: data.precio });
+      }
+    }
+
+    tablaResultados.innerHTML = "";
+
+    resultados.forEach(item => {
+      const disponible = item.cant;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${item.id}</td>
+        <td>${item.nombre}</td>
+        <td>${item.tipo}</td>
+        <td>${disponible}</td>
+        <td><button data-id="${item.id}" data-tipo="${item.tipo}" ${disponible <= 0 ? "disabled style='opacity:0.5;'" : ""}>Agregar</button></td>`;
+      tr.querySelector("button").addEventListener("click", async (e) => {
+        const id = e.currentTarget.dataset.id;
+        const tipo = e.currentTarget.dataset.tipo;
+        const snap = await window.get(window.ref(`/${tipo}/${id}`));
+        if (!snap.exists()) return alert("Producto no encontrado");
+        const data = snap.val();
+        const disponible = tipo === "stock" ? data.cant : data.kg;
+        if (disponible <= 0) return alert("Producto sin disponibilidad");
+        agregarAlCarrito({
+          id,
+          nombre: data.nombre,
+          cant: tipo === "stock" ? 1 : 0.000,
+          precio: data.precio,
+          tipo
+        });
+        modalBusqueda.style.display = "none";
+        modalBusqueda.classList.add("hidden");
       });
-      modalBusqueda.style.display = "none";
-      modalBusqueda.classList.add("hidden");
+      tablaResultados.appendChild(tr);
     });
-    tablaResultados.appendChild(tr);
-  });
+  } finally {
+    setTimeout(() => { busquedaEnProgreso = false; }, 150);
+  }
 });
 
 // --- MOVIMIENTOS ---
