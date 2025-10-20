@@ -565,26 +565,29 @@ function actualizarTotalesGeneralesSolo() {
   btnCobrar.classList.toggle("hidden", carrito.length === 0);
 }
 
-// ---------- IMPRIMIR TICKET ----------
-let iframeTicket = null;
+// --- IMPRIMIR TICKET ---
 async function imprimirTicket(ticketID, fecha, cajeroID, items, total, tipoPago) {
+  const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
+  const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+
+  let shopName = "TICKET";
+  let shopLocation = "Sucursal Nueva";
+  let shopCuit = "00000000000";
   try {
-    const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
-    const porcentajeTexto = porcentajeFinal !== 0 ? ` (${signo}${Math.abs(porcentajeFinal)}%)` : "";
+    const snap = await window.get(window.ref("/config"));
+    if (snap.exists()) {
+      const val = snap.val();
+      shopName = val.shopName || "TICKET";
+      shopLocation = val.shopLocation || "Sucursal Nueva";
+      shopCuit = val.shopCuit || "00000000000";
+    }
+  } catch (e) {
+    console.error("Error al cargar configuración de tienda:", e);
+  }
 
-    let shopName = "TICKET", shopLocation = "Sucursal Nueva", shopCuit = "00000000000";
-    try {
-      const snap = await window.get(window.ref("/config"));
-      if (snap.exists()) {
-        const val = snap.val();
-        shopName = val.shopName || shopName;
-        shopLocation = val.shopLocation || shopLocation;
-        shopCuit = val.shopCuit || shopCuit;
-      }
-    } catch (e) { console.error("Error al cargar configuración de tienda:", e); }
+  const iva = total * 0.21;
 
-    const iva = total * 0.21;
-    const contenido = `
+  const contenido = `
 *** CONSUMIDOR FINAL ***
 ${shopName.toUpperCase()}
 ${shopLocation}
@@ -596,7 +599,7 @@ Pago: ${tipoPago}
 ==============================
 
 ${items.map(it => `  ${it.nombre}
-  $${formatPrecioSimple(it.precio)} (x${it.tipo === "stock" ? it.cant : Number(it.cant).toFixed(3)}) = $${formatPrecioSimple(it.precio * it.cant)}
+  $${formatPrecioSimple(it.precio)} (x${it.cant}) = $${formatPrecioSimple(it.precio * it.cant)}
   =========================`).join("\n")}
 
 TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
@@ -604,32 +607,53 @@ TOTAL: $${formatPrecioSimple(total)}${porcentajeTexto}
 <span>Regimen de Transparencia Fiscal</span>
 <span>al Consumidor Ley 27.743</span>
 <span>IVA Contenido $${formatPrecioSimple(iva)}</span>
+<span>Otros impuestos nacionales </span>
+<span>Indirectos</span>
+<span>Imp. Internos importados $0,00</span>
+<span>Los impuestos informados son </span>
+<span>solo los que corresponden </span>
+<span>a nivel nacional</span>
 ==============================
 `;
 
-    if (!iframeTicket) {
-      iframeTicket = document.createElement("iframe");
-      iframeTicket.id = "iframe-ticket";
-      iframeTicket.style.cssText = "position:fixed;width:0;height:0;border:0;";
-      document.body.appendChild(iframeTicket);
-    }
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
 
-    const doc = iframeTicket.contentWindow.document;
-    doc.open();
-    doc.write(`<html><body style="font-family:monospace;font-size:10px;width:5cm;">${contenido}</body></html>`);
-    doc.close();
-
-    setTimeout(() => {
-      const win = iframeTicket.contentWindow;
-      if (win) {
-        win.focus();
-        win.print();
-        setTimeout(() => { try { win.stop(); } catch {} }, 100);
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+<html>
+  <head>
+    <style>
+      @page { size: auto; margin: 0; }
+      body {
+        font-family: monospace;
+        font-size: 10px;
+        width: 5cm;
+        margin: 0;
+        padding: 4px;
+        white-space: pre-wrap;
+        line-height: 1.4;
+        text-align: center;
       }
-    }, 10);
-  } catch (err) {
-    console.error("Error al imprimir ticket:", err);
-  }
+      body span.sep { display: block; text-align: center; }
+      span { display:block; text-align:center; }
+    </style>
+  </head>
+  <body>
+${contenido}
+  </body>
+</html>
+  `);
+  doc.close();
+
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+  setTimeout(() => iframe.remove(), 2000);
 }
 
 // ---------- COBRAR ----------
