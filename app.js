@@ -204,8 +204,7 @@ async function agregarAlCarrito(nuevoItem) {
   if (idx >= 0) {
     carrito[idx].cant += nuevoItem.cant;
   } else {
-    // Guardamos precio unitario en item.precio (stock = por unidad, sueltos = $/kg)
-    carrito.push({ ...nuevoItem, precio: data.precio });
+    carrito.push({ ...nuevoItem, precio: data.precio }); // precio = $/unidad ó $/kg
   }
   actualizarTabla();
 }
@@ -225,10 +224,8 @@ async function validarStock(item) {
 // --- Tabla de cobro (editable) ---
 function actualizarTabla() {
   tablaCobro.innerHTML = "";
-  let total = 0;
 
   carrito.forEach((item, idx) => {
-    // Para sueltos vamos a permitir editar KG y también el TOTAL (importe) con acople bidireccional
     const esSuelto = item.tipo === "sueltos";
     const totalItem = item.cant * item.precio;
 
@@ -242,10 +239,10 @@ function actualizarTabla() {
       <td>${item.nombre}</td>
       <td>
         ${esSuelto
-          ? `<span>$/${"kg"}</span>`
+          ? `<span class="precio-unit">${"$"}${item.precio.toFixed(2)} /kg</span>`  <!-- FIX: mostrar $/kg -->
           : `<input type="number" step="0.01" value="${item.precio.toFixed(2)}" disabled>`}
       </td>
-      <td>
+      <td class="total-cell">
         ${esSuelto
           ? `<input type="number" step="0.01" min="0" value="${totalItem.toFixed(2)}">`
           : `${totalItem.toFixed(2)}`}
@@ -253,10 +250,10 @@ function actualizarTabla() {
       <td><button data-idx="${idx}">❌</button></td>
     `;
 
-    const [inputCant]  = tr.querySelectorAll("input");
-    const btnDel       = tr.querySelector("button");
-    const inputPrecioU = esSuelto ? null : tr.querySelectorAll("input")[1];
-    const inputTotalSu = esSuelto ? tr.querySelectorAll("input")[1] : null;
+    const inputCant   = tr.querySelectorAll("input")[0]; // siempre existe al inicio de la fila
+    const btnDel      = tr.querySelector("button");
+    const totalCell   = tr.querySelector(".total-cell");
+    const inputTotalSu= esSuelto ? totalCell.querySelector("input") : null;
 
     // --- Cambios en cantidad ---
     inputCant.addEventListener("input", async () => {
@@ -268,31 +265,25 @@ function actualizarTabla() {
       item.cant = esSuelto ? parseFloat(val.toFixed(3)) : Math.floor(val);
       await validarStock(item);
 
-      if (esSuelto && inputTotalSu) {
+      // FIX: actualizar total de la fila en STOCK
+      if (!esSuelto) {
+        totalCell.textContent = (item.cant * item.precio).toFixed(2);
+      } else if (inputTotalSu) {
         inputTotalSu.value = (item.cant * item.precio).toFixed(2);
       }
       renderTotales();
     });
 
-    // --- Para sueltos: acople TOTAL <-> KG (usa item.precio como $/kg) ---
+    // --- Para sueltos: acople TOTAL <-> KG ---
     if (esSuelto && inputTotalSu) {
       inputTotalSu.addEventListener("input", async () => {
         let totalNuevo = parseFloat(inputTotalSu.value);
         if (isNaN(totalNuevo) || totalNuevo < 0) totalNuevo = 0;
-        // Recalcular KG según total ingresado y precio unitario ($/kg)
         const kgNuevo = item.precio > 0 ? totalNuevo / item.precio : 0;
         item.cant = Math.max(0, Math.min(99, parseFloat(kgNuevo.toFixed(3))));
         await validarStock(item);
         inputCant.value = item.cant.toFixed(3);
         renderTotales();
-      });
-    }
-
-    // (Stock: precio unidad bloqueado. Si quisieras liberar, quitar "disabled" arriba)
-    if (inputPrecioU) {
-      inputPrecioU.addEventListener("input", () => {
-        // Mantener deshabilitado: no cambia
-        inputPrecioU.value = item.precio.toFixed(2);
       });
     }
 
@@ -303,19 +294,17 @@ function actualizarTabla() {
     });
 
     tablaCobro.appendChild(tr);
-    total += totalItem;
   });
 
+  renderTotales();
   function renderTotales() {
-    let t = carrito.reduce((a, it) => a + it.cant * it.precio, 0);
-    const totalMod = t * (1 + porcentajeFinal / 100);
+    const total = carrito.reduce((a, it) => a + it.cant * it.precio, 0);
+    const totalMod = total * (1 + porcentajeFinal / 100);
     const signo = porcentajeFinal > 0 ? "+" : porcentajeFinal < 0 ? "-" : "";
     const pTxt = porcentajeFinal !== 0 ? ` <small>(${signo}${Math.abs(porcentajeFinal)}%)</small>` : "";
     totalDiv.innerHTML = `TOTAL: <span style="color:red; font-weight:bold;">$${totalMod.toFixed(2)}</span>${pTxt}`;
     btnCobrar.classList.toggle("hidden", carrito.length === 0);
   }
-
-  renderTotales();
 }
 
 // --- Escaneo unificado por código (stock/sueltos) ---
@@ -331,7 +320,7 @@ inputCodigoProducto.addEventListener("input", async () => {
       await agregarAlCarrito({
         id: codigo,
         nombre: data.nombre,
-        cant: 0.000,            // como pediste
+        cant: 0.000,            // suelto entra con 0.000 kg
         precio: data.precio,
         tipo: "sueltos"
       });
@@ -364,7 +353,7 @@ inputCodigoProducto.addEventListener("input", async () => {
   inputCodigoProducto.value = "";
 });
 
-// --- SUELTOS: KG <-> Precio “rápido” (inputs superiores) ---
+// --- SUELTOS: inputs superiores KG <-> Precio ---
 async function actualizarPrecioUnitario() {
   let id = cobroSueltos.value || inputCodigoSuelto.value.trim();
   if (!id) return;
@@ -596,12 +585,14 @@ btnCobrar.addEventListener("click", async () => {
   });
 });
 
-// --- Submit automático stock/sueltos por código superior ---
-inputCodigoSuelto && inputCodigoSuelto.addEventListener("input", () => {
-  if (inputCodigoSuelto.value.trim().length === 13) { btnAddSuelto.click(); inputCodigoSuelto.value = ""; }
-});
+// --- Submit automático por código sueltos (input dedicado) ---
+if (inputCodigoSuelto) {
+  inputCodigoSuelto.addEventListener("input", () => {
+    if (inputCodigoSuelto.value.trim().length === 13) { btnAddSuelto.click(); inputCodigoSuelto.value = ""; }
+  });
+}
 
-// --- MODAL DE BÚSQUEDA UNIFICADO (con anti-duplicados) ---
+// --- MODAL DE BÚSQUEDA UNIFICADO (anti-duplicados) ---
 const modalBusqueda = document.getElementById("modal-busqueda");
 const btnBuscarProducto = document.getElementById("btn-buscar-producto");
 const btnCancelarBusqueda = document.getElementById("btn-cancelar-busqueda");
@@ -666,7 +657,6 @@ inputBusqueda.addEventListener("input", async () => {
       }
     }
 
-    // Render único
     const frag = document.createDocumentFragment();
     res.forEach(item => {
       const tr = document.createElement("tr");
@@ -687,7 +677,7 @@ inputBusqueda.addEventListener("input", async () => {
         agregarAlCarrito({
           id,
           nombre: data.nombre,
-          cant: tipo === "stock" ? 1 : 0.000, // sueltos agregado con 0.000 kg
+          cant: tipo === "stock" ? 1 : 0.000,
           precio: data.precio,
           tipo
         });
@@ -703,6 +693,7 @@ inputBusqueda.addEventListener("input", async () => {
     busquedaEnProgreso = false;
   }
 });
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
