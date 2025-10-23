@@ -7,7 +7,7 @@
 }
 
 body {
-  background: #f0f2f5; /* gris muy claro, no quema la vista */
+  background: #e6e8eb;
   color: #2d3436;
   line-height: 1.5;
   transition: filter 0.25s ease;
