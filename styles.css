@@ -6,19 +6,18 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* === BODY GENERAL === */
 body {
-  background: #e6e8eb; /* gris suave más cálido */
+  background: #f0f2f5; /* gris muy claro, no quema la vista */
   color: #2d3436;
-  line-height: 1.6;
+  line-height: 1.5;
   transition: filter 0.25s ease;
 }
 
 /* === HEADER === */
 header {
   background: #264653;
-  padding: 2px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+  padding: 5px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
   text-align: center;
 }
 
@@ -28,23 +27,20 @@ nav {
   justify-content: center;
 }
 
-/* === BOTONES DEL HEADER === */
 .nav-btn {
-  background: #264653;      /* igual que botones principales */
-  color: #f4a261;
+  background: #636e72;
+  color: #fff;
   border: none;
-  border-radius: 6px;
   padding: 10px 16px;
+  border-radius: 6px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 2s ease;
+  transition: all 0.25s ease;
 }
 
-/* Hover igual que los principales */
 .nav-btn:hover {
-  background: #f4a261;
-  color: #264653;
-  transform: scale(1.07);
+  background: #00b894;
+  transform: scale(1.05);
 }
 
 /* === MAIN === */
@@ -57,10 +53,10 @@ main {
 /* === SECCIONES === */
 section {
   margin-top: 20px;
-  background: #f8f9fa; /* gris muy claro, no blanco puro */
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  background: #ffffff;
+  padding: 18px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .hidden {
@@ -69,8 +65,8 @@ section {
 
 h2 {
   margin-bottom: 15px;
-  color: #264653;
-  border-left: 5px solid #2a9d8f;
+  color: #2d3436;
+  border-left: 5px solid #00b894;
   padding-left: 10px;
 }
 
@@ -80,12 +76,73 @@ label {
   margin-bottom: 10px;
 }
 
-input, select {
-  padding: 9px 10px;
+input, select, button {
+  padding: 8px 10px;
   margin-top: 4px;
-  border: 1px solid #bbb;
+  border: 1px solid #ccc;
   border-radius: 6px;
-  background-color: #fdfdfd;
+}
+
+button {
+  cursor: pointer;
+  font-weight: bold;
+  border: none;
+  transition: all 0.25s ease;
+}
+
+/* === BOTONES GENERALES === */
+button:hover {
+  transform: scale(1.05);
+}
+
+/* Botones de acción principales */
+.btn-ver {
+  background: #00b894;
+  color: #fff;
+}
+.btn-ver:hover {
+  background: #55efc4;
+}
+
+.btn-eliminar {
+  background: #d63031;
+  color: #fff;
+}
+.btn-eliminar:hover {
+  background: #ff7675;
+}
+
+.btn-guardar {
+  background: #0984e3;
+  color: #fff;
+}
+.btn-guardar:hover {
+  background: #74b9ff;
+}
+
+.btn-restaurar {
+  background: #e17055;
+  color: #fff;
+}
+.btn-restaurar:hover {
+  background: #fab1a0;
+}
+
+#btn-cobrar {
+  margin-top: 15px;
+  background: #00b894;
+  color: #fff;
+}
+#btn-cobrar:hover {
+  background: #55efc4;
+}
+
+#btn-tirar-z {
+  background: #d63031;
+  color: #fff;
+}
+#btn-tirar-z:hover {
+  background: #ff7675;
 }
 
 /* === TABLAS === */
@@ -95,7 +152,6 @@ table {
   margin-top: 15px;
   border-radius: 8px;
   overflow: hidden;
-  background: #fdfdfd;
 }
 
 th, td {
@@ -105,12 +161,12 @@ th, td {
 }
 
 th {
-  background: #dce3e9;
+  background: #dfe6e9;
   font-weight: bold;
 }
 
 tbody tr:nth-child(even) {
-  background: #f2f4f6;
+  background: #f9f9f9;
 }
 
 /* === TOTAL COBRAR === */
@@ -118,7 +174,7 @@ tbody tr:nth-child(even) {
   font-size: 20px;
   font-weight: bold;
   margin-top: 10px;
-  color: #e63946;
+  color: #d63031;
 }
 
 /* === MODALES === */
@@ -128,43 +184,260 @@ tbody tr:nth-child(even) {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0,0,0,0.35);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 999;
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(4px); /* solo el fondo borroso */
 }
 
+/* El modal en sí no se verá borroso */
 .modal {
-  background: #f8f9fa;
-  padding: 24px;
+  background: #fff;
+  padding: 22px;
   border-radius: 12px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
   min-width: 320px;
   max-width: 500px;
   width: 90%;
   text-align: center;
+  position: relative;
   transition: transform 0.25s ease, opacity 0.25s ease;
+  backdrop-filter: none; /* ¡IMPORTANTE! */
+}
+
+/* Para modales creados vía JS inline style */
+#admin-modal,
+.modal-inline-js {
+  backdrop-filter: none !important;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal h3 {
+  margin-bottom: 12px;
+}
+
+.modal button {
+  margin: 6px;
 }
 
 /* === MENSAJES === */
-.msg-exito { color: #2a9d8f; }
-.msg-error { color: #e63946; }
-.msg-alerta { color: #f4a261; }
+#login-msg, #config-msg {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: bold;
+}
+
+/* Colores de feedback */
+.msg-exito {
+  color: #00b894; /* verde éxito */
+}
+.msg-error {
+  color: #d63031; /* rojo error */
+}
+.msg-alerta {
+  color: #e17055; /* naranja advertencia */
+}
+
+/* === IMPRESIÓN TICKET === */
+@media print {
+  /* Todo el ticket tendrá un ancho máximo de 5cm */
+  body {
+    font-family: monospace !important;
+    font-size: 10px !important;
+    color: #000 !important;
+    width: 5cm !important;
+    margin: 0 !important;
+    padding: 3px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Contenedor principal del ticket */
+  .ticket-container {
+    width: 100% !important;
+    max-width: 5cm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+  }
+
+  /* Cabecera */
+  .ticket-header {
+    text-align: center !important;
+    font-weight: bold !important;
+    margin-bottom: 2px !important;
+    border-bottom: 0.5px solid #000 !important;
+    padding-bottom: 1px !important;
+  }
+
+  .ticket-subheader {
+    text-align: center !important;
+    font-weight: normal !important;
+    margin-bottom: 2px !important;
+  }
+
+  .ticket-info {
+    text-align: left !important;
+    font-size: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Items */
+  .ticket-items {
+    text-align: left !important;
+    margin: 2px 0 !important;
+    line-height: 1.2 !important;
+  }
+
+  .ticket-item {
+    text-align: left !important;
+    border-bottom: 0.5px solid #000 !important;
+    padding: 1px 0 !important;
+    margin: 0 !important;
+    display: block !important;
+    word-wrap: break-word !important;
+  }
+
+  /* Total */
+  .ticket-total {
+    text-align: center !important;
+    font-weight: bold !important;
+    font-size: 12px !important;
+    margin: 2px 0 0 0 !important;
+    padding-top: 2px !important;
+    border-top: 0.5px solid #000 !important;
+  }
+
+  /* Espacio final */
+  .ticket-footer-space {
+    height: 10px !important;
+  }
+
+  /* Forzar que todo el ticket se imprima correctamente */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
 
 /* === HISTORIAL === */
-#tabla-historial th { background: #ffeaa7; }
+#historial-info {
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: #636e72;
+}
 
-/* === SCROLL TABLA MODAL === */
+#tabla-historial th {
+  background: #ffeaa7;
+}
+
+/*  =====  Botones de paginado de HISTORIAL  =====  */
+/* Contenedor de los botones y label del historial */
+#historial-paginador {
+  display: flex;
+  justify-content: center;   /* centra horizontalmente */
+  align-items: center;       /* alinea verticalmente */
+  gap: 10px;                 /* espacio entre botones y label */
+  margin: 10px 0;            /* separación arriba y abajo */
+}
+
+/* Botones prev / next */
+#historial-paginador button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#historial-paginador button:hover {
+  background-color: #0056b3;
+}
+
+/* Texto del día */
+#hist-dia-label {
+  font-weight: bold;
+  font-size: 14px;
+  min-width: 120px;   /* evita que se muevan los botones si el texto cambia */
+  text-align: center;
+}
+
+/*===  Texto BANNER PRINCIPAL  ===*/
+#app-title {
+  text-align: center;        /* Centra el texto */
+  font-size: 14px;           /* Tamaño pequeño */
+  font-weight: bold;         /* Negrita */
+  letter-spacing: 0px;       /* Espaciado entre letras */
+  color: #fff;               /* Color de texto */
+  margin: 1px 0;            /* Separación arriba y abajo */
+}
+
+/*===  Tamaño de los Emojis  ===*/
+.emoji {
+  display: inline-block;
+  font-size: 24px;
+  margin: 0 0.5rem 0 0; /* ajusta separación si hace falta */
+  vertical-align: middle;
+}
+
+/*===  Info técnica tipo BANNER  ===*/
+blockquote {
+  background: #f0f0f0;
+  border-left: 5px solid #f4a261;
+  padding: 5px 5px;
+  margin: 5px auto;
+  width: fit-content;
+  font-style: italic;
+  border-radius: 6px;
+  color: #333;
+  font-size:12px;
+}
+
+/* ===========================
+   EFECTO PARPADEO ROJO (3s)
+   =========================== */
+@keyframes flashRojo {
+  0%   { background-color: #ff4d4d; }
+  25%  { background-color: #ff9999; }
+  50%  { background-color: #ffffff; }
+  75%  { background-color: #ff9999; }
+  100% { background-color: #ffffff; }
+}
+
+.flash-rojo {
+  animation: flashRojo 3s ease-in-out;
+  transition: background-color 0.3s ease-in-out;
+}
+
+/* ===== Scroll vertical en el modal de búsqueda ===== */
+#modal-busqueda {
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+
+#modal-busqueda table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 700px; /* opcional, ajustá según tu diseño */
+}
+
+/* --- Clave: contenedor con scroll vertical --- */
 #modal-busqueda tbody {
   display: block;
-  max-height: calc(10 * 2.4em);
+  max-height: calc(10 * 2.4em); /* ≈10 filas visibles */
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-/* Mantener encabezado fijo */
+/* Mantener encabezado fijo y columnas alineadas */
 #modal-busqueda thead,
 #modal-busqueda tbody tr {
   display: table;
@@ -172,45 +445,11 @@ tbody tr:nth-child(even) {
   table-layout: fixed;
 }
 
-/* === BOTONES PRINCIPALES (por ID) === */
-#btn-login,
-#btn-cobrar,
-#btn-tirar-z,
-#agregar-stock,
-#btn-agregar-suelto,
-#agregar-cajero,
-#guardar-config {
-  background: #264653;      /* fondo principal */
-  color: #f4a261;           /* texto principal */
-  border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.5s ease;  /* animación de color y escala */
-}
-
-/* Efecto hover (inversión de colores + ampliación) */
-#btn-login:hover,
-#btn-cobrar:hover,
-#btn-tirar-z:hover,
-#agregar-stock:hover,
-#btn-agregar-suelto:hover,
-#agregar-cajero:hover,
-#guardar-config:hover {
-  background: #f4a261;
-  color: #264653;
-  transform: scale(1.07);
-}
-
-/* === BOTONES SECUNDARIOS (por ID) === */
-#btn-buscar-producto,
-#btn-cancelar-busqueda,
-#buscar-stock,
-#sueltos-btn-decr,
-#sueltos-btn-incr,
-#btn-buscar-suelto,
-#btn-restaurar {
-  background: #eae2b7; /* fondo secundario */
-  color: #f4a261;      /* texto secundario */
+/* Estilo visual */
+#modal-busqueda th,
+#modal-busqueda td {
+  padding: 6px;
+  text-align: left;
+  border-bottom: 1px solid #ccc;
+  font-size: 14px;
 }
