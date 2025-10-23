@@ -88,31 +88,6 @@ input, select, button {
   background-color: #fdfdfd;
 }
 
-/* === BOTONES GENERALES === */
-button {
-  background: #264653;      /* fondo principal */
-  color: #f4a261;           /* texto principal */
-  border: none;
-  border-radius: 6px;
-  padding: 10px 16px;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 2s ease;  /* animación de color y escala */
-}
-
-/* Efecto hover (inversión de colores + ampliación) */
-button:hover {
-  background: #f4a261;
-  color: #264653;
-  transform: scale(1.07);
-}
-
-/* === BOTONES SECUNDARIOS === */
-.btn-secundario {
-  background: #eae2b7; /* fondo secundario */
-  color: #f4a261;      /* texto secundario */
-}
-
 /* === TABLAS === */
 table {
   width: 100%;
@@ -195,4 +170,47 @@ tbody tr:nth-child(even) {
   display: table;
   width: 100%;
   table-layout: fixed;
+}
+
+/* === BOTONES PRINCIPALES (por ID) === */
+#btn-login,
+#btn-cobrar,
+#btn-tirar-z,
+#agregar-stock,
+#btn-agregar-suelto,
+#agregar-cajero,
+#guardar-config {
+  background: #264653;      /* fondo principal */
+  color: #f4a261;           /* texto principal */
+  border: none;
+  border-radius: 6px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 2s ease;  /* animación de color y escala */
+}
+
+/* Efecto hover (inversión de colores + ampliación) */
+#btn-login:hover,
+#btn-cobrar:hover,
+#btn-tirar-z:hover,
+#agregar-stock:hover,
+#btn-agregar-suelto:hover,
+#agregar-cajero:hover,
+#guardar-config:hover {
+  background: #f4a261;
+  color: #264653;
+  transform: scale(1.07);
+}
+
+/* === BOTONES SECUNDARIOS (por ID) === */
+#btn-buscar-producto,
+#btn-cancelar-busqueda,
+#buscar-stock,
+#sueltos-btn-decr,
+#sueltos-btn-incr,
+#btn-buscar-suelto,
+#btn-restaurar {
+  background: #eae2b7; /* fondo secundario */
+  color: #f4a261;      /* texto secundario */
 }
