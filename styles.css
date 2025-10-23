@@ -80,7 +80,7 @@ label {
   margin-bottom: 10px;
 }
 
-input, select, button {
+input, select {
   padding: 9px 10px;
   margin-top: 4px;
   border: 1px solid #bbb;
@@ -187,7 +187,7 @@ tbody tr:nth-child(even) {
   padding: 10px 16px;
   cursor: pointer;
   font-weight: bold;
-  transition: all 1s ease;  /* animación de color y escala */
+  transition: all 0.5s ease;  /* animación de color y escala */
 }
 
 /* Efecto hover (inversión de colores + ampliación) */
