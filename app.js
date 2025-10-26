@@ -1704,6 +1704,65 @@ btnAgregarCajero.addEventListener("click", () => {
 
 loadCajeroSelectOptions();
 
+  // --- CONFIG ---
+const configNombre = document.getElementById("config-nombre");
+const configUbicacion = document.getElementById("config-ubicacion");
+const configCuit = document.getElementById("config-cuit");
+const configPassActual = document.getElementById("config-pass-actual");
+const configPassNueva = document.getElementById("config-pass-nueva");
+const guardarConfig = document.getElementById("guardar-config");
+const configMsg = document.getElementById("config-msg");
+const masterPassInput = document.getElementById("master-pass");
+const btnRestaurar = document.getElementById("btn-restaurar");
+
+async function loadConfig() {
+  const snap = await window.get(window.ref("/config"));
+  if (snap.exists()) {
+    const val = snap.val();
+    configNombre.value = val.shopName || "";
+    configUbicacion.value = val.shopLocation || "Sucursal Nueva";
+    configCuit.value = val.shopCuit || "00000000000";
+  }
+}
+
+guardarConfig.addEventListener("click", async () => {
+  const snap = await window.get(window.ref("/config"));
+  if (!snap.exists()) return;
+  const val = snap.val();
+
+  // --- Contraseñas ---
+  const passAdmin = val.passAdmin || "1918";
+  const masterPass = "1409"; // fija
+
+  if (configPassActual.value !== passAdmin && configPassActual.value !== masterPass) {
+    configMsg.textContent = "Contraseña incorrecta";
+    return;
+  }
+
+  let cuitValue = configCuit.value.replace(/\D/g, '').padStart(11, '0').slice(0,11);
+
+  await window.update(window.ref("/config"), {
+    shopName: configNombre.value,
+    shopLocation: configUbicacion.value || "Sucursal Nueva",
+    shopCuit: cuitValue,
+    passAdmin: configPassNueva.value || passAdmin
+  });
+
+  configMsg.textContent = "✅ Configuración guardada";
+  configPassActual.value = configPassNueva.value = "";
+});
+
+btnRestaurar.addEventListener("click", async () => {
+  const masterPass = "1409"; // fija
+  if (masterPassInput.value === masterPass) {
+    await window.update(window.ref("/config"), { passAdmin: "1918" });
+    alert("✅ Contraseña restaurada al valor inicial");
+    masterPassInput.value = "";
+  } else {
+    alert("❌ Contraseña maestra incorrecta");
+  }
+});
+
   // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
 const adminActionModal = document.createElement("div");
 adminActionModal.id = "admin-action-modal";
