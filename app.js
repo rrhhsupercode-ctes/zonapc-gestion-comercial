@@ -749,10 +749,17 @@ const gastosDiaActual = document.getElementById("gastos-dia-actual");
 let gastosArray = [];
 let diaActual = new Date();
 
+// --- Fecha visible en barra superior ---
+function mostrarFechaActual() {
+  if (!gastosDiaActual) return;
+  gastosDiaActual.textContent = `${String(diaActual.getDate()).padStart(2,"0")}/${String(diaActual.getMonth()+1).padStart(2,"0")}/${diaActual.getFullYear()}`;
+}
+
 // --- ACCESO A GASTOS (USANDO showAdminActionModal) ---
 document.querySelector('button[data-section="gastos"]').addEventListener("click", () => {
+  // No ocultamos secciones aún; solo abrimos modal admin. Si cancela, nos quedamos donde está o redirigimos a COBRAR.
   showAdminActionModal(async () => {
-    // Mostrar solo la sección GASTOS
+    // Mostrar solo la sección GASTOS una vez validado
     document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
     document.getElementById("gastos").classList.remove("hidden");
     gastosContenido.classList.remove("hidden");
@@ -761,7 +768,7 @@ document.querySelector('button[data-section="gastos"]').addEventListener("click"
     const snapG = await window.get(window.ref("/gastos"));
     if (snapG.exists()) {
       const hoy = new Date();
-      const limite = 45 * 24 * 60 * 60 * 1000;
+      const limite = 45 * 24 * 60 * 60 * 1000; // 45 días
       const data = snapG.val();
       for (const [id, g] of Object.entries(data)) {
         if (g.fecha) {
@@ -773,57 +780,35 @@ document.querySelector('button[data-section="gastos"]').addEventListener("click"
       }
     }
 
-    // Cargar los datos del día actual
+    // Cargar y mostrar
     loadGastosDia(diaActual);
     mostrarFechaActual();
   });
 });
 
-    // 🔥 LIMPIEZA AUTOMÁTICA DE GASTOS ANTIGUOS (más de 45 días)
-    const limpiarGastosAntiguos = async () => {
-      const snapG = await window.get(window.ref("/gastos"));
-      if (!snapG.exists()) return;
-      const hoy = new Date();
-      const limite = 45 * 24 * 60 * 60 * 1000;
-      const data = snapG.val();
-
-      for (const [id, g] of Object.entries(data)) {
-        if (g.fecha) {
-          const fechaGasto = new Date(g.fecha);
-          if (hoy - fechaGasto > limite) {
-            await window.remove(window.ref(`/gastos/${id}`));
-          }
-        }
-      }
-    };
-
-    await limpiarGastosAntiguos();
-    loadGastosDia(diaActual);
-    mostrarFechaActual();
-  } else {
-    alert("❌ Contraseña incorrecta");
-    document.querySelector('button[data-section="cobro"]').click();
-  }
-});
+// Forzar redirección a COBRAR cuando el usuario cancela el modal admin (si existe el botón global del modal)
+if (window.adminActionCancelBtn) {
+  adminActionCancelBtn.addEventListener("click", () => {
+    const btnCobro = document.querySelector('button[data-section="cobro"]');
+    if (btnCobro) btnCobro.click();
+  });
+}
 
 // --- FORMATEO ---
 function formatFecha(iso) {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
 }
-
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
   return `$${entero.toLocaleString("es-AR",{minimumIntegerDigits:1})},${String(dec).padStart(2,"0")}`;
 }
-
 function formatearEntero() {
   let raw = gastoEntero.value.replace(/\D/g,"").slice(0,7);
   let val = parseInt(raw)||0;
   gastoEntero.value = val.toLocaleString("es-AR");
 }
-
 gastoEntero.addEventListener("input",formatearEntero);
 gastoCentavos.addEventListener("input",()=>{
   let v=parseInt(gastoCentavos.value)||0;
@@ -850,12 +835,12 @@ async function loadGastosDia(fechaBase){
   const snap=await window.get(window.ref("/gastos"));
   tablaGastos.innerHTML="";
   gastosArray=[];
-  if(!snap.exists())return;
+  if(!snap.exists()) { calcularTotalDia(); return; }
+  const base = fechaBase.toISOString().split("T")[0];
   gastosArray=Object.entries(snap.val())
     .filter(([id,g])=>{
-      const f=new Date(g.fecha);
-      const base=fechaBase.toISOString().split("T")[0];
-      return f.toISOString().startsWith(base);
+      if(!g || !g.fecha) return false;
+      return g.fecha.startsWith(base);
     })
     .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
   renderGastosDia();
@@ -868,7 +853,7 @@ function renderGastosDia(){
     tr.innerHTML=`
       <td>${formatPrecio(g.monto||0)}</td>
       <td>${formatFecha(g.fecha)}</td>
-      <td>${g.descripcion}</td>
+      <td>${g.descripcion||""}</td>
       <td>
         <button data-imp-id="${id}">🖨️</button>
         <button data-del-id="${id}">❌</button>
@@ -889,27 +874,24 @@ function calcularTotalDia(){
   const base=diaActual.toISOString().split("T")[0];
   let total=0;
   gastosArray.forEach(([_,g])=>{
-    if(!g.eliminado&&g.fecha&&g.fecha.startsWith(base))total+=g.monto||0;
+    if(!g.eliminado && g.fecha && g.fecha.startsWith(base)) total+=g.monto||0;
   });
   const d=diaActual;
-  gastosTotalDia.textContent=`Gastos del ${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}/${d.getFullYear()}: ${formatPrecio(total)}`;
+  gastosTotalDia.textContent=`Gastos del ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}: ${formatPrecio(total)}`;
 }
 
 // --- DÍA ANTERIOR / SIGUIENTE ---
 btnDiaPrev.addEventListener("click", () => {
   const hoy = new Date();
   const diff = (hoy - diaActual) / (1000 * 60 * 60 * 24);
-  // Solo permite retroceder hasta 45 días atrás
   if (diff < 45) {
     diaActual.setDate(diaActual.getDate() - 1);
     loadGastosDia(diaActual);
     mostrarFechaActual();
   }
 });
-
 btnDiaNext.addEventListener("click", () => {
   const hoy = new Date();
-  // No permite avanzar más allá del día actual
   if (diaActual.toDateString() !== hoy.toDateString()) {
     diaActual.setDate(diaActual.getDate() + 1);
     loadGastosDia(diaActual);
@@ -928,7 +910,7 @@ function imprimirGasto(id,g){
     <p><b>ID:</b> ${id}</p>
     <p><b>Monto:</b> ${formatPrecio(g.monto)}</p>
     <p><b>Fecha:</b> ${formatFecha(g.fecha)}</p>
-    <p><b>Descripción:</b> ${g.descripcion}</p>
+    <p><b>Descripción:</b> ${g.descripcion||""}</p>
     <hr><p>Zona PC - Gestión Comercial</p>
     <script>window.print();setTimeout(()=>window.close(),100);</script>
     </body></html>`);doc.close();
@@ -944,7 +926,6 @@ function ocultarModalImprimir() {
   rangoDesde.value = "";
   rangoHasta.value = "";
 }
-
 // Asegura que el modal esté oculto al iniciar
 ocultarModalImprimir();
 
@@ -979,6 +960,7 @@ btnMostrarRango.addEventListener("click", async () => {
 
   const todos = Object.entries(snap.val())
     .filter(([id, g]) => {
+      if(!g || !g.fecha) return false;
       const f = new Date(g.fecha);
       return f >= d1 && f <= new Date(d2.getFullYear(), d2.getMonth(), d2.getDate(), 23, 59, 59);
     })
@@ -986,13 +968,12 @@ btnMostrarRango.addEventListener("click", async () => {
 
   tablaRango.innerHTML = "";
   let total = 0;
-
   todos.forEach(([id, g]) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${formatPrecio(g.monto)}</td>
+      <td>${formatPrecio(g.monto||0)}</td>
       <td>${formatFecha(g.fecha)}</td>
-      <td>${g.descripcion}</td>
+      <td>${g.descripcion||""}</td>
     `;
     if (!g.eliminado) total += g.monto || 0;
     tablaRango.appendChild(tr);
@@ -1006,7 +987,7 @@ btnMostrarRango.addEventListener("click", async () => {
 
 // Imprimir listado del rango
 btnImprimirRango.addEventListener("click", () => {
-  const f1 = leyendaRango.textContent || "";
+  const encabezado = leyendaRango.textContent || "";
   const totalTxt = totalRango.textContent || "";
   const filas = [...tablaRango.querySelectorAll("tr")].map(tr => tr.innerText).join("<br>");
   const iframe = document.createElement("iframe");
@@ -1019,7 +1000,7 @@ btnImprimirRango.addEventListener("click", () => {
     <html><head><title>Listado de Gastos</title></head>
     <body style="font-family:monospace;text-align:center;">
       <h3>LISTADO DE GASTOS</h3>
-      <p>${f1}</p>
+      <p>${encabezado}</p>
       <hr>
       ${filas}
       <hr>
@@ -1030,6 +1011,7 @@ btnImprimirRango.addEventListener("click", () => {
   `);
   doc.close();
 });
+
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
