@@ -724,7 +724,7 @@ inputBusqueda.addEventListener("input",async()=>{
   });
 });
 
-// --- GASTOS NUEVA VERSIÓN (COMPLETA Y FUNCIONAL) ---
+// --- GASTOS NUEVA VERSIÓN (FINAL CON ELIMINADOS EXCLUIDOS DE IMPRESIÓN) ---
 const gastosContenido = document.getElementById("gastos-contenido");
 const gastoEntero = document.getElementById("gasto-entero");
 const gastoCentavos = document.getElementById("gasto-centavos");
@@ -762,6 +762,7 @@ document.querySelector('button[data-section="gastos"]').addEventListener("click"
     document.getElementById("gastos").classList.remove("hidden");
     gastosContenido.classList.remove("hidden");
 
+    // --- LIMPIEZA AUTOMÁTICA (45 DÍAS) ---
     const snapG = await window.get(window.ref("/gastos"));
     if (snapG.exists()) {
       const hoy = new Date();
@@ -835,7 +836,7 @@ btnAgregarGasto.addEventListener("click",async()=>{
   loadGastosDia(diaActual);
 });
 
-// --- CARGAR GASTOS DE UN DÍA (UTC) ---
+// --- CARGAR GASTOS DE UN DÍA ---
 async function loadGastosDia(fechaBase){
   const snap=await window.get(window.ref("/gastos"));
   tablaGastos.innerHTML="";
@@ -845,7 +846,7 @@ async function loadGastosDia(fechaBase){
   const { start, end } = getUTCBoundsFromLocalDate(fechaBase);
   gastosArray=Object.entries(snap.val())
     .filter(([_,g])=>{
-      if(!g||!g.fecha)return false;
+      if(!g||!g.fecha||g.eliminado)return false;
       const fUTC=new Date(g.fecha);
       return isInRangeUTC(fUTC,start,end);
     })
@@ -867,10 +868,6 @@ function renderGastosDia(){
         <button data-imp-id="${id}">🖨️</button>
         <button data-del-id="${id}">❌</button>
       </td>`;
-    if(g.eliminado){
-      tr.style.background="#e0e0e0";
-      tr.querySelector(`button[data-del-id="${id}"]`).disabled=true;
-    }
     tr.querySelector(`button[data-imp-id="${id}"]`).addEventListener("click",()=>imprimirGasto(id,g));
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click",async()=>{
       await window.update(window.ref(`/gastos/${id}`),{eliminado:true});
@@ -935,7 +932,7 @@ btnImprimirGastos.addEventListener("click",()=>{modalImprimir.style.display="fle
 cerrarModal.addEventListener("click",()=>ocultarModalImprimir());
 modalImprimir.addEventListener("click",(e)=>{if(e.target===modalImprimir)ocultarModalImprimir();});
 
-// --- MOSTRAR RANGO (CORREGIDO UTC) ---
+// --- MOSTRAR RANGO (EXCLUYENDO ELIMINADOS) ---
 btnMostrarRango.addEventListener("click",async()=>{
   if(!rangoDesde.value||!rangoHasta.value)return alert("Seleccione ambas fechas");
   const d1Local=new Date(rangoDesde.value+"T00:00:00");
@@ -946,7 +943,7 @@ btnMostrarRango.addEventListener("click",async()=>{
   const snap=await window.get(window.ref("/gastos"));
   if(!snap.exists()){tablaRango.innerHTML="";leyendaRango.textContent="";totalRango.textContent="";return;}
   const todos=Object.entries(snap.val()).filter(([_,g])=>{
-    if(!g||!g.fecha)return false;
+    if(!g||!g.fecha||g.eliminado)return false;
     const fUTC=new Date(g.fecha);
     return isInRangeUTC(fUTC,start,end);
   }).sort((a,b)=>new Date(a[1].fecha)-new Date(b[1].fecha));
@@ -958,7 +955,7 @@ btnMostrarRango.addEventListener("click",async()=>{
       <td>${formatPrecio(g.monto||0)}</td>
       <td>${formatFecha(g.fecha)}</td>
       <td>${g.descripcion||""}</td>`;
-    if(!g.eliminado)total+=g.monto||0;
+    total+=g.monto||0;
     tablaRango.appendChild(tr);
   });
   const f1=`${String(d1Local.getDate()).padStart(2,"0")}/${String(d1Local.getMonth()+1).padStart(2,"0")}/${d1Local.getFullYear()}`;
@@ -969,9 +966,10 @@ btnMostrarRango.addEventListener("click",async()=>{
 
 // --- IMPRIMIR LISTADO DE RANGO ---
 btnImprimirRango.addEventListener("click",()=>{
+  const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
+  if(!filas){alert("No hay gastos para imprimir.");return;}
   const encabezado=leyendaRango.textContent||"";
   const totalTxt=totalRango.textContent||"";
-  const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
   const iframe=document.createElement("iframe");
   iframe.style.display="none";document.body.appendChild(iframe);
   const doc=iframe.contentWindow.document;
