@@ -79,7 +79,7 @@ label {
 input, select, button {
   padding: 8px 10px;
   margin-top: 4px;
-  border: 1px solid #000;
+  border: 1px solid #000 !important;
   border-radius: 6px;
 }
 
