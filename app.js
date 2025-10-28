@@ -724,6 +724,202 @@ inputBusqueda.addEventListener("input",async()=>{
   });
 });
 
+// --- GASTOS NUEVA VERSIÓN ---
+const gastosPass = document.getElementById("gastos-pass");
+const gastosLogin = document.getElementById("gastos-login");
+const gastosMsg = document.getElementById("gastos-msg");
+const gastosContenido = document.getElementById("gastos-contenido");
+const gastoEntero = document.getElementById("gasto-entero");
+const gastoCentavos = document.getElementById("gasto-centavos");
+const gastoDescripcion = document.getElementById("gasto-descripcion");
+const btnAgregarGasto = document.getElementById("btn-agregar-gasto");
+const tablaGastos = document.getElementById("tabla-gastos").querySelector("tbody");
+const gastosTotalDia = document.getElementById("gastos-total-dia");
+const btnDiaPrev = document.getElementById("gastos-dia-prev");
+const btnDiaNext = document.getElementById("gastos-dia-next");
+const btnImprimirGastos = document.getElementById("btn-imprimir-gastos");
+const modalImprimir = document.getElementById("modal-imprimir-gastos");
+const cerrarModal = document.getElementById("cerrar-modal-gastos");
+const rangoDesde = document.getElementById("rango-desde");
+const rangoHasta = document.getElementById("rango-hasta");
+const btnMostrarRango = document.getElementById("btn-mostrar-rango");
+const tablaRango = document.getElementById("tabla-gastos-rango").querySelector("tbody");
+const leyendaRango = document.getElementById("rango-leyenda");
+const totalRango = document.getElementById("total-rango");
+const btnImprimirRango = document.getElementById("btn-imprimir-rango");
+
+let gastosArray = [];
+let diaActual = new Date();
+
+// --- VALIDAR ADMIN ---
+gastosLogin.addEventListener("click", async () => {
+  const pass = gastosPass.value.trim();
+  const snap = await window.get(window.ref("/config"));
+  if (!snap.exists()) return (gastosMsg.textContent = "⚠️ Configuración no encontrada");
+  const val = snap.val();
+  if (val.adminPass && pass === val.adminPass) {
+    gastosContenido.classList.remove("hidden");
+    document.getElementById("gastos-admin").classList.add("hidden");
+    loadGastosDia(diaActual);
+  } else gastosMsg.textContent = "❌ Contraseña incorrecta";
+});
+
+// --- FORMATEO ---
+function formatFecha(iso) {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
+}
+function formatPrecio(num) {
+  const entero = Math.floor(num);
+  const dec = Math.round((num - entero) * 100);
+  return `$${entero.toLocaleString("es-AR",{minimumIntegerDigits:1})},${String(dec).padStart(2,"0")}`;
+}
+function formatearEntero() {
+  let raw = gastoEntero.value.replace(/\D/g,"").slice(0,7);
+  let val = parseInt(raw)||0;
+  gastoEntero.value = val.toLocaleString("es-AR");
+}
+gastoEntero.addEventListener("input",formatearEntero);
+gastoCentavos.addEventListener("input",()=>{
+  let v=parseInt(gastoCentavos.value)||0;
+  if(v<0)v=0;if(v>99)v=99;
+  gastoCentavos.value=v.toString().padStart(2,"0");
+});
+
+// --- AGREGAR GASTO ---
+btnAgregarGasto.addEventListener("click",async()=>{
+  let entero=parseInt(gastoEntero.value.replace(/\D/g,""))||0;
+  let cent=parseInt(gastoCentavos.value)||0;
+  let desc=gastoDescripcion.value.trim().slice(0,150);
+  if(!desc||(entero===0&&cent===0))return;
+  const monto=entero+cent/100;
+  const fecha=new Date().toISOString();
+  const id="G"+Date.now();
+  await window.set(window.ref(`/gastos/${id}`),{monto,fecha,descripcion:desc,eliminado:false});
+  gastoEntero.value="";gastoCentavos.value="00";gastoDescripcion.value="";
+  loadGastosDia(diaActual);
+});
+
+// --- CARGAR GASTOS DE UN DÍA ---
+async function loadGastosDia(fechaBase){
+  const snap=await window.get(window.ref("/gastos"));
+  tablaGastos.innerHTML="";
+  gastosArray=[];
+  if(!snap.exists())return;
+  gastosArray=Object.entries(snap.val())
+    .filter(([id,g])=>{
+      const f=new Date(g.fecha);
+      const base=fechaBase.toISOString().split("T")[0];
+      return f.toISOString().startsWith(base);
+    })
+    .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
+  renderGastosDia();
+  calcularTotalDia();
+}
+function renderGastosDia(){
+  tablaGastos.innerHTML="";
+  gastosArray.forEach(([id,g])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
+      <td>${formatPrecio(g.monto||0)}</td>
+      <td>${formatFecha(g.fecha)}</td>
+      <td>${g.descripcion}</td>
+      <td>
+        <button data-imp-id="${id}">🖨️</button>
+        <button data-del-id="${id}">❌</button>
+      </td>`;
+    if(g.eliminado){
+      tr.style.background="#e0e0e0";
+      tr.querySelector(`button[data-del-id="${id}"]`).disabled=true;
+    }
+    tr.querySelector(`button[data-imp-id="${id}"]`).addEventListener("click",()=>imprimirGasto(id,g));
+    tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click",async()=>{
+      await window.update(window.ref(`/gastos/${id}`),{eliminado:true});
+      loadGastosDia(diaActual);
+    });
+    tablaGastos.appendChild(tr);
+  });
+}
+function calcularTotalDia(){
+  const base=diaActual.toISOString().split("T")[0];
+  let total=0;
+  gastosArray.forEach(([_,g])=>{
+    if(!g.eliminado&&g.fecha&&g.fecha.startsWith(base))total+=g.monto||0;
+  });
+  const d=diaActual;
+  gastosTotalDia.textContent=`Gastos del ${d.getDate().toString().padStart(2,"0")}/${(d.getMonth()+1).toString().padStart(2,"0")}/${d.getFullYear()}: ${formatPrecio(total)}`;
+}
+
+// --- DÍA ANTERIOR / SIGUIENTE ---
+btnDiaPrev.addEventListener("click",()=>{
+  const hoy=new Date();
+  const diff=(hoy-diaActual)/(1000*60*60*24);
+  if(diff<45){diaActual.setDate(diaActual.getDate()-1);loadGastosDia(diaActual);}
+});
+btnDiaNext.addEventListener("click",()=>{
+  const hoy=new Date();
+  if(diaActual.toDateString()!==hoy.toDateString()){diaActual.setDate(diaActual.getDate()+1);loadGastosDia(diaActual);}
+});
+
+// --- IMPRIMIR GASTO INDIVIDUAL ---
+function imprimirGasto(id,g){
+  const iframe=document.createElement("iframe");
+  iframe.style.display="none";document.body.appendChild(iframe);
+  const doc=iframe.contentWindow.document;
+  doc.open();doc.write(`
+    <html><head><title>Gasto</title></head><body style="font-family:monospace;text-align:center;">
+    <h3>COMPROBANTE DE GASTO</h3>
+    <p><b>ID:</b> ${id}</p>
+    <p><b>Monto:</b> ${formatPrecio(g.monto)}</p>
+    <p><b>Fecha:</b> ${formatFecha(g.fecha)}</p>
+    <p><b>Descripción:</b> ${g.descripcion}</p>
+    <hr><p>Zona PC - Gestión Comercial</p>
+    <script>window.print();setTimeout(()=>window.close(),100);</script>
+    </body></html>`);doc.close();
+}
+
+// --- MODAL DE IMPRESIÓN ---
+btnImprimirGastos.addEventListener("click",()=>{modalImprimir.classList.remove("hidden");});
+cerrarModal.addEventListener("click",()=>{modalImprimir.classList.add("hidden");tablaRango.innerHTML="";leyendaRango.textContent="";totalRango.textContent="";});
+btnMostrarRango.addEventListener("click",async()=>{
+  const d1=new Date(rangoDesde.value);
+  const d2=new Date(rangoHasta.value);
+  if(!rangoDesde.value||!rangoHasta.value)return alert("Seleccione ambas fechas");
+  const diff=Math.abs((d2-d1)/(1000*60*60*24));
+  if(diff>45)return alert("El rango máximo es de 45 días");
+  const snap=await window.get(window.ref("/gastos"));
+  if(!snap.exists())return;
+  const todos=Object.entries(snap.val()).filter(([id,g])=>{
+    const f=new Date(g.fecha);
+    return f>=d1 && f<=new Date(d2.getFullYear(),d2.getMonth(),d2.getDate(),23,59,59);
+  }).sort((a,b)=>new Date(a[1].fecha)-new Date(b[1].fecha));
+  tablaRango.innerHTML="";
+  let total=0;
+  todos.forEach(([id,g])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${formatPrecio(g.monto)}</td><td>${formatFecha(g.fecha)}</td><td>${g.descripcion}</td>`;
+    if(!g.eliminado)total+=g.monto||0;
+    tablaRango.appendChild(tr);
+  });
+  const f1=`${String(d1.getDate()).padStart(2,"0")}/${String(d1.getMonth()+1).padStart(2,"0")}/${d1.getFullYear()}`;
+  const f2=`${String(d2.getDate()).padStart(2,"0")}/${String(d2.getMonth()+1).padStart(2,"0")}/${d2.getFullYear()}`;
+  leyendaRango.textContent=`Gastos del ${f1} hasta ${f2}`;
+  totalRango.textContent=`Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
+});
+btnImprimirRango.addEventListener("click",()=>{
+  const f1=leyendaRango.textContent||"";
+  const totalTxt=totalRango.textContent||"";
+  const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
+  const iframe=document.createElement("iframe");
+  iframe.style.display="none";document.body.appendChild(iframe);
+  const doc=iframe.contentWindow.document;
+  doc.open();doc.write(`
+    <html><head><title>Listado de Gastos</title></head><body style="font-family:monospace;text-align:center;">
+    <h3>LISTADO DE GASTOS</h3><p>${f1}</p><hr>${filas}<hr><p>${totalTxt}</p>
+    <p>Zona PC - Gestión Comercial</p><script>window.print();setTimeout(()=>window.close(),100);</script></body></html>`);
+  doc.close();
+});
+
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
 const filtroCajero = document.getElementById("filtroCajero");
