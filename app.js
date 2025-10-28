@@ -1257,9 +1257,9 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       }
     } else {
       botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
-      // solo sumamos movimientos normales (no Z)
-      const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
-      totalDia += totalMov;
+      // Solo sumar movimientos normales (no Z)
+      const totalMovSum = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
+      totalDia += totalMovSum;
     }
 
     const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
@@ -1400,6 +1400,14 @@ document.getElementById("historial-dia-next")?.addEventListener("click", () => {
   loadHistorial();
 });
 
+// Helper para parsear <input type="date"> en hora local (sin corrimiento)
+function parseDateInputLocal(inputId) {
+  const v = document.getElementById(inputId).value;
+  if (!v) return null;
+  const [y, m, d] = v.split("-").map(Number);
+  return new Date(y, m - 1, d); // Local midnight
+}
+
 // --- BUSCAR HISTORIAL ---
 document.getElementById("btn-buscar-historial")?.addEventListener("click", () => {
   document.getElementById("modal-buscar-historial").style.display = "flex";
@@ -1410,8 +1418,8 @@ document.getElementById("cerrar-modal-historial")?.addEventListener("click", () 
 
 // --- RANGO HISTORIAL ---
 document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click", async () => {
-  const desde = new Date(document.getElementById("historial-desde").value);
-  const hasta = new Date(document.getElementById("historial-hasta").value);
+  const desde = parseDateInputLocal("historial-desde");
+  const hasta = parseDateInputLocal("historial-hasta");
   if (!desde || !hasta) return;
 
   // Asegurar rango local completo
