@@ -757,11 +757,37 @@ gastosLogin.addEventListener("click", async () => {
   const snap = await window.get(window.ref("/config"));
   if (!snap.exists()) return (gastosMsg.textContent = "⚠️ Configuración no encontrada");
   const val = snap.val();
+
+  // 🔐 Verifica contraseña admin
   if (val.adminPass && pass === val.adminPass) {
     gastosContenido.classList.remove("hidden");
     document.getElementById("gastos-admin").classList.add("hidden");
+
+    // 🔥 LIMPIEZA AUTOMÁTICA DE GASTOS ANTIGUOS (más de 45 días)
+    const limpiarGastosAntiguos = async () => {
+      const snapG = await window.get(window.ref("/gastos"));
+      if (!snapG.exists()) return;
+      const hoy = new Date();
+      const limite = 45 * 24 * 60 * 60 * 1000; // 45 días en milisegundos
+      const data = snapG.val();
+
+      for (const [id, g] of Object.entries(data)) {
+        if (g.fecha) {
+          const fechaGasto = new Date(g.fecha);
+          const diff = hoy - fechaGasto;
+          if (diff > limite) {
+            await window.remove(window.ref(`/gastos/${id}`));
+          }
+        }
+      }
+    };
+
+    await limpiarGastosAntiguos(); // Ejecuta limpieza antes de cargar los gastos
     loadGastosDia(diaActual);
-  } else gastosMsg.textContent = "❌ Contraseña incorrecta";
+    mostrarFechaActual(); // Actualiza etiqueta de fecha visible
+  } else {
+    gastosMsg.textContent = "❌ Contraseña incorrecta";
+  }
 });
 
 // --- FORMATEO ---
@@ -769,34 +795,48 @@ function formatFecha(iso) {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
 }
+
 function formatPrecio(num) {
   const entero = Math.floor(num);
   const dec = Math.round((num - entero) * 100);
-  return `$${entero.toLocaleString("es-AR",{minimumIntegerDigits:1})},${String(dec).padStart(2,"0")}`;
+  return `$${entero.toLocaleString("es-AR", { minimumIntegerDigits: 1 })},${String(dec).padStart(2,"0")}`;
 }
+
 function formatearEntero() {
-  let raw = gastoEntero.value.replace(/\D/g,"").slice(0,7);
-  let val = parseInt(raw)||0;
+  let raw = gastoEntero.value.replace(/\D/g, "").slice(0, 7);
+  let val = parseInt(raw) || 0;
   gastoEntero.value = val.toLocaleString("es-AR");
 }
-gastoEntero.addEventListener("input",formatearEntero);
-gastoCentavos.addEventListener("input",()=>{
-  let v=parseInt(gastoCentavos.value)||0;
-  if(v<0)v=0;if(v>99)v=99;
-  gastoCentavos.value=v.toString().padStart(2,"0");
+
+gastoEntero.addEventListener("input", formatearEntero);
+gastoCentavos.addEventListener("input", () => {
+  let v = parseInt(gastoCentavos.value) || 0;
+  if (v < 0) v = 0;
+  if (v > 99) v = 99;
+  gastoCentavos.value = v.toString().padStart(2, "0");
 });
 
 // --- AGREGAR GASTO ---
-btnAgregarGasto.addEventListener("click",async()=>{
-  let entero=parseInt(gastoEntero.value.replace(/\D/g,""))||0;
-  let cent=parseInt(gastoCentavos.value)||0;
-  let desc=gastoDescripcion.value.trim().slice(0,150);
-  if(!desc||(entero===0&&cent===0))return;
-  const monto=entero+cent/100;
-  const fecha=new Date().toISOString();
-  const id="G"+Date.now();
-  await window.set(window.ref(`/gastos/${id}`),{monto,fecha,descripcion:desc,eliminado:false});
-  gastoEntero.value="";gastoCentavos.value="00";gastoDescripcion.value="";
+btnAgregarGasto.addEventListener("click", async () => {
+  let entero = parseInt(gastoEntero.value.replace(/\D/g, "")) || 0;
+  let cent = parseInt(gastoCentavos.value) || 0;
+  let desc = gastoDescripcion.value.trim().slice(0, 150);
+  if (!desc || (entero === 0 && cent === 0)) return;
+
+  const monto = entero + cent / 100;
+  const fecha = new Date().toISOString();
+  const id = "G" + Date.now();
+
+  await window.set(window.ref(`/gastos/${id}`), {
+    monto,
+    fecha,
+    descripcion: desc,
+    eliminado: false
+  });
+
+  gastoEntero.value = "";
+  gastoCentavos.value = "00";
+  gastoDescripcion.value = "";
   loadGastosDia(diaActual);
 });
 
