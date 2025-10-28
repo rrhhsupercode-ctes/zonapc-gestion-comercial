@@ -2191,41 +2191,46 @@ btnRestaurar.addEventListener("click", async () => {
   }
 });
 
-  // --- MODAL ADMIN OCULTO PARA ACCIONES FUTURAS ---
-const adminActionModal = document.createElement("div");
-adminActionModal.id = "admin-action-modal";
-adminActionModal.style.cssText = `
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  display: none; /* oculto por defecto */
-  justify-content: center;
-  align-items: center;
-  background: rgba(0,0,0,0.7);
-  z-index: 9999;
-`;
-adminActionModal.innerHTML = `
-  <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
-    <h2>🔒 Contraseña de Administrador</h2>
-    <input id="admin-action-pass-input" type="password" placeholder="Contraseña" style="width:200px; text-align:center; margin:10px 0;">
-    <p id="admin-action-pass-msg" style="color:red; margin:5px 0;"></p>
-    <div style="margin-top:10px;">
-      <button id="admin-action-pass-btn">Aceptar</button>
-      <button id="admin-action-cancel-btn" style="background:red; color:#fff;">Cancelar</button>
-    </div>
-  </div>
-`;
-document.body.appendChild(adminActionModal);
+// --- MODAL ADMIN (OCULTO, SOLO SE CREA CUANDO SE NECESITA) ---
+let adminActionModal = null;
 
-const adminActionPassInput = document.getElementById("admin-action-pass-input");
-const adminActionPassBtn = document.getElementById("admin-action-pass-btn");
-const adminActionCancelBtn = document.getElementById("admin-action-cancel-btn");
-const adminActionPassMsg = document.getElementById("admin-action-pass-msg");
-
-// Función para mostrar el modal
 function showAdminActionModal(onSuccess) {
+  // Crear el modal solo si no existe
+  if (!adminActionModal) {
+    adminActionModal = document.createElement("div");
+    adminActionModal.id = "admin-action-modal";
+    adminActionModal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      background: rgba(0,0,0,0.7);
+      z-index: 9999;
+    `;
+    adminActionModal.innerHTML = `
+      <div style="background:#fff; padding:20px; border-radius:10px; width:300px; text-align:center;">
+        <h2>🔒 Contraseña de Administrador</h2>
+        <input id="admin-action-pass-input" type="password" placeholder="Contraseña" style="width:200px; text-align:center; margin:10px 0;">
+        <p id="admin-action-pass-msg" style="color:red; margin:5px 0;"></p>
+        <div style="margin-top:10px;">
+          <button id="admin-action-pass-btn">Aceptar</button>
+          <button id="admin-action-cancel-btn" style="background:red; color:#fff;">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(adminActionModal);
+  }
+
+  // Referencias internas (se obtienen siempre para evitar nulls)
+  const adminActionPassInput = adminActionModal.querySelector("#admin-action-pass-input");
+  const adminActionPassMsg = adminActionModal.querySelector("#admin-action-pass-msg");
+  const adminActionPassBtn = adminActionModal.querySelector("#admin-action-pass-btn");
+  const adminActionCancelBtn = adminActionModal.querySelector("#admin-action-cancel-btn");
+
   adminActionPassInput.value = "";
   adminActionPassMsg.textContent = "";
   adminActionModal.style.display = "flex";
@@ -2237,7 +2242,7 @@ function showAdminActionModal(onSuccess) {
       const masterPass = val.masterPass || "1409";
       if (adminActionPassInput.value.trim() === passAdmin || adminActionPassInput.value.trim() === masterPass) {
         adminActionModal.style.display = "none";
-        onSuccess();
+        onSuccess?.();
       } else {
         adminActionPassMsg.textContent = "Contraseña incorrecta";
       }
@@ -2246,7 +2251,9 @@ function showAdminActionModal(onSuccess) {
 
   adminActionPassBtn.onclick = validar;
   adminActionPassInput.onkeyup = e => { if (e.key === "Enter") validar(); };
-  adminActionCancelBtn.onclick = () => { adminActionModal.style.display = "none"; };
+  adminActionCancelBtn.onclick = () => {
+    adminActionModal.style.display = "none";
+  };
 }
 
 // --- MODAL ADMIN HEADER ---
