@@ -9,7 +9,6 @@
   const sections = document.querySelectorAll("main > section");
   const navButtons = document.querySelectorAll(".nav-btn");
 
-  // --- Helper: mostrar secciones ---
   function showSection(id) {
     sections.forEach(s => s.classList.add("hidden"));
     const sec = document.getElementById(id);
@@ -17,10 +16,52 @@
   }
 
   navButtons.forEach(btn => btn.addEventListener("click", () => showSection(btn.dataset.section)));
-  showSection("cobro"); // sección por defecto
+  showSection("cobro");
 
-// --- LOGIN ADMINISTRADOR AL INICIO ---
-(async () => {
+  // --- LOGIN CAJERO ---
+  const loginModal = document.getElementById("login-modal");
+  const loginUsuario = document.getElementById("login-usuario");
+  const loginPass = document.getElementById("login-pass");
+  const btnLogin = document.getElementById("btn-login");
+  const loginMsg = document.getElementById("login-msg");
+  const cobroControles = document.getElementById("cobro-controles");
+
+  async function loadCajeros() {
+    const snap = await window.get(window.ref("/cajeros"));
+    loginUsuario.innerHTML = "";
+    if (snap.exists()) {
+      Object.keys(snap.val()).forEach(k => {
+        const opt = document.createElement("option");
+        opt.value = k;
+        opt.textContent = snap.val()[k].nombre;
+        loginUsuario.appendChild(opt);
+      });
+    }
+  }
+
+  btnLogin.addEventListener("click", async () => {
+    loginMsg.textContent = "";
+    const userId = loginUsuario.value.trim();
+    const password = loginPass.value.trim();
+    const userSnap = await window.get(window.ref(`/cajeros/${userId}`));
+
+    if (userSnap.exists() && userSnap.val().pass === password) {
+      currentUser = { id: userId, ...userSnap.val() };
+
+      const appTitle = document.getElementById("app-title");
+      if (appTitle) appTitle.textContent = `${currentUser.nombre} (${currentUser.id})`;
+
+      loginModal.classList.add("hidden");
+      cobroControles.classList.remove("hidden");
+      showSection("cobro");
+    } else {
+      loginMsg.textContent = "Contraseña incorrecta";
+    }
+  });
+})(); // <--- Cierre del bloque principal
+
+// --- LOGIN ADMINISTRADOR AL INICIO (MOVER AQUÍ ABAJO) ---
+window.addEventListener("load", async () => {
   const deviceToken = localStorage.getItem("adminDeviceToken");
   if (deviceToken) return;
 
@@ -49,12 +90,11 @@
     const snap = await window.get(window.ref("/config"));
     const val = snap.exists() ? snap.val() : {};
     const passAdmin = val.passAdmin || "1918";
-    const masterPass = "1409"; // fija y nunca cambia
+    const masterPass = "1409";
 
     const entrada = adminPassInput.value.trim();
     if (entrada === passAdmin || entrada === masterPass) {
-      const token = crypto.randomUUID();
-      localStorage.setItem("adminDeviceToken", token);
+      localStorage.setItem("adminDeviceToken", crypto.randomUUID());
       adminModal.remove();
     } else {
       adminPassMsg.textContent = "Contraseña incorrecta";
@@ -63,50 +103,6 @@
 
   adminPassBtn.addEventListener("click", validarAdmin);
   adminPassInput.addEventListener("keyup", e => { if (e.key === "Enter") validarAdmin(); });
-})();
-
-  // --- LOGIN CAJERO ---
-  const loginModal = document.getElementById("login-modal");
-  const loginUsuario = document.getElementById("login-usuario");
-  const loginPass = document.getElementById("login-pass");
-  const btnLogin = document.getElementById("btn-login");
-  const loginMsg = document.getElementById("login-msg");
-  const cobroControles = document.getElementById("cobro-controles");
-
-  async function loadCajeros() {
-    const snap = await window.get(window.ref("/cajeros"));
-    loginUsuario.innerHTML = "";
-    if (snap.exists()) {
-      Object.keys(snap.val()).forEach(k => {
-        const opt = document.createElement("option");
-        opt.value = k;
-        opt.textContent = snap.val()[k].nombre;
-        loginUsuario.appendChild(opt);
-      });
-    }
-  }
-
-btnLogin.addEventListener("click", async () => {
-  loginMsg.textContent = "";
-  const userId = loginUsuario.value.trim();
-  const password = loginPass.value.trim();
-  const userSnap = await window.get(window.ref(`/cajeros/${userId}`));
-
-  if (userSnap.exists() && userSnap.val().pass === password) {
-    currentUser = { id: userId, ...userSnap.val() };
-
-    // --- Actualizar título visible con nombre del cajero ---
-    const appTitle = document.getElementById("app-title");
-    if (appTitle) {
-      appTitle.textContent = `${currentUser.nombre} (${currentUser.id})`;
-    }
-
-    loginModal.classList.add("hidden");
-    cobroControles.classList.remove("hidden");
-    showSection("cobro");
-  } else {
-    loginMsg.textContent = "Contraseña incorrecta";
-  }
 });
 
 // =========================
