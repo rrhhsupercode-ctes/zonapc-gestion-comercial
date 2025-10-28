@@ -761,9 +761,8 @@ document.querySelector('button[data-section="gastos"]').addEventListener("click"
     const snapG = await window.get(window.ref("/gastos"));
     if (snapG.exists()) {
       const hoy = new Date();
-      const limite = 45 * 24 * 60 * 60 * 1000; // 45 días en milisegundos
+      const limite = 45 * 24 * 60 * 60 * 1000;
       const data = snapG.val();
-
       for (const [id, g] of Object.entries(data)) {
         if (g.fecha) {
           const fechaGasto = new Date(g.fecha);
