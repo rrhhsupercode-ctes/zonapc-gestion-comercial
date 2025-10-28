@@ -1395,8 +1395,19 @@ document.getElementById("historial-dia-prev")?.addEventListener("click", () => {
   fechaHistorialActual.setDate(fechaHistorialActual.getDate() - 1);
   loadHistorial();
 });
+
 document.getElementById("historial-dia-next")?.addEventListener("click", () => {
-  fechaHistorialActual.setDate(fechaHistorialActual.getDate() + 1);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  // Evitar avanzar más allá del día actual
+  const siguiente = new Date(fechaHistorialActual);
+  siguiente.setDate(siguiente.getDate() + 1);
+  siguiente.setHours(0, 0, 0, 0);
+
+  if (siguiente > hoy) return; // no avanzar al futuro
+
+  fechaHistorialActual = siguiente;
   loadHistorial();
 });
 
