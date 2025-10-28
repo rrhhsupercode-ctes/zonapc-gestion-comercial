@@ -932,6 +932,7 @@ function imprimirGasto(id,g){
 // --- MODAL DE IMPRESIÓN ---
 function ocultarModalImprimir() {
   modalImprimir.classList.add("hidden");
+  modalImprimir.style.display = "none";
   tablaRango.innerHTML = "";
   leyendaRango.textContent = "";
   totalRango.textContent = "";
@@ -944,12 +945,20 @@ ocultarModalImprimir();
 
 // Abrir modal solo al hacer clic en el botón de imprimir
 btnImprimirGastos.addEventListener("click", () => {
+  modalImprimir.style.display = "flex";
   modalImprimir.classList.remove("hidden");
 });
 
-// Cerrar modal correctamente
+// Cerrar modal con botón ❌
 cerrarModal.addEventListener("click", () => {
   ocultarModalImprimir();
+});
+
+// Cerrar modal al hacer clic fuera del recuadro
+modalImprimir.addEventListener("click", (e) => {
+  if (e.target === modalImprimir) {
+    ocultarModalImprimir();
+  }
 });
 
 // Mostrar gastos del rango seleccionado
