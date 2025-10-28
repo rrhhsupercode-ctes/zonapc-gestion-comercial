@@ -48,6 +48,7 @@
     <h1 id="app-title">ZONAPC - Gestión Comercial V3.8.2</h1>
     <nav>
       <button class="nav-btn" data-section="cobro">Cobrar</button>
+      <button class="nav-btn" data-section="gastos">Gastos</button>
       <button class="nav-btn" data-section="movimientos">Movimientos</button>
       <button class="nav-btn" data-section="historial">Historial</button>
       <button class="nav-btn" data-section="stock">Stock</button>
@@ -142,6 +143,59 @@
     </table>
   </div>
 </div>
+
+<!-- GASTOS (NUEVO) -->
+<section id="gastos" class="hidden">
+  <h2>Gastos</h2>
+  <div id="gastos-admin">
+    <input id="gastos-pass" type="password" placeholder="Contraseña admin">
+    <button id="gastos-login">🔑 Ingresar</button>
+    <p id="gastos-msg" class="msg-error"></p>
+  </div>
+
+  <div id="gastos-contenido" class="hidden">
+    <!-- CARGA NUEVO GASTO -->
+    <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input id="gasto-entero" type="text" placeholder="0" style="width:100px; text-align:right;">
+        <span>,</span>
+        <input id="gasto-centavos" type="number" min="0" max="99" value="00" style="width:50px; text-align:center;">
+      </div>
+      <input id="gasto-descripcion" maxlength="150" placeholder="Descripción del gasto (máx. 150 caracteres)" style="flex:1;">
+      <button id="btn-agregar-gasto">➕ Agregar Gasto ➕</button>
+    </div>
+
+    <!-- BOTONES NAVEGACIÓN SUPERIOR -->
+    <div style="display:flex; justify-content:center; gap:10px; margin-bottom:5px;">
+      <button id="gastos-prev">⬅️</button>
+      <button id="gastos-next">➡️</button>
+    </div>
+
+    <!-- TABLA GASTOS -->
+    <table id="tabla-gastos">
+      <thead>
+        <tr>
+          <th>Gasto</th>
+          <th>Fecha</th>
+          <th>Descripción</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- BOTONES NAVEGACIÓN INFERIOR -->
+    <div style="display:flex; justify-content:center; gap:10px; margin-top:5px;">
+      <button id="gastos-prev2">⬅️</button>
+      <button id="gastos-next2">➡️</button>
+    </div>
+
+    <!-- TOTAL DIARIO -->
+    <div id="gastos-total-dia" style="margin-top:10px; text-align:center; font-weight:bold;">
+      Gastos del día de hoy: $0
+    </div>
+  </div>
+</section>
 
 <!-- MOVIMIENTOS -->
 <section id="movimientos" class="hidden">
