@@ -851,14 +851,25 @@ function calcularTotalDia(){
 }
 
 // --- DÍA ANTERIOR / SIGUIENTE ---
-btnDiaPrev.addEventListener("click",()=>{
-  const hoy=new Date();
-  const diff=(hoy-diaActual)/(1000*60*60*24);
-  if(diff<45){diaActual.setDate(diaActual.getDate()-1);loadGastosDia(diaActual);}
+btnDiaPrev.addEventListener("click", () => {
+  const hoy = new Date();
+  const diff = (hoy - diaActual) / (1000 * 60 * 60 * 24);
+  // Solo permite retroceder hasta 45 días atrás
+  if (diff < 45) {
+    diaActual.setDate(diaActual.getDate() - 1);
+    loadGastosDia(diaActual);
+    mostrarFechaActual();
+  }
 });
-btnDiaNext.addEventListener("click",()=>{
-  const hoy=new Date();
-  if(diaActual.toDateString()!==hoy.toDateString()){diaActual.setDate(diaActual.getDate()+1);loadGastosDia(diaActual);}
+
+btnDiaNext.addEventListener("click", () => {
+  const hoy = new Date();
+  // No permite avanzar más allá del día actual
+  if (diaActual.toDateString() !== hoy.toDateString()) {
+    diaActual.setDate(diaActual.getDate() + 1);
+    loadGastosDia(diaActual);
+    mostrarFechaActual();
+  }
 });
 
 // --- IMPRIMIR GASTO INDIVIDUAL ---
