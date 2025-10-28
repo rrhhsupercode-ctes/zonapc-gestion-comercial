@@ -796,25 +796,28 @@ async function generarNuevoIdGasto(){
   return `G_${String(actual).padStart(6,"0")}`;
 }
 
-// === ACCESO CON CONTRASEÑA ADMIN ===
-document.querySelector('button[data-section="gastos"]').addEventListener("click",()=>{
-  showAdminActionModal(async()=>{
-    document.querySelectorAll("main > section").forEach(sec=>sec.classList.add("hidden"));
-    document.getElementById("gastos").classList.remove("hidden");
-    gastosContenido.classList.remove("hidden");
+// === ACCESO CON CONTRASEÑA ADMIN (USANDO requireAdminHeader) ===
+const btnGastos = document.querySelector('button[data-section="gastos"]');
+if (btnGastos) {
+  btnGastos.addEventListener("click", () => {
+    requireAdminHeader(async () => {
+      document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+      document.getElementById("gastos").classList.remove("hidden");
+      gastosContenido.classList.remove("hidden");
 
-    const snapG=await window.get(window.ref("/gastos"));
-    if(snapG.exists()){
-      const hoy=new Date(),limite=45*24*60*60*1000;
-      for(const [id,g] of Object.entries(snapG.val())){
-        if(g.fecha&&(hoy-new Date(g.fecha)>limite))
-          await window.remove(window.ref(`/gastos/${id}`));
+      const snapG = await window.get(window.ref("/gastos"));
+      if (snapG.exists()) {
+        const hoy = new Date(), limite = 45 * 24 * 60 * 60 * 1000;
+        for (const [id, g] of Object.entries(snapG.val())) {
+          if (g.fecha && (hoy - new Date(g.fecha) > limite))
+            await window.remove(window.ref(`/gastos/${id}`));
+        }
       }
-    }
-    loadGastosDia(diaActual);
-    mostrarFechaActual();
+      loadGastosDia(diaActual);
+      mostrarFechaActual();
+    });
   });
-});
+}
 
 // === FORMATEO CAMPOS ===
 function formatearEntero(){
