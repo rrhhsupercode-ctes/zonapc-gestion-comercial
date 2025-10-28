@@ -749,25 +749,36 @@ const gastosDiaActual = document.getElementById("gastos-dia-actual");
 let gastosArray = [];
 let diaActual = new Date();
 
-// --- ABRIR SECCIÓN GASTOS (verifica admin) ---
-document.querySelector('button[data-section="gastos"]').addEventListener("click", async () => {
-  const pass = prompt("Ingrese la contraseña de administrador");
-  if (!pass) {
-    alert("Acceso cancelado");
-    document.querySelector('button[data-section="cobro"]').click();
-    return;
-  }
-
-  const snap = await window.get(window.ref("/config"));
-  if (!snap.exists()) {
-    alert("⚠️ Configuración no encontrada");
-    document.querySelector('button[data-section="cobro"]').click();
-    return;
-  }
-
-  const val = snap.val();
-  if (val.adminPass && pass === val.adminPass) {
+// --- ACCESO A GASTOS (USANDO showAdminActionModal) ---
+document.querySelector('button[data-section="gastos"]').addEventListener("click", () => {
+  showAdminActionModal(async () => {
+    // Mostrar solo la sección GASTOS
+    document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+    document.getElementById("gastos").classList.remove("hidden");
     gastosContenido.classList.remove("hidden");
+
+    // --- LIMPIEZA AUTOMÁTICA DE GASTOS ANTIGUOS (más de 45 días) ---
+    const snapG = await window.get(window.ref("/gastos"));
+    if (snapG.exists()) {
+      const hoy = new Date();
+      const limite = 45 * 24 * 60 * 60 * 1000; // 45 días en milisegundos
+      const data = snapG.val();
+
+      for (const [id, g] of Object.entries(data)) {
+        if (g.fecha) {
+          const fechaGasto = new Date(g.fecha);
+          if (hoy - fechaGasto > limite) {
+            await window.remove(window.ref(`/gastos/${id}`));
+          }
+        }
+      }
+    }
+
+    // Cargar los datos del día actual
+    loadGastosDia(diaActual);
+    mostrarFechaActual();
+  });
+});
 
     // 🔥 LIMPIEZA AUTOMÁTICA DE GASTOS ANTIGUOS (más de 45 días)
     const limpiarGastosAntiguos = async () => {
