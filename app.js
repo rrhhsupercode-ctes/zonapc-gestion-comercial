@@ -724,7 +724,7 @@ inputBusqueda.addEventListener("input",async()=>{
   });
 });
 
-// --- GASTOS NUEVA VERSIÓN ---
+// --- GASTOS NUEVA VERSIÓN (COMPLETA Y FUNCIONAL) ---
 const gastosContenido = document.getElementById("gastos-contenido");
 const gastoEntero = document.getElementById("gasto-entero");
 const gastoCentavos = document.getElementById("gasto-centavos");
@@ -749,52 +749,57 @@ const gastosDiaActual = document.getElementById("gastos-dia-actual");
 let gastosArray = [];
 let diaActual = new Date();
 
-// --- Fecha visible en barra superior ---
+// --- FECHA SUPERIOR ---
 function mostrarFechaActual() {
   if (!gastosDiaActual) return;
   gastosDiaActual.textContent = `${String(diaActual.getDate()).padStart(2,"0")}/${String(diaActual.getMonth()+1).padStart(2,"0")}/${diaActual.getFullYear()}`;
 }
 
-// --- ACCESO A GASTOS (USANDO showAdminActionModal) ---
+// --- ACCESO A GASTOS (CON CONTRASEÑA ADMIN) ---
 document.querySelector('button[data-section="gastos"]').addEventListener("click", () => {
-  // No ocultamos secciones aún; solo abrimos modal admin. Si cancela, nos quedamos donde está o redirigimos a COBRAR.
   showAdminActionModal(async () => {
-    // Mostrar solo la sección GASTOS una vez validado
     document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
     document.getElementById("gastos").classList.remove("hidden");
     gastosContenido.classList.remove("hidden");
 
-    // --- LIMPIEZA AUTOMÁTICA DE GASTOS ANTIGUOS (más de 45 días) ---
     const snapG = await window.get(window.ref("/gastos"));
     if (snapG.exists()) {
       const hoy = new Date();
-      const limite = 45 * 24 * 60 * 60 * 1000; // 45 días
-      const data = snapG.val();
-      for (const [id, g] of Object.entries(data)) {
-        if (g.fecha) {
-          const fechaGasto = new Date(g.fecha);
-          if (hoy - fechaGasto > limite) {
-            await window.remove(window.ref(`/gastos/${id}`));
-          }
+      const limite = 45 * 24 * 60 * 60 * 1000;
+      for (const [id, g] of Object.entries(snapG.val())) {
+        if (g.fecha && (hoy - new Date(g.fecha) > limite)) {
+          await window.remove(window.ref(`/gastos/${id}`));
         }
       }
     }
 
-    // Cargar y mostrar
     loadGastosDia(diaActual);
     mostrarFechaActual();
   });
 });
 
-// Forzar redirección a COBRAR cuando el usuario cancela el modal admin (si existe el botón global del modal)
-if (window.adminActionCancelBtn) {
-  adminActionCancelBtn.addEventListener("click", () => {
-    const btnCobro = document.querySelector('button[data-section="cobro"]');
-    if (btnCobro) btnCobro.click();
-  });
+// --- UTILIDADES FECHAS UTC ---
+function getUTCBoundsFromLocalDate(localDate) {
+  const y = localDate.getFullYear();
+  const m = localDate.getMonth();
+  const d = localDate.getDate();
+  const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
+  const end   = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
+  return { start, end };
+}
+function getUTCBoundsFromDateInputs(desdeStr, hastaStr) {
+  const [y1, m1, d1] = desdeStr.split("-").map(Number);
+  const [y2, m2, d2] = hastaStr.split("-").map(Number);
+  const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
+  const end   = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
+  return { start, end };
+}
+function isInRangeUTC(dateUTC, startUTC, endUTC) {
+  const t = dateUTC.getTime();
+  return t >= startUTC.getTime() && t <= endUTC.getTime();
 }
 
-// --- FORMATEO ---
+// --- FORMATO ---
 function formatFecha(iso) {
   const d = new Date(iso);
   return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
@@ -830,22 +835,26 @@ btnAgregarGasto.addEventListener("click",async()=>{
   loadGastosDia(diaActual);
 });
 
-// --- CARGAR GASTOS DE UN DÍA ---
+// --- CARGAR GASTOS DE UN DÍA (UTC) ---
 async function loadGastosDia(fechaBase){
   const snap=await window.get(window.ref("/gastos"));
   tablaGastos.innerHTML="";
   gastosArray=[];
-  if(!snap.exists()) { calcularTotalDia(); return; }
-  const base = fechaBase.toISOString().split("T")[0];
+  if(!snap.exists()) { calcularTotalDia([]); return; }
+
+  const { start, end } = getUTCBoundsFromLocalDate(fechaBase);
   gastosArray=Object.entries(snap.val())
-    .filter(([id,g])=>{
-      if(!g || !g.fecha) return false;
-      return g.fecha.startsWith(base);
+    .filter(([_,g])=>{
+      if(!g||!g.fecha)return false;
+      const fUTC=new Date(g.fecha);
+      return isInRangeUTC(fUTC,start,end);
     })
     .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
+
   renderGastosDia();
-  calcularTotalDia();
+  calcularTotalDia(gastosArray);
 }
+
 function renderGastosDia(){
   tablaGastos.innerHTML="";
   gastosArray.forEach(([id,g])=>{
@@ -870,33 +879,28 @@ function renderGastosDia(){
     tablaGastos.appendChild(tr);
   });
 }
-function calcularTotalDia(){
-  const base=diaActual.toISOString().split("T")[0];
+
+function calcularTotalDia(gArr=gastosArray){
+  const { start, end } = getUTCBoundsFromLocalDate(diaActual);
   let total=0;
-  gastosArray.forEach(([_,g])=>{
-    if(!g.eliminado && g.fecha && g.fecha.startsWith(base)) total+=g.monto||0;
+  gArr.forEach(([_,g])=>{
+    if(!g||g.eliminado)return;
+    const fUTC=new Date(g.fecha);
+    if(isInRangeUTC(fUTC,start,end))total+=g.monto||0;
   });
   const d=diaActual;
   gastosTotalDia.textContent=`Gastos del ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}: ${formatPrecio(total)}`;
 }
 
 // --- DÍA ANTERIOR / SIGUIENTE ---
-btnDiaPrev.addEventListener("click", () => {
-  const hoy = new Date();
-  const diff = (hoy - diaActual) / (1000 * 60 * 60 * 24);
-  if (diff < 45) {
-    diaActual.setDate(diaActual.getDate() - 1);
-    loadGastosDia(diaActual);
-    mostrarFechaActual();
-  }
+btnDiaPrev.addEventListener("click",()=>{
+  const hoy=new Date();
+  const diff=(hoy-diaActual)/(1000*60*60*24);
+  if(diff<45){diaActual.setDate(diaActual.getDate()-1);loadGastosDia(diaActual);mostrarFechaActual();}
 });
-btnDiaNext.addEventListener("click", () => {
-  const hoy = new Date();
-  if (diaActual.toDateString() !== hoy.toDateString()) {
-    diaActual.setDate(diaActual.getDate() + 1);
-    loadGastosDia(diaActual);
-    mostrarFechaActual();
-  }
+btnDiaNext.addEventListener("click",()=>{
+  const hoy=new Date();
+  if(diaActual.toDateString()!==hoy.toDateString()){diaActual.setDate(diaActual.getDate()+1);loadGastosDia(diaActual);mostrarFechaActual();}
 });
 
 // --- IMPRIMIR GASTO INDIVIDUAL ---
@@ -916,102 +920,72 @@ function imprimirGasto(id,g){
     </body></html>`);doc.close();
 }
 
-// --- MODAL DE IMPRESIÓN ---
-function ocultarModalImprimir() {
+// --- MODAL IMPRESIÓN ---
+function ocultarModalImprimir(){
   modalImprimir.classList.add("hidden");
-  modalImprimir.style.display = "none";
-  tablaRango.innerHTML = "";
-  leyendaRango.textContent = "";
-  totalRango.textContent = "";
-  rangoDesde.value = "";
-  rangoHasta.value = "";
+  modalImprimir.style.display="none";
+  tablaRango.innerHTML="";
+  leyendaRango.textContent="";
+  totalRango.textContent="";
+  rangoDesde.value="";
+  rangoHasta.value="";
 }
-// Asegura que el modal esté oculto al iniciar
 ocultarModalImprimir();
+btnImprimirGastos.addEventListener("click",()=>{modalImprimir.style.display="flex";modalImprimir.classList.remove("hidden");});
+cerrarModal.addEventListener("click",()=>ocultarModalImprimir());
+modalImprimir.addEventListener("click",(e)=>{if(e.target===modalImprimir)ocultarModalImprimir();});
 
-// Abrir modal solo al hacer clic en el botón de imprimir
-btnImprimirGastos.addEventListener("click", () => {
-  modalImprimir.style.display = "flex";
-  modalImprimir.classList.remove("hidden");
-});
-
-// Cerrar modal con botón ❌
-cerrarModal.addEventListener("click", () => {
-  ocultarModalImprimir();
-});
-
-// Cerrar modal al hacer clic fuera del recuadro
-modalImprimir.addEventListener("click", (e) => {
-  if (e.target === modalImprimir) {
-    ocultarModalImprimir();
-  }
-});
-
-// Mostrar gastos del rango seleccionado
-btnMostrarRango.addEventListener("click", async () => {
-  const d1 = new Date(rangoDesde.value);
-  const d2 = new Date(rangoHasta.value);
-  if (!rangoDesde.value || !rangoHasta.value) return alert("Seleccione ambas fechas");
-  const diff = Math.abs((d2 - d1) / (1000 * 60 * 60 * 24));
-  if (diff > 45) return alert("El rango máximo es de 45 días");
-
-  const snap = await window.get(window.ref("/gastos"));
-  if (!snap.exists()) return;
-
-  const todos = Object.entries(snap.val())
-    .filter(([id, g]) => {
-      if(!g || !g.fecha) return false;
-      const f = new Date(g.fecha);
-      return f >= d1 && f <= new Date(d2.getFullYear(), d2.getMonth(), d2.getDate(), 23, 59, 59);
-    })
-    .sort((a, b) => new Date(a[1].fecha) - new Date(b[1].fecha));
-
-  tablaRango.innerHTML = "";
-  let total = 0;
-  todos.forEach(([id, g]) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+// --- MOSTRAR RANGO (CORREGIDO UTC) ---
+btnMostrarRango.addEventListener("click",async()=>{
+  if(!rangoDesde.value||!rangoHasta.value)return alert("Seleccione ambas fechas");
+  const d1Local=new Date(rangoDesde.value+"T00:00:00");
+  const d2Local=new Date(rangoHasta.value+"T00:00:00");
+  const diffDias=Math.floor((d2Local-d1Local)/(1000*60*60*24));
+  if(diffDias>45)return alert("El rango máximo es de 45 días");
+  const {start,end}=getUTCBoundsFromDateInputs(rangoDesde.value,rangoHasta.value);
+  const snap=await window.get(window.ref("/gastos"));
+  if(!snap.exists()){tablaRango.innerHTML="";leyendaRango.textContent="";totalRango.textContent="";return;}
+  const todos=Object.entries(snap.val()).filter(([_,g])=>{
+    if(!g||!g.fecha)return false;
+    const fUTC=new Date(g.fecha);
+    return isInRangeUTC(fUTC,start,end);
+  }).sort((a,b)=>new Date(a[1].fecha)-new Date(b[1].fecha));
+  tablaRango.innerHTML="";
+  let total=0;
+  todos.forEach(([_,g])=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`
       <td>${formatPrecio(g.monto||0)}</td>
       <td>${formatFecha(g.fecha)}</td>
-      <td>${g.descripcion||""}</td>
-    `;
-    if (!g.eliminado) total += g.monto || 0;
+      <td>${g.descripcion||""}</td>`;
+    if(!g.eliminado)total+=g.monto||0;
     tablaRango.appendChild(tr);
   });
-
-  const f1 = `${String(d1.getDate()).padStart(2, "0")}/${String(d1.getMonth() + 1).padStart(2, "0")}/${d1.getFullYear()}`;
-  const f2 = `${String(d2.getDate()).padStart(2, "0")}/${String(d2.getMonth() + 1).padStart(2, "0")}/${d2.getFullYear()}`;
-  leyendaRango.textContent = `Gastos del ${f1} hasta ${f2}`;
-  totalRango.textContent = `Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
+  const f1=`${String(d1Local.getDate()).padStart(2,"0")}/${String(d1Local.getMonth()+1).padStart(2,"0")}/${d1Local.getFullYear()}`;
+  const f2=`${String(d2Local.getDate()).padStart(2,"0")}/${String(d2Local.getMonth()+1).padStart(2,"0")}/${d2Local.getFullYear()}`;
+  leyendaRango.textContent=`Gastos del ${f1} hasta ${f2}`;
+  totalRango.textContent=`Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
 });
 
-// Imprimir listado del rango
-btnImprimirRango.addEventListener("click", () => {
-  const encabezado = leyendaRango.textContent || "";
-  const totalTxt = totalRango.textContent || "";
-  const filas = [...tablaRango.querySelectorAll("tr")].map(tr => tr.innerText).join("<br>");
-  const iframe = document.createElement("iframe");
-  iframe.style.display = "none";
-  document.body.appendChild(iframe);
-
-  const doc = iframe.contentWindow.document;
+// --- IMPRIMIR LISTADO DE RANGO ---
+btnImprimirRango.addEventListener("click",()=>{
+  const encabezado=leyendaRango.textContent||"";
+  const totalTxt=totalRango.textContent||"";
+  const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
+  const iframe=document.createElement("iframe");
+  iframe.style.display="none";document.body.appendChild(iframe);
+  const doc=iframe.contentWindow.document;
   doc.open();
   doc.write(`
     <html><head><title>Listado de Gastos</title></head>
     <body style="font-family:monospace;text-align:center;">
       <h3>LISTADO DE GASTOS</h3>
-      <p>${encabezado}</p>
-      <hr>
-      ${filas}
-      <hr>
-      <p>${totalTxt}</p>
-      <p>Zona PC - Gestión Comercial</p>
+      <p>${encabezado}</p><hr>${filas}<hr>
+      <p>${totalTxt}</p><p>Zona PC - Gestión Comercial</p>
       <script>window.print();setTimeout(()=>window.close(),100);</script>
-    </body></html>
-  `);
+    </body></html>`);
   doc.close();
 });
-
 
 // --- MOVIMIENTOS ---
 const tablaMovimientos = document.getElementById("tabla-movimientos").querySelector("tbody");
