@@ -930,44 +930,90 @@ function imprimirGasto(id,g){
 }
 
 // --- MODAL DE IMPRESIÓN ---
-btnImprimirGastos.addEventListener("click",()=>{modalImprimir.classList.remove("hidden");});
-cerrarModal.addEventListener("click",()=>{modalImprimir.classList.add("hidden");tablaRango.innerHTML="";leyendaRango.textContent="";totalRango.textContent="";});
-btnMostrarRango.addEventListener("click",async()=>{
-  const d1=new Date(rangoDesde.value);
-  const d2=new Date(rangoHasta.value);
-  if(!rangoDesde.value||!rangoHasta.value)return alert("Seleccione ambas fechas");
-  const diff=Math.abs((d2-d1)/(1000*60*60*24));
-  if(diff>45)return alert("El rango máximo es de 45 días");
-  const snap=await window.get(window.ref("/gastos"));
-  if(!snap.exists())return;
-  const todos=Object.entries(snap.val()).filter(([id,g])=>{
-    const f=new Date(g.fecha);
-    return f>=d1 && f<=new Date(d2.getFullYear(),d2.getMonth(),d2.getDate(),23,59,59);
-  }).sort((a,b)=>new Date(a[1].fecha)-new Date(b[1].fecha));
-  tablaRango.innerHTML="";
-  let total=0;
-  todos.forEach(([id,g])=>{
-    const tr=document.createElement("tr");
-    tr.innerHTML=`<td>${formatPrecio(g.monto)}</td><td>${formatFecha(g.fecha)}</td><td>${g.descripcion}</td>`;
-    if(!g.eliminado)total+=g.monto||0;
+function ocultarModalImprimir() {
+  modalImprimir.classList.add("hidden");
+  tablaRango.innerHTML = "";
+  leyendaRango.textContent = "";
+  totalRango.textContent = "";
+  rangoDesde.value = "";
+  rangoHasta.value = "";
+}
+
+// Asegura que el modal esté oculto al iniciar
+ocultarModalImprimir();
+
+// Abrir modal solo al hacer clic en el botón de imprimir
+btnImprimirGastos.addEventListener("click", () => {
+  modalImprimir.classList.remove("hidden");
+});
+
+// Cerrar modal correctamente
+cerrarModal.addEventListener("click", () => {
+  ocultarModalImprimir();
+});
+
+// Mostrar gastos del rango seleccionado
+btnMostrarRango.addEventListener("click", async () => {
+  const d1 = new Date(rangoDesde.value);
+  const d2 = new Date(rangoHasta.value);
+  if (!rangoDesde.value || !rangoHasta.value) return alert("Seleccione ambas fechas");
+  const diff = Math.abs((d2 - d1) / (1000 * 60 * 60 * 24));
+  if (diff > 45) return alert("El rango máximo es de 45 días");
+
+  const snap = await window.get(window.ref("/gastos"));
+  if (!snap.exists()) return;
+
+  const todos = Object.entries(snap.val())
+    .filter(([id, g]) => {
+      const f = new Date(g.fecha);
+      return f >= d1 && f <= new Date(d2.getFullYear(), d2.getMonth(), d2.getDate(), 23, 59, 59);
+    })
+    .sort((a, b) => new Date(a[1].fecha) - new Date(b[1].fecha));
+
+  tablaRango.innerHTML = "";
+  let total = 0;
+
+  todos.forEach(([id, g]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${formatPrecio(g.monto)}</td>
+      <td>${formatFecha(g.fecha)}</td>
+      <td>${g.descripcion}</td>
+    `;
+    if (!g.eliminado) total += g.monto || 0;
     tablaRango.appendChild(tr);
   });
-  const f1=`${String(d1.getDate()).padStart(2,"0")}/${String(d1.getMonth()+1).padStart(2,"0")}/${d1.getFullYear()}`;
-  const f2=`${String(d2.getDate()).padStart(2,"0")}/${String(d2.getMonth()+1).padStart(2,"0")}/${d2.getFullYear()}`;
-  leyendaRango.textContent=`Gastos del ${f1} hasta ${f2}`;
-  totalRango.textContent=`Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
+
+  const f1 = `${String(d1.getDate()).padStart(2, "0")}/${String(d1.getMonth() + 1).padStart(2, "0")}/${d1.getFullYear()}`;
+  const f2 = `${String(d2.getDate()).padStart(2, "0")}/${String(d2.getMonth() + 1).padStart(2, "0")}/${d2.getFullYear()}`;
+  leyendaRango.textContent = `Gastos del ${f1} hasta ${f2}`;
+  totalRango.textContent = `Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
 });
-btnImprimirRango.addEventListener("click",()=>{
-  const f1=leyendaRango.textContent||"";
-  const totalTxt=totalRango.textContent||"";
-  const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
-  const iframe=document.createElement("iframe");
-  iframe.style.display="none";document.body.appendChild(iframe);
-  const doc=iframe.contentWindow.document;
-  doc.open();doc.write(`
-    <html><head><title>Listado de Gastos</title></head><body style="font-family:monospace;text-align:center;">
-    <h3>LISTADO DE GASTOS</h3><p>${f1}</p><hr>${filas}<hr><p>${totalTxt}</p>
-    <p>Zona PC - Gestión Comercial</p><script>window.print();setTimeout(()=>window.close(),100);</script></body></html>`);
+
+// Imprimir listado del rango
+btnImprimirRango.addEventListener("click", () => {
+  const f1 = leyendaRango.textContent || "";
+  const totalTxt = totalRango.textContent || "";
+  const filas = [...tablaRango.querySelectorAll("tr")].map(tr => tr.innerText).join("<br>");
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html><head><title>Listado de Gastos</title></head>
+    <body style="font-family:monospace;text-align:center;">
+      <h3>LISTADO DE GASTOS</h3>
+      <p>${f1}</p>
+      <hr>
+      ${filas}
+      <hr>
+      <p>${totalTxt}</p>
+      <p>Zona PC - Gestión Comercial</p>
+      <script>window.print();setTimeout(()=>window.close(),100);</script>
+    </body></html>
+  `);
   doc.close();
 });
 
