@@ -994,23 +994,6 @@ const tablaMovimientos = document.getElementById("tabla-movimientos").querySelec
 const filtroCajero = document.getElementById("filtroCajero");
 const btnTirarZ = document.getElementById("btn-tirar-z");
 
-// --- GENERAR NUEVO TICKET ID ---
-async function generarTicketID() {
-  const snap = await window.get(window.ref("/ultimoTicketID"));
-  let ultimo = snap.exists() ? parseInt(snap.val()) : 0;
-
-  // Incrementar y hacer rollover si supera 999999
-  let nuevo = ultimo + 1;
-  if (nuevo > 999999) nuevo = 1;
-
-  const ticketID = "ID_" + nuevo.toString().padStart(6, "0");
-
-  // Guardar el nuevo valor en la base
-  await window.set(window.ref("/ultimoTicketID"), nuevo);
-
-  return ticketID;
-}
-
 // Cargar movimientos
 async function loadMovimientos() {
   const snap = await window.get(window.ref("/movimientos"));
@@ -1096,8 +1079,16 @@ btnTirarZ.addEventListener("click", () => {
 
     if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
 
+    // --- NUEVO ID DE Z ---
+    const snapZ = await window.get(window.ref("/ultimoZID"));
+    let ultimoZ = snapZ.exists() ? parseInt(snapZ.val()) : 0;
+    let nuevoZ = ultimoZ + 1;
+    if (nuevoZ > 999999) nuevoZ = 1;
+    const zID = "Z_" + nuevoZ.toString().padStart(6, "0");
+    await window.set(window.ref("/ultimoZID"), nuevoZ);
+    // ----------------------
+
     const fechaZ = new Date();
-    const zID = `TIRAR_Z_${fechaZ.getTime()}`;
 
     const totalPorTipoPago = {};
     let totalGeneral = 0;
