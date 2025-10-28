@@ -1,6 +1,6 @@
 /*****************************************************
  * app.js
- * Lógica completa de Zona PC V3.0.0
+ * Lógica completa de Zona PC V3.12.1
  * Compatible Firebase 11.8.1 modular
  *****************************************************/
 (() => {
