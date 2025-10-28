@@ -19,59 +19,6 @@
   navButtons.forEach(btn => btn.addEventListener("click", () => showSection(btn.dataset.section)));
   showSection("cobro"); // sección por defecto
 
-// --- LOGIN ADMINISTRADOR AL INICIO (AJUSTE SIN ROMPER NADA) ---
-window.addEventListener("load", () => {
-  setTimeout(async () => {
-    const deviceToken = localStorage.getItem("adminDeviceToken");
-    if (deviceToken) return;
-
-    const adminModal = document.createElement("div");
-    adminModal.id = "admin-modal";
-    adminModal.style.cssText = `
-      position:fixed; top:0; left:0; width:100%; height:100%;
-      display:flex; justify-content:center; align-items:center;
-      background:rgba(0,0,0,0.7); z-index:9999;
-    `;
-    adminModal.innerHTML = `
-      <div style="background:#fff; padding:20px; border-radius:10px; text-align:center;">
-        <h2>🔒 Contraseña de Administrador</h2>
-        <input id="admin-pass-input" type="password" placeholder="Contraseña" style="width:200px; text-align:center;">
-        <p id="admin-pass-msg" style="color:red; margin:5px 0;"></p>
-        <button id="admin-pass-btn">Ingresar</button>
-      </div>
-    `;
-    document.body.appendChild(adminModal);
-
-    const adminPassInput = document.getElementById("admin-pass-input");
-    const adminPassBtn = document.getElementById("admin-pass-btn");
-    const adminPassMsg = document.getElementById("admin-pass-msg");
-
-    async function validarAdmin() {
-      try {
-        const snap = await window.get(window.ref("/config"));
-        const val = snap.exists() ? snap.val() : {};
-        const passAdmin = val.passAdmin || "1918";
-        const masterPass = "1409";
-
-        const entrada = adminPassInput.value.trim();
-        if (entrada === passAdmin || entrada === masterPass) {
-          const token = crypto.randomUUID();
-          localStorage.setItem("adminDeviceToken", token);
-          adminModal.remove();
-        } else {
-          adminPassMsg.textContent = "Contraseña incorrecta";
-        }
-      } catch (err) {
-        adminPassMsg.textContent = "Error al conectar con la base";
-        console.error(err);
-      }
-    }
-
-    adminPassBtn.addEventListener("click", validarAdmin);
-    adminPassInput.addEventListener("keyup", e => { if (e.key === "Enter") validarAdmin(); });
-  }, 500); // espera 0.5 segundos para asegurar Firebase listo
-});
-
   // --- LOGIN CAJERO ---
   const loginModal = document.getElementById("login-modal");
   const loginUsuario = document.getElementById("login-usuario");
