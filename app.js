@@ -1257,10 +1257,12 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       }
     } else {
       botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
+      // solo sumamos movimientos normales (no Z)
+      const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
+      totalDia += totalMov;
     }
 
     const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
-    totalDia += totalMov;
 
     tr.innerHTML = `
       <td>${id}</td>
@@ -1377,7 +1379,6 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       });
     }
 
-    // --- ELIMINAR RESPALDO EXPIRADO ---
     if (expirada) {
       await window.remove(window.ref(`/respaldoZ/${id}`));
     }
@@ -1411,6 +1412,12 @@ document.getElementById("cerrar-modal-historial")?.addEventListener("click", () 
 document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click", async () => {
   const desde = new Date(document.getElementById("historial-desde").value);
   const hasta = new Date(document.getElementById("historial-hasta").value);
+  if (!desde || !hasta) return;
+
+  // Asegurar rango local completo
+  desde.setHours(0, 0, 0, 0);
+  hasta.setHours(23, 59, 59, 999);
+
   const tbody = document.querySelector("#tabla-historial-rango tbody");
   const snap = await window.get(window.ref("/historial"));
   tbody.innerHTML = "";
