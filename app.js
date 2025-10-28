@@ -1195,9 +1195,7 @@ btnTirarZ.addEventListener("click", () => {
 });
 
 // --- HISTORIAL ---
-let fechaHistorialActual = new Date(); // Día mostrado actualmente
-
-async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
+async function loadHistorial() {
   const tablaHistorial = document.querySelector("#tabla-historial tbody");
   if (!tablaHistorial) return;
   tablaHistorial.innerHTML = "";
@@ -1209,7 +1207,7 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
   const limite = new Date(hoy);
   limite.setDate(limite.getDate() - 45); // eliminar entradas con más de 45 días
 
-  // Eliminar antiguas
+  // --- eliminar entradas viejas ---
   for (const [id, mov] of Object.entries(snap.val())) {
     const fecha = new Date(mov.fecha);
     if (fecha < limite) {
@@ -1218,37 +1216,20 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
     }
   }
 
+  // --- ordenar por fecha descendente ---
   const entries = Object.entries(snap.val())
-    .map(([id, mov]) => [id, mov])
-    .filter(([, mov]) => new Date(mov.fecha) >= limite)
+    .filter(([, mov]) => mov && mov.fecha && new Date(mov.fecha) >= limite && !mov.eliminado)
     .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
-  const diaSel = new Date(fechaSeleccionada);
-  const spanFecha = document.getElementById("historial-dia-actual");
-  const fechaStr = `${diaSel.getDate().toString().padStart(2,"0")}/${(diaSel.getMonth()+1).toString().padStart(2,"0")}/${diaSel.getFullYear()}`;
-  if (spanFecha) spanFecha.textContent = fechaStr;
-
-  // Filtrar solo las entradas del día seleccionado
-  const diaFiltrado = entries.filter(([, mov]) => {
-    const f = new Date(mov.fecha);
-    return (
-      f.getDate() === diaSel.getDate() &&
-      f.getMonth() === diaSel.getMonth() &&
-      f.getFullYear() === diaSel.getFullYear()
-    );
-  });
-
-  let totalDia = 0;
-  for (const [id, mov] of diaFiltrado) {
+  for (const [id, mov] of entries) {
     const expirada = mov.fechaExpira && new Date(mov.fechaExpira) < hoy;
-    if (mov.eliminado) continue; // ignorar eliminados
 
     const tr = document.createElement("tr");
-    tr.style.backgroundColor = expirada ? "#eee" : mov.eliminado ? "#ccc" : "";
+    tr.style.backgroundColor = expirada ? "#eee" : "";
 
     let botones = "";
     if (mov.tipo === "TIRAR Z") {
-      if (!expirada && !mov.eliminado) {
+      if (!expirada) {
         botones = `
           <button class="reimprimir" data-id="${id}">🧾​</button>
           <button class="eliminar-z">❌</button>`;
@@ -1257,12 +1238,9 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
     }
 
-    const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
-    totalDia += totalMov;
-
     tr.innerHTML = `
       <td>${id}</td>
-      <td>${totalMov.toFixed(2)}</td>
+      <td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
       <td>${mov.tipo}</td>
       <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
       <td>${(() => {
@@ -1282,6 +1260,7 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
     if (btnReimprimir) {
       btnReimprimir.addEventListener("click", () => {
         if (mov.tipo === "TIRAR Z") {
+          // --- FORMATO CIERRE Z ---
           const fechaZ = new Date(mov.fecha);
           const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
 
@@ -1335,7 +1314,9 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
           setTimeout(() => iframe.remove(), 500);
+
         } else {
+          // --- VENTAS NORMALES ---
           const fechaObj = new Date(mov.fecha);
           const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()} (${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')})`;
           imprimirTicket(
@@ -1367,28 +1348,16 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       });
     }
 
+    // --- ELIMINAR AUTOMÁTICO DE RESPALDO Z VENCIDO ---
     if (expirada) {
       await window.remove(window.ref(`/respaldoZ/${id}`));
     }
 
     tablaHistorial.appendChild(tr);
   }
-
-  const totalDiv = document.getElementById("historial-total-dia");
-  if (totalDiv) totalDiv.textContent = `Historial del ${fechaStr}: $${totalDia.toFixed(2)}`;
 }
 
-// --- BOTONES DE FECHA ---
-document.getElementById("historial-dia-prev")?.addEventListener("click", () => {
-  fechaHistorialActual.setDate(fechaHistorialActual.getDate() - 1);
-  loadHistorial();
-});
-document.getElementById("historial-dia-next")?.addEventListener("click", () => {
-  fechaHistorialActual.setDate(fechaHistorialActual.getDate() + 1);
-  loadHistorial();
-});
-
-// --- BOTÓN BUSCAR HISTORIAL ---
+// --- BOTÓN BUSCAR HISTORIAL (MODAL) ---
 document.getElementById("btn-buscar-historial")?.addEventListener("click", () => {
   document.getElementById("modal-buscar-historial").style.display = "flex";
 });
@@ -1396,7 +1365,7 @@ document.getElementById("cerrar-modal-historial")?.addEventListener("click", () 
   document.getElementById("modal-buscar-historial").style.display = "none";
 });
 
-// --- BUSCAR RANGO ---
+// --- BUSCAR RANGO HISTORIAL ---
 document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click", async () => {
   const desde = new Date(document.getElementById("historial-desde").value);
   const hasta = new Date(document.getElementById("historial-hasta").value);
@@ -1422,7 +1391,6 @@ document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click"
     tr.innerHTML = `
       <td>${id}</td>
       <td>${total.toFixed(2)}</td>
-      <td>${mov.tipo}</td>
       <td>${mov.cajeros ? mov.cajeros.join(", ") : ""}</td>
       <td>${new Date(mov.fecha).toLocaleDateString()}</td>
     `;
