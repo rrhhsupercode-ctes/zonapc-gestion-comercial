@@ -1195,7 +1195,9 @@ btnTirarZ.addEventListener("click", () => {
 });
 
 // --- HISTORIAL ---
-async function loadHistorial() {
+let fechaHistorialActual = new Date(); // Día mostrado actualmente
+
+async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
   const tablaHistorial = document.querySelector("#tabla-historial tbody");
   if (!tablaHistorial) return;
   tablaHistorial.innerHTML = "";
@@ -1204,10 +1206,43 @@ async function loadHistorial() {
   if (!snap.exists()) return;
 
   const hoy = new Date();
-  const entries = Object.entries(snap.val()).sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+  const limite = new Date(hoy);
+  limite.setDate(limite.getDate() - 45); // eliminar entradas con más de 45 días
 
-  for (const [id, mov] of entries) {
+  // Eliminar antiguas
+  for (const [id, mov] of Object.entries(snap.val())) {
+    const fecha = new Date(mov.fecha);
+    if (fecha < limite) {
+      await window.remove(window.ref(`/historial/${id}`));
+      await window.remove(window.ref(`/respaldoZ/${id}`));
+    }
+  }
+
+  const entries = Object.entries(snap.val())
+    .map(([id, mov]) => [id, mov])
+    .filter(([, mov]) => new Date(mov.fecha) >= limite)
+    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+
+  const diaSel = new Date(fechaSeleccionada);
+  const spanFecha = document.getElementById("historial-dia-actual");
+  const fechaStr = `${diaSel.getDate().toString().padStart(2,"0")}/${(diaSel.getMonth()+1).toString().padStart(2,"0")}/${diaSel.getFullYear()}`;
+  if (spanFecha) spanFecha.textContent = fechaStr;
+
+  // Filtrar solo las entradas del día seleccionado
+  const diaFiltrado = entries.filter(([, mov]) => {
+    const f = new Date(mov.fecha);
+    return (
+      f.getDate() === diaSel.getDate() &&
+      f.getMonth() === diaSel.getMonth() &&
+      f.getFullYear() === diaSel.getFullYear()
+    );
+  });
+
+  let totalDia = 0;
+  for (const [id, mov] of diaFiltrado) {
     const expirada = mov.fechaExpira && new Date(mov.fechaExpira) < hoy;
+    if (mov.eliminado) continue; // ignorar eliminados
+
     const tr = document.createElement("tr");
     tr.style.backgroundColor = expirada ? "#eee" : mov.eliminado ? "#ccc" : "";
 
@@ -1222,99 +1257,98 @@ async function loadHistorial() {
       botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
     }
 
+    const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
+    totalDia += totalMov;
+
     tr.innerHTML = `
       <td>${id}</td>
-<td>${mov.totalGeneral ? mov.totalGeneral.toFixed(2) : mov.total ? mov.total.toFixed(2) : "-"}</td>
-<td>${mov.tipo}</td>
-<td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
-<td>${(() => {
-  const fechaObj = new Date(mov.fecha);
-  const dia = fechaObj.getDate().toString().padStart(2, "0");
-  const mes = (fechaObj.getMonth() + 1).toString().padStart(2, "0");
-  const anio = fechaObj.getFullYear();
-  const horas = fechaObj.getHours().toString().padStart(2, "0");
-  const minutos = fechaObj.getMinutes().toString().padStart(2, "0");
-  return `${dia}/${mes}/${anio} (${horas}:${minutos})`;
-})()}</td>
-<td>${botones}</td>
+      <td>${totalMov.toFixed(2)}</td>
+      <td>${mov.tipo}</td>
+      <td>${mov.cajeros ? mov.cajeros.join(", ") : mov.cajero || ""}</td>
+      <td>${(() => {
+        const fechaObj = new Date(mov.fecha);
+        const dia = fechaObj.getDate().toString().padStart(2, "0");
+        const mes = (fechaObj.getMonth() + 1).toString().padStart(2, "0");
+        const anio = fechaObj.getFullYear();
+        const horas = fechaObj.getHours().toString().padStart(2, "0");
+        const minutos = fechaObj.getMinutes().toString().padStart(2, "0");
+        return `${dia}/${mes}/${anio} (${horas}:${minutos})`;
+      })()}</td>
+      <td>${botones}</td>
     `;
 
-// --- REIMPRIMIR DESDE HISTORIAL ---
-const btnReimprimir = tr.querySelector(".reimprimir");
-if (btnReimprimir) {
-  btnReimprimir.addEventListener("click", () => {
-    if (mov.tipo === "TIRAR Z") {
-      // --- FORMATO CIERRE Z ---
-      const fechaZ = new Date(mov.fecha);
-      const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
+    // --- REIMPRIMIR DESDE HISTORIAL ---
+    const btnReimprimir = tr.querySelector(".reimprimir");
+    if (btnReimprimir) {
+      btnReimprimir.addEventListener("click", () => {
+        if (mov.tipo === "TIRAR Z") {
+          const fechaZ = new Date(mov.fecha);
+          const fechaFormateada = `${fechaZ.getDate().toString().padStart(2,'0')}/${(fechaZ.getMonth()+1).toString().padStart(2,'0')}/${fechaZ.getFullYear()} (${fechaZ.getHours().toString().padStart(2,"0")}:${fechaZ.getMinutes().toString().padStart(2,"0")})`;
 
-      let cuerpo = '';
-      for (const cajero of mov.cajeros) {
-        cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
-        const movCajero = mov.items.filter(i => i.cajero === cajero);
-        const tiposPago = [...new Set(movCajero.map(i => i.tipo))];
-        for (const tipo of tiposPago) {
-          const ventasTipo = movCajero.filter(i => i.tipo === tipo);
-          const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
-          cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
-          ventasTipo.forEach(m => {
-            cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
-          });
-          cuerpo += `--------------------------------\n`;
+          let cuerpo = '';
+          for (const cajero of mov.cajeros) {
+            cuerpo += `CAJERO: ${cajero}\n--------------------------------\n`;
+            const movCajero = mov.items.filter(i => i.cajero === cajero);
+            const tiposPago = [...new Set(movCajero.map(i => i.tipo))];
+            for (const tipo of tiposPago) {
+              const ventasTipo = movCajero.filter(i => i.tipo === tipo);
+              const subtotal = ventasTipo.reduce((acc, m) => acc + m.total, 0);
+              cuerpo += ` ${tipo.toUpperCase()} — Subtotal: $${subtotal.toFixed(2)}\n`;
+              ventasTipo.forEach(m => {
+                cuerpo += `   ${m.ticketID.slice(-5)}  $${m.total.toFixed(2)}\n`;
+              });
+              cuerpo += `--------------------------------\n`;
+            }
+            cuerpo += `\n`;
+          }
+          cuerpo += `TOTAL GENERAL: $${mov.totalGeneral.toFixed(2)}\n--------------------------------\n`;
+          cuerpo += `CIERRE COMPLETO - ${mov.cajeros.length} CAJEROS\n`;
+          cuerpo += `--------------------------------\nFIN DEL REPORTE Z\n`;
+
+          const iframe = document.createElement("iframe");
+          iframe.style.position = "absolute";
+          iframe.style.width = "0";
+          iframe.style.height = "0";
+          document.body.appendChild(iframe);
+
+          const doc = iframe.contentWindow.document;
+          doc.open();
+          doc.write(`
+            <html>
+              <head>
+                <style>
+                  body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
+                  .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
+                  .bloque { margin-bottom:8px; }
+                  .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
+                </style>
+              </head>
+              <body>
+                <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
+                <div class="bloque">${fechaFormateada}</div>
+                <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
+                <div class="total">TOTAL: $${mov.totalGeneral.toFixed(2)}</div>
+              </body>
+            </html>
+          `);
+          doc.close();
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+          setTimeout(() => iframe.remove(), 500);
+        } else {
+          const fechaObj = new Date(mov.fecha);
+          const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()} (${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')})`;
+          imprimirTicket(
+            mov.ticketID || "N/A",
+            fechaStr,
+            mov.cajero,
+            mov.items,
+            mov.total,
+            mov.tipo
+          );
         }
-        cuerpo += `\n`;
-      }
-      cuerpo += `TOTAL GENERAL: $${mov.totalGeneral.toFixed(2)}\n--------------------------------\n`;
-      cuerpo += `CIERRE COMPLETO - ${mov.cajeros.length} CAJEROS\n`;
-      cuerpo += `--------------------------------\nFIN DEL REPORTE Z\n`;
-
-      const iframe = document.createElement("iframe");
-      iframe.style.position = "absolute";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      document.body.appendChild(iframe);
-
-      const doc = iframe.contentWindow.document;
-      doc.open();
-      doc.write(`
-        <html>
-          <head>
-            <style>
-              body { font-family: monospace; font-size:13px; max-width:6cm; white-space:pre-line; margin:0; padding:6px; }
-              .titulo { text-align:center; font-weight:bold; border-bottom:1px dashed #000; margin-bottom:6px; padding-bottom:2px; }
-              .bloque { margin-bottom:8px; }
-              .total { text-align:center; font-weight:bold; font-size:14px; border-top:1px dashed #000; padding-top:4px; }
-            </style>
-          </head>
-          <body>
-            <div class="titulo">*** CIERRE DE CAJA (Z) ***</div>
-            <div class="bloque">${fechaFormateada}</div>
-            <div class="bloque" style="white-space: pre-line;">${cuerpo}</div>
-            <div class="total">TOTAL: $${mov.totalGeneral.toFixed(2)}</div>
-          </body>
-        </html>
-      `);
-      doc.close();
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      setTimeout(() => iframe.remove(), 500);
-
-    } else {
-      // --- VENTAS NORMALES: unificadas con Cobrar/Movimientos ---
-      const fechaObj = new Date(mov.fecha);
-      const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()} (${fechaObj.getHours().toString().padStart(2,'0')}:${fechaObj.getMinutes().toString().padStart(2,'0')})`;
-
-      imprimirTicket(
-        mov.ticketID || "N/A",
-        fechaStr,
-        mov.cajero,
-        mov.items,
-        mov.total,
-        mov.tipo
-      );
+      });
     }
-  });
-}
 
     // --- ELIMINAR Z ---
     const btnEliminarZ = tr.querySelector(".eliminar-z");
@@ -1333,15 +1367,110 @@ if (btnReimprimir) {
       });
     }
 
-    // --- ELIMINAR AUTOMÁTICO DE RESPALDO Z VENCIDO ---
     if (expirada) {
       await window.remove(window.ref(`/respaldoZ/${id}`));
     }
 
     tablaHistorial.appendChild(tr);
   }
+
+  const totalDiv = document.getElementById("historial-total-dia");
+  if (totalDiv) totalDiv.textContent = `Historial del ${fechaStr}: $${totalDia.toFixed(2)}`;
 }
 
+// --- BOTONES DE FECHA ---
+document.getElementById("historial-dia-prev")?.addEventListener("click", () => {
+  fechaHistorialActual.setDate(fechaHistorialActual.getDate() - 1);
+  loadHistorial();
+});
+document.getElementById("historial-dia-next")?.addEventListener("click", () => {
+  fechaHistorialActual.setDate(fechaHistorialActual.getDate() + 1);
+  loadHistorial();
+});
+
+// --- BOTÓN BUSCAR HISTORIAL ---
+document.getElementById("btn-buscar-historial")?.addEventListener("click", () => {
+  document.getElementById("modal-buscar-historial").style.display = "flex";
+});
+document.getElementById("cerrar-modal-historial")?.addEventListener("click", () => {
+  document.getElementById("modal-buscar-historial").style.display = "none";
+});
+
+// --- BUSCAR RANGO ---
+document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click", async () => {
+  const desde = new Date(document.getElementById("historial-desde").value);
+  const hasta = new Date(document.getElementById("historial-hasta").value);
+  const tbody = document.querySelector("#tabla-historial-rango tbody");
+  const snap = await window.get(window.ref("/historial"));
+  tbody.innerHTML = "";
+  if (!snap.exists()) return;
+
+  const entries = Object.entries(snap.val())
+    .filter(([, mov]) => {
+      if (mov.eliminado) return false;
+      if (mov.tipo !== "TIRAR Z") return false;
+      const f = new Date(mov.fecha);
+      return f >= desde && f <= hasta;
+    })
+    .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
+
+  let totalRango = 0;
+  for (const [id, mov] of entries) {
+    const total = mov.totalGeneral || 0;
+    totalRango += total;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${id}</td>
+      <td>${total.toFixed(2)}</td>
+      <td>${mov.tipo}</td>
+      <td>${mov.cajeros ? mov.cajeros.join(", ") : ""}</td>
+      <td>${new Date(mov.fecha).toLocaleDateString()}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("historial-rango-leyenda").textContent = `Del ${desde.toLocaleDateString()} al ${hasta.toLocaleDateString()}`;
+  document.getElementById("historial-total-rango").textContent = `Total en rango: $${totalRango.toFixed(2)}`;
+});
+
+// --- IMPRIMIR RANGO ---
+document.getElementById("btn-imprimir-historial-rango")?.addEventListener("click", () => {
+  const tabla = document.getElementById("tabla-historial-rango");
+  const leyenda = document.getElementById("historial-rango-leyenda").textContent;
+  const total = document.getElementById("historial-total-rango").textContent;
+
+  const contenido = `
+${leyenda}\n\n${Array.from(tabla.querySelectorAll("tbody tr"))
+  .map(tr => tr.innerText)
+  .join("\n")}\n\n${total}`;
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "absolute";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
+    <html>
+      <head>
+        <style>
+          body { font-family: monospace; font-size:12px; max-width:7cm; white-space:pre-wrap; margin:0; padding:10px; }
+          h3 { text-align:center; }
+        </style>
+      </head>
+      <body>
+        <h3>REPORTE Z (RANGO)</h3>
+        ${contenido.replace(/\n/g, "<br>")}
+      </body>
+    </html>
+  `);
+  doc.close();
+  iframe.contentWindow.focus();
+  iframe.contentWindow.print();
+  setTimeout(() => iframe.remove(), 500);
+});
   
 // --- STOCK ---
 const stockCodigo = document.getElementById("stock-codigo");
