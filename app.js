@@ -724,7 +724,7 @@ inputBusqueda.addEventListener("input",async()=>{
   });
 });
 
-// --- GASTOS NUEVA VERSIÓN (FINAL CON ELIMINADOS EXCLUIDOS DE IMPRESIÓN) ---
+// --- GASTOS NUEVA VERSIÓN (FINAL + ID CONSECUTIVO G_XXXXXX + EXCLUYE ELIMINADOS EN MODAL) ---
 const gastosContenido = document.getElementById("gastos-contenido");
 const gastoEntero = document.getElementById("gasto-entero");
 const gastoCentavos = document.getElementById("gasto-centavos");
@@ -749,71 +749,71 @@ const gastosDiaActual = document.getElementById("gastos-dia-actual");
 let gastosArray = [];
 let diaActual = new Date();
 
-// --- FECHA SUPERIOR ---
+// === FUNCIONES AUXILIARES ===
 function mostrarFechaActual() {
-  if (!gastosDiaActual) return;
-  gastosDiaActual.textContent = `${String(diaActual.getDate()).padStart(2,"0")}/${String(diaActual.getMonth()+1).padStart(2,"0")}/${diaActual.getFullYear()}`;
+  if (gastosDiaActual)
+    gastosDiaActual.textContent = `${String(diaActual.getDate()).padStart(2,"0")}/${String(diaActual.getMonth()+1).padStart(2,"0")}/${diaActual.getFullYear()}`;
 }
 
-// --- ACCESO A GASTOS (CON CONTRASEÑA ADMIN) ---
-document.querySelector('button[data-section="gastos"]').addEventListener("click", () => {
-  showAdminActionModal(async () => {
-    document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
+function getUTCBoundsFromLocalDate(localDate) {
+  const y=localDate.getFullYear(),m=localDate.getMonth(),d=localDate.getDate();
+  return { start:new Date(Date.UTC(y,m,d,0,0,0,0)), end:new Date(Date.UTC(y,m,d,23,59,59,999)) };
+}
+function getUTCBoundsFromDateInputs(desde,hasta){
+  const [y1,m1,d1]=desde.split("-").map(Number),[y2,m2,d2]=hasta.split("-").map(Number);
+  return {
+    start:new Date(Date.UTC(y1,m1-1,d1,0,0,0,0)),
+    end:new Date(Date.UTC(y2,m2-1,d2,23,59,59,999))
+  };
+}
+function isInRangeUTC(dateUTC,startUTC,endUTC){
+  const t=dateUTC.getTime();return t>=startUTC.getTime()&&t<=endUTC.getTime();
+}
+function formatFecha(iso){
+  const d=new Date(iso);
+  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
+}
+function formatPrecio(num){
+  const e=Math.floor(num),dec=Math.round((num-e)*100);
+  return `$${e.toLocaleString("es-AR",{minimumIntegerDigits:1})},${String(dec).padStart(2,"0")}`;
+}
+
+// === GENERADOR DE ID G_000001 ... G_999999 (cíclico) ===
+async function generarNuevoIdGasto(){
+  const snap = await window.get(window.ref("/gastos_meta/idCounter"));
+  let actual = 0;
+  if(snap.exists()) actual = parseInt(snap.val()) || 0;
+  actual++;
+  if(actual>999999) actual=1;
+  await window.set(window.ref("/gastos_meta/idCounter"),actual);
+  return `G_${String(actual).padStart(6,"0")}`;
+}
+
+// === ACCESO CON CONTRASEÑA ADMIN ===
+document.querySelector('button[data-section="gastos"]').addEventListener("click",()=>{
+  showAdminActionModal(async()=>{
+    document.querySelectorAll("main > section").forEach(sec=>sec.classList.add("hidden"));
     document.getElementById("gastos").classList.remove("hidden");
     gastosContenido.classList.remove("hidden");
 
-    // --- LIMPIEZA AUTOMÁTICA (45 DÍAS) ---
-    const snapG = await window.get(window.ref("/gastos"));
-    if (snapG.exists()) {
-      const hoy = new Date();
-      const limite = 45 * 24 * 60 * 60 * 1000;
-      for (const [id, g] of Object.entries(snapG.val())) {
-        if (g.fecha && (hoy - new Date(g.fecha) > limite)) {
+    const snapG=await window.get(window.ref("/gastos"));
+    if(snapG.exists()){
+      const hoy=new Date(),limite=45*24*60*60*1000;
+      for(const [id,g] of Object.entries(snapG.val())){
+        if(g.fecha&&(hoy-new Date(g.fecha)>limite))
           await window.remove(window.ref(`/gastos/${id}`));
-        }
       }
     }
-
     loadGastosDia(diaActual);
     mostrarFechaActual();
   });
 });
 
-// --- UTILIDADES FECHAS UTC ---
-function getUTCBoundsFromLocalDate(localDate) {
-  const y = localDate.getFullYear();
-  const m = localDate.getMonth();
-  const d = localDate.getDate();
-  const start = new Date(Date.UTC(y, m, d, 0, 0, 0, 0));
-  const end   = new Date(Date.UTC(y, m, d, 23, 59, 59, 999));
-  return { start, end };
-}
-function getUTCBoundsFromDateInputs(desdeStr, hastaStr) {
-  const [y1, m1, d1] = desdeStr.split("-").map(Number);
-  const [y2, m2, d2] = hastaStr.split("-").map(Number);
-  const start = new Date(Date.UTC(y1, m1 - 1, d1, 0, 0, 0, 0));
-  const end   = new Date(Date.UTC(y2, m2 - 1, d2, 23, 59, 59, 999));
-  return { start, end };
-}
-function isInRangeUTC(dateUTC, startUTC, endUTC) {
-  const t = dateUTC.getTime();
-  return t >= startUTC.getTime() && t <= endUTC.getTime();
-}
-
-// --- FORMATO ---
-function formatFecha(iso) {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()} (${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")})`;
-}
-function formatPrecio(num) {
-  const entero = Math.floor(num);
-  const dec = Math.round((num - entero) * 100);
-  return `$${entero.toLocaleString("es-AR",{minimumIntegerDigits:1})},${String(dec).padStart(2,"0")}`;
-}
-function formatearEntero() {
-  let raw = gastoEntero.value.replace(/\D/g,"").slice(0,7);
-  let val = parseInt(raw)||0;
-  gastoEntero.value = val.toLocaleString("es-AR");
+// === FORMATEO CAMPOS ===
+function formatearEntero(){
+  let raw=gastoEntero.value.replace(/\D/g,"").slice(0,7);
+  let val=parseInt(raw)||0;
+  gastoEntero.value=val.toLocaleString("es-AR");
 }
 gastoEntero.addEventListener("input",formatearEntero);
 gastoCentavos.addEventListener("input",()=>{
@@ -822,7 +822,7 @@ gastoCentavos.addEventListener("input",()=>{
   gastoCentavos.value=v.toString().padStart(2,"0");
 });
 
-// --- AGREGAR GASTO ---
+// === AGREGAR GASTO ===
 btnAgregarGasto.addEventListener("click",async()=>{
   let entero=parseInt(gastoEntero.value.replace(/\D/g,""))||0;
   let cent=parseInt(gastoCentavos.value)||0;
@@ -830,28 +830,25 @@ btnAgregarGasto.addEventListener("click",async()=>{
   if(!desc||(entero===0&&cent===0))return;
   const monto=entero+cent/100;
   const fecha=new Date().toISOString();
-  const id="G"+Date.now();
-  await window.set(window.ref(`/gastos/${id}`),{monto,fecha,descripcion:desc,eliminado:false});
+  const idVisual=await generarNuevoIdGasto();
+  await window.set(window.ref(`/gastos/${idVisual}`),{id:idVisual,monto,fecha,descripcion:desc,eliminado:false});
   gastoEntero.value="";gastoCentavos.value="00";gastoDescripcion.value="";
   loadGastosDia(diaActual);
 });
 
-// --- CARGAR GASTOS DE UN DÍA ---
+// === CARGAR GASTOS DÍA ===
 async function loadGastosDia(fechaBase){
   const snap=await window.get(window.ref("/gastos"));
-  tablaGastos.innerHTML="";
-  gastosArray=[];
-  if(!snap.exists()) { calcularTotalDia([]); return; }
-
-  const { start, end } = getUTCBoundsFromLocalDate(fechaBase);
+  tablaGastos.innerHTML="";gastosArray=[];
+  if(!snap.exists())return;
+  const {start,end}=getUTCBoundsFromLocalDate(fechaBase);
   gastosArray=Object.entries(snap.val())
     .filter(([_,g])=>{
-      if(!g||!g.fecha||g.eliminado)return false;
+      if(!g||!g.fecha)return false;
       const fUTC=new Date(g.fecha);
       return isInRangeUTC(fUTC,start,end);
     })
     .sort((a,b)=>new Date(b[1].fecha)-new Date(a[1].fecha));
-
   renderGastosDia();
   calcularTotalDia(gastosArray);
 }
@@ -861,6 +858,7 @@ function renderGastosDia(){
   gastosArray.forEach(([id,g])=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`
+      <td>${g.id||id}</td>
       <td>${formatPrecio(g.monto||0)}</td>
       <td>${formatFecha(g.fecha)}</td>
       <td>${g.descripcion||""}</td>
@@ -868,6 +866,11 @@ function renderGastosDia(){
         <button data-imp-id="${id}">🖨️</button>
         <button data-del-id="${id}">❌</button>
       </td>`;
+    if(g.eliminado){
+      tr.style.background="#f0f0f0";
+      tr.style.opacity="0.6";
+      tr.querySelectorAll("button").forEach(b=>b.disabled=true);
+    }
     tr.querySelector(`button[data-imp-id="${id}"]`).addEventListener("click",()=>imprimirGasto(id,g));
     tr.querySelector(`button[data-del-id="${id}"]`).addEventListener("click",async()=>{
       await window.update(window.ref(`/gastos/${id}`),{eliminado:true});
@@ -878,7 +881,7 @@ function renderGastosDia(){
 }
 
 function calcularTotalDia(gArr=gastosArray){
-  const { start, end } = getUTCBoundsFromLocalDate(diaActual);
+  const {start,end}=getUTCBoundsFromLocalDate(diaActual);
   let total=0;
   gArr.forEach(([_,g])=>{
     if(!g||g.eliminado)return;
@@ -889,7 +892,7 @@ function calcularTotalDia(gArr=gastosArray){
   gastosTotalDia.textContent=`Gastos del ${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}: ${formatPrecio(total)}`;
 }
 
-// --- DÍA ANTERIOR / SIGUIENTE ---
+// === NAVEGACIÓN ENTRE DÍAS ===
 btnDiaPrev.addEventListener("click",()=>{
   const hoy=new Date();
   const diff=(hoy-diaActual)/(1000*60*60*24);
@@ -900,24 +903,23 @@ btnDiaNext.addEventListener("click",()=>{
   if(diaActual.toDateString()!==hoy.toDateString()){diaActual.setDate(diaActual.getDate()+1);loadGastosDia(diaActual);mostrarFechaActual();}
 });
 
-// --- IMPRIMIR GASTO INDIVIDUAL ---
+// === IMPRESIÓN INDIVIDUAL ===
 function imprimirGasto(id,g){
   const iframe=document.createElement("iframe");
   iframe.style.display="none";document.body.appendChild(iframe);
   const doc=iframe.contentWindow.document;
   doc.open();doc.write(`
-    <html><head><title>Gasto</title></head><body style="font-family:monospace;text-align:center;">
+    <html><head><title>${g.id||id}</title></head><body style="font-family:monospace;text-align:center;">
     <h3>COMPROBANTE DE GASTO</h3>
-    <p><b>ID:</b> ${id}</p>
+    <p><b>ID:</b> ${g.id||id}</p>
     <p><b>Monto:</b> ${formatPrecio(g.monto)}</p>
     <p><b>Fecha:</b> ${formatFecha(g.fecha)}</p>
-    <p><b>Descripción:</b> ${g.descripcion||""}</p>
     <hr><p>Zona PC - Gestión Comercial</p>
     <script>window.print();setTimeout(()=>window.close(),100);</script>
     </body></html>`);doc.close();
 }
 
-// --- MODAL IMPRESIÓN ---
+// === MODAL IMPRESIÓN ===
 function ocultarModalImprimir(){
   modalImprimir.classList.add("hidden");
   modalImprimir.style.display="none";
@@ -932,7 +934,7 @@ btnImprimirGastos.addEventListener("click",()=>{modalImprimir.style.display="fle
 cerrarModal.addEventListener("click",()=>ocultarModalImprimir());
 modalImprimir.addEventListener("click",(e)=>{if(e.target===modalImprimir)ocultarModalImprimir();});
 
-// --- MOSTRAR RANGO (EXCLUYENDO ELIMINADOS) ---
+// === MOSTRAR RANGO (EXCLUYE ELIMINADOS + MUESTRA ID SIN DESCRIPCIÓN) ===
 btnMostrarRango.addEventListener("click",async()=>{
   if(!rangoDesde.value||!rangoHasta.value)return alert("Seleccione ambas fechas");
   const d1Local=new Date(rangoDesde.value+"T00:00:00");
@@ -947,24 +949,26 @@ btnMostrarRango.addEventListener("click",async()=>{
     const fUTC=new Date(g.fecha);
     return isInRangeUTC(fUTC,start,end);
   }).sort((a,b)=>new Date(a[1].fecha)-new Date(b[1].fecha));
+
   tablaRango.innerHTML="";
   let total=0;
   todos.forEach(([_,g])=>{
     const tr=document.createElement("tr");
     tr.innerHTML=`
+      <td>${g.id||"G_??????"}</td>
       <td>${formatPrecio(g.monto||0)}</td>
-      <td>${formatFecha(g.fecha)}</td>
-      <td>${g.descripcion||""}</td>`;
+      <td>${formatFecha(g.fecha)}</td>`;
     total+=g.monto||0;
     tablaRango.appendChild(tr);
   });
+
   const f1=`${String(d1Local.getDate()).padStart(2,"0")}/${String(d1Local.getMonth()+1).padStart(2,"0")}/${d1Local.getFullYear()}`;
   const f2=`${String(d2Local.getDate()).padStart(2,"0")}/${String(d2Local.getMonth()+1).padStart(2,"0")}/${d2Local.getFullYear()}`;
   leyendaRango.textContent=`Gastos del ${f1} hasta ${f2}`;
   totalRango.textContent=`Total de gastos entre el ${f1} hasta el ${f2} = ${formatPrecio(total)}`;
 });
 
-// --- IMPRIMIR LISTADO DE RANGO ---
+// === IMPRIMIR LISTADO RANGO (SOLO ID, MONTO, FECHA/HORA) ===
 btnImprimirRango.addEventListener("click",()=>{
   const filas=[...tablaRango.querySelectorAll("tr")].map(tr=>tr.innerText).join("<br>");
   if(!filas){alert("No hay gastos para imprimir.");return;}
