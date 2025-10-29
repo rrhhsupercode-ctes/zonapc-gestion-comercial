@@ -2589,17 +2589,20 @@ function requireAdminHeader(callback) {
   };
 }
 
-// --- HEADER STOCK & SUELTOS ---
+// --- HEADER SECCIONES CON PROTECCIÓN ADMIN ---
 document.querySelectorAll("button.nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const section = btn.dataset.section;
 
-    if (section === "stock" || section === "sueltos") {
+    if (section === "stock" || section === "sueltos" || section === "tienda" || section === "gastos") {
       requireAdminHeader(() => {
         document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
         document.getElementById(section).classList.remove("hidden");
-        if (section === "stock") loadStock();
-        if (section === "sueltos") loadSueltos();
+
+        if (section === "stock" && typeof loadStock === "function") loadStock();
+        if (section === "sueltos" && typeof loadSueltos === "function") loadSueltos();
+        if (section === "tienda" && typeof loadTienda === "function") loadTienda();
+        if (section === "gastos" && typeof loadGastos === "function") loadGastos();
       });
     } else {
       // Secciones normales
