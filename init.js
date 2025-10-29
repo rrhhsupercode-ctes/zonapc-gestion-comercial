@@ -28,13 +28,13 @@ import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/fireb
 
       // --- FIRESTORE: Verificar categoría inicial "PROMOS" ---
       const dbFS = getFirestore();
-      const docRef = doc(dbFS, "categorias", "PROMOS");
+      const docRef = doc(dbFS, "categorias", "TODO");
       const docSnap = await getDoc(docRef);
       if (!docSnap.exists()) {
-        await setDoc(docRef, { nombre: "PROMOS", fechaCreacion: Date.now() });
-        console.log("✅ Categoría inicial PROMOS creada en Firestore");
+        await setDoc(docRef, { nombre: "TODO", fechaCreacion: Date.now() });
+        console.log("✅ Categoría inicial TODO creada en Firestore");
       } else {
-        console.log("ℹ️ Categoría PROMOS ya existente en Firestore");
+        console.log("ℹ️ Categoría TODO ya existente en Firestore");
       }
     } catch (err) {
       console.error("❌ Error al inicializar bases:", err);
