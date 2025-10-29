@@ -26,21 +26,30 @@ import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/fireb
         console.log("ℹ️ Base ya existente, no se sobrescribió");
       }
 
-      // --- FIRESTORE: Verificar categoría inicial "PROMOS" ---
-      const dbFS = getFirestore();
-      const docRef = doc(dbFS, "categorias", "TODO");
-      const docSnap = await getDoc(docRef);
-      if (!docSnap.exists()) {
-        await setDoc(docRef, { nombre: "TODO", fechaCreacion: Date.now() });
-        console.log("✅ Categoría inicial TODO creada en Firestore");
-      } else {
-        console.log("ℹ️ Categoría TODO ya existente en Firestore");
-      }
-    } catch (err) {
-      console.error("❌ Error al inicializar bases:", err);
+// --- FIRESTORE: Verificar categoría inicial "TODO" ---
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+const dbFS = getFirestore();
+
+async function asegurarCategoriaInicial() {
+  try {
+    const docRef = doc(dbFS, "categorias", "TODO");
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      console.log("ℹ️ Creando categoría TODO en Firestore...");
+      await setDoc(docRef, { nombre: "TODO", fechaCreacion: Date.now() });
+      console.log("✅ Categoría inicial TODO creada en Firestore");
+    } else {
+      console.log("ℹ️ Categoría TODO ya existente en Firestore");
     }
-  })();
-})();
+  } catch (err) {
+    console.warn("⚠️ Firestore no disponible aún, reintentando en 3s...");
+    setTimeout(asegurarCategoriaInicial, 3000);
+  }
+}
+
+asegurarCategoriaInicial();
 
 // --- Inicialización global del sistema ---
 window.addEventListener("DOMContentLoaded", async () => {
