@@ -14,13 +14,14 @@
   <header id="header-tienda">
     <div class="header-superior">
       <h1 id="nombre-tienda">Zona PC</h1>
-      <div class="header-botones">
+      <div class="acciones-header">
+        <button id="btn-login" class="btn-sesion">👤 Iniciar Sesión / Registrarse</button>
         <div class="carrito-icono" id="abrir-carrito">
           🛒 <span id="contador-carrito">0</span>
         </div>
-        <button id="btn-login" class="btn-header">Iniciar Sesión / Registrarse</button>
       </div>
     </div>
+
     <div class="header-inferior">
       <div id="categorias-container">
         <!-- Botones dinámicos de categorías -->
@@ -50,44 +51,41 @@
       <h2>Tu carrito</h2>
       <button id="cerrar-carrito">✕</button>
     </div>
-    <div id="carrito-items"></div>
+    <div id="carrito-items">
+      <!-- Productos seleccionados -->
+    </div>
     <div class="carrito-footer">
       <div id="total-carrito">Total: $0</div>
       <button id="finalizar-pedido">Completar Pedido</button>
     </div>
   </aside>
 
-  <!-- MODAL LOGIN -->
-  <div id="modal-login">
+  <!-- MODAL LOGIN / PERFIL -->
+  <div id="modal-login" class="modal oculto">
     <div class="modal-contenido">
-      <h2 id="modal-titulo">Iniciar Sesión / Registrarse</h2>
-
-      <label for="login-dni">DNI</label>
-      <input type="number" id="login-dni" placeholder="8 dígitos" maxlength="8">
-
-      <label for="login-pass">Contraseña</label>
-      <input type="password" id="login-pass" placeholder="4-15 caracteres">
-
-      <div id="opcional-container" class="hidden">
-        <label for="login-nombre">Nombre (opcional)</label>
-        <input type="text" id="login-nombre" maxlength="50">
-
-        <label for="login-direccion">Dirección (opcional)</label>
-        <input type="text" id="login-direccion" maxlength="100">
-
-        <label for="login-whatsapp">WhatsApp (opcional)</label>
-        <input type="text" id="login-whatsapp" maxlength="20">
+      <h2 id="titulo-modal">Iniciar Sesión / Registrarse</h2>
+      <div class="modal-body">
+        <label>DNI</label>
+        <input type="number" id="dni-input" maxlength="8" placeholder="Ej: 12345678">
+        <label>Contraseña</label>
+        <input type="password" id="pass-input" maxlength="15" placeholder="4 a 15 caracteres">
+        <div id="campos-opcionales" class="oculto">
+          <label>Nombre</label>
+          <input type="text" id="nombre-input" maxlength="30" placeholder="Tu nombre (opcional)">
+          <label>WhatsApp</label>
+          <input type="text" id="whatsapp-input" maxlength="15" placeholder="Ej: +5493704123456">
+          <label>Dirección</label>
+          <input type="text" id="direccion-input" maxlength="80" placeholder="Tu dirección (opcional)">
+        </div>
+        <p id="msg-login"></p>
       </div>
-
-      <div class="modal-botones">
+      <div class="modal-footer">
         <button id="btn-ingresar">Ingresar</button>
-        <button id="btn-crear-cuenta">Crear Cuenta</button>
-        <button id="btn-guardar-perfil" class="hidden">Guardar Cambios</button>
+        <button id="btn-registrar">Crear cuenta</button>
+        <button id="btn-guardar-perfil" class="oculto">Guardar cambios</button>
+        <button id="btn-cerrar-sesion" class="oculto">Cerrar sesión</button>
+        <button id="cerrar-modal">Cancelar</button>
       </div>
-
-      <div id="login-msg"></div>
-      <button id="btn-cerrar-sesion" class="hidden cerrar-sesion">Cerrar Sesión</button>
-      <button id="btn-cerrar-modal" class="cerrar-modal">✕</button>
     </div>
   </div>
 
