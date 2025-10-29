@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tienda | Zona PC</title>
+  <link rel="icon" type="image/x-icon" href="img/favicon.ico">
+  <link rel="stylesheet" href="tienda.css">
+  <script type="module" src="tienda.js" defer></script>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header id="header-tienda">
+    <div class="header-superior">
+      <h1 id="nombre-tienda">Zona PC</h1>
+      <div class="header-botones">
+        <div class="carrito-icono" id="abrir-carrito">
+          🛒 <span id="contador-carrito">0</span>
+        </div>
+        <button id="btn-login" class="btn-header">Iniciar Sesión / Registrarse</button>
+      </div>
+    </div>
+    <div class="header-inferior">
+      <div id="categorias-container">
+        <!-- Botones dinámicos de categorías -->
+      </div>
+    </div>
+  </header>
+
+  <!-- FILTROS -->
+  <section id="filtros">
+    <input type="text" id="buscar-producto" placeholder="Buscar producto...">
+    <select id="ordenar-producto">
+      <option value="az">Ordenar A–Z</option>
+      <option value="za">Ordenar Z–A</option>
+      <option value="precio-asc">Precio ↑</option>
+      <option value="precio-desc">Precio ↓</option>
+    </select>
+  </section>
+
+  <!-- PRODUCTOS -->
+  <main id="productos-container">
+    <!-- Se cargan las tarjetas dinámicamente -->
+  </main>
+
+  <!-- CARRITO -->
+  <aside id="carrito">
+    <div class="carrito-header">
+      <h2>Tu carrito</h2>
+      <button id="cerrar-carrito">✕</button>
+    </div>
+    <div id="carrito-items"></div>
+    <div class="carrito-footer">
+      <div id="total-carrito">Total: $0</div>
+      <button id="finalizar-pedido">Completar Pedido</button>
+    </div>
+  </aside>
+
+  <!-- MODAL LOGIN -->
+  <div id="modal-login">
+    <div class="modal-contenido">
+      <h2 id="modal-titulo">Iniciar Sesión / Registrarse</h2>
+
+      <label for="login-dni">DNI</label>
+      <input type="number" id="login-dni" placeholder="8 dígitos" maxlength="8">
+
+      <label for="login-pass">Contraseña</label>
+      <input type="password" id="login-pass" placeholder="4-15 caracteres">
+
+      <div id="opcional-container" class="hidden">
+        <label for="login-nombre">Nombre (opcional)</label>
+        <input type="text" id="login-nombre" maxlength="50">
+
+        <label for="login-direccion">Dirección (opcional)</label>
+        <input type="text" id="login-direccion" maxlength="100">
+
+        <label for="login-whatsapp">WhatsApp (opcional)</label>
+        <input type="text" id="login-whatsapp" maxlength="20">
+      </div>
+
+      <div class="modal-botones">
+        <button id="btn-ingresar">Ingresar</button>
+        <button id="btn-crear-cuenta">Crear Cuenta</button>
+        <button id="btn-guardar-perfil" class="hidden">Guardar Cambios</button>
+      </div>
+
+      <div id="login-msg"></div>
+      <button id="btn-cerrar-sesion" class="hidden cerrar-sesion">Cerrar Sesión</button>
+      <button id="btn-cerrar-modal" class="cerrar-modal">✕</button>
+    </div>
+  </div>
+
+  <!-- OVERLAY -->
+  <div id="overlay"></div>
+
+</body>
+</html>
