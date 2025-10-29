@@ -711,13 +711,13 @@ function mostrarFechaActual() {
 
 function getUTCBoundsFromLocalDate(localDate) {
   const y=localDate.getFullYear(),m=localDate.getMonth(),d=localDate.getDate();
-  return { start:new Date(Date.UTC(y,m,d,0,0,0,0)), end:new Date(Date.UTC(y,m,d,23,59,59,999)) };
+  return { start:new Date(y,m,d,0,0,0,0), end:new Date(y,m,d,23,59,59,999) };
 }
 function getUTCBoundsFromDateInputs(desde,hasta){
   const [y1,m1,d1]=desde.split("-").map(Number),[y2,m2,d2]=hasta.split("-").map(Number);
   return {
-    start:new Date(Date.UTC(y1,m1-1,d1,0,0,0,0)),
-    end:new Date(Date.UTC(y2,m2-1,d2,23,59,59,999))
+    start:new Date(y1,m1-1,d1,0,0,0,0),
+    end:new Date(y2,m2-1,d2,23,59,59,999)
   };
 }
 function isInRangeUTC(dateUTC,startUTC,endUTC){
@@ -748,10 +748,12 @@ const btnGastos = document.querySelector('button[data-section="gastos"]');
 if (btnGastos) {
   btnGastos.addEventListener("click", () => {
     requireAdminHeader(async () => {
+      // Asegurar que la sección esté visible antes de cargar
       document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
       document.getElementById("gastos").classList.remove("hidden");
       gastosContenido.classList.remove("hidden");
 
+      // Eliminar gastos viejos (+45 días)
       const snapG = await window.get(window.ref("/gastos"));
       if (snapG.exists()) {
         const hoy = new Date(), limite = 45 * 24 * 60 * 60 * 1000;
@@ -760,8 +762,8 @@ if (btnGastos) {
             await window.remove(window.ref(`/gastos/${id}`));
         }
       }
-      loadGastosDia(diaActual);
       mostrarFechaActual();
+      loadGastosDia(diaActual);
     });
   });
 }
@@ -785,14 +787,22 @@ btnAgregarGasto.addEventListener("click",async()=>{
   let cent=parseInt(gastoCentavos.value)||0;
   let desc=gastoDescripcion.value.trim().slice(0,150);
   if(!desc||(entero===0&&cent===0))return;
-  const monto=entero+cent/100;
-  const fecha=new Date().toISOString();
-  const idVisual=await generarNuevoIdGasto();
-  await window.set(window.ref(`/gastos/${idVisual}`), { id:idVisual, monto, fecha, descripcion:desc, eliminado:false });
-gastoEntero.value = "";
-gastoCentavos.value = "00";
-gastoDescripcion.value = "";
-setTimeout(() => loadGastosDia(diaActual), 300);
+
+  const monto = entero + cent/100;
+  // Usar fecha local (no UTC)
+  const fecha = new Date().toLocaleString("sv-SE").replace(" ", "T");
+  const idVisual = await generarNuevoIdGasto();
+
+  await window.set(window.ref(`/gastos/${idVisual}`), {
+    id: idVisual, monto, fecha, descripcion: desc, eliminado: false
+  });
+
+  gastoEntero.value=""; 
+  gastoCentavos.value="00"; 
+  gastoDescripcion.value="";
+
+  // Esperar un poco antes de recargar (asegura lectura desde Firebase)
+  setTimeout(() => loadGastosDia(diaActual), 300);
 });
 
 // === CARGAR GASTOS DÍA ===
@@ -855,11 +865,19 @@ function calcularTotalDia(gArr=gastosArray){
 btnDiaPrev.addEventListener("click",()=>{
   const hoy=new Date();
   const diff=(hoy-diaActual)/(1000*60*60*24);
-  if(diff<45){diaActual.setDate(diaActual.getDate()-1);loadGastosDia(diaActual);mostrarFechaActual();}
+  if(diff<45){
+    diaActual.setDate(diaActual.getDate()-1);
+    loadGastosDia(diaActual);
+    mostrarFechaActual();
+  }
 });
 btnDiaNext.addEventListener("click",()=>{
   const hoy=new Date();
-  if(diaActual.toDateString()!==hoy.toDateString()){diaActual.setDate(diaActual.getDate()+1);loadGastosDia(diaActual);mostrarFechaActual();}
+  if(diaActual.toDateString()!==hoy.toDateString()){
+    diaActual.setDate(diaActual.getDate()+1);
+    loadGastosDia(diaActual);
+    mostrarFechaActual();
+  }
 });
 
 // === IMPRESIÓN INDIVIDUAL ===
