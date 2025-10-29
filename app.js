@@ -2165,308 +2165,222 @@ btnRestaurar.addEventListener("click", async () => {
   }
 });
 
-// --- TIENDA ---
-
-import { 
-  getFirestore, collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy 
+// --- ADMIN TIENDA ---
+import {
+  getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
-import { 
-  getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject, listAll 
+import {
+  getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata
 } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
 
 const dbFS = getFirestore();
 const storage = getStorage();
 
-// --- REFERENCIAS DOM ---
-const nombreTienda = document.getElementById("nombre-tienda");
-const categoriasContainer = document.getElementById("categorias-container");
-const productosContainer = document.getElementById("productos-container");
-const contadorCarrito = document.getElementById("contador-carrito");
-const abrirCarrito = document.getElementById("abrir-carrito");
-const cerrarCarrito = document.getElementById("cerrar-carrito");
-const carritoPanel = document.getElementById("carrito");
-const overlay = document.getElementById("overlay");
-const buscarInput = document.getElementById("buscar-producto");
-const ordenarSelect = document.getElementById("ordenar-producto");
-const totalCarrito = document.getElementById("total-carrito");
-const finalizarPedido = document.getElementById("finalizar-pedido");
-const btnLogin = document.getElementById("btn-login");
+const listaCategorias = document.getElementById("lista-categorias");
+const btnNuevaCategoria = document.getElementById("btn-nueva-categoria");
+const btnEditarCategoria = document.getElementById("btn-editar-categoria");
+const btnEliminarCategoria = document.getElementById("btn-eliminar-categoria");
+const inputNuevaCategoria = document.getElementById("nueva-categoria");
+const tablaTienda = document.getElementById("tabla-tienda").querySelector("tbody");
 
-// --- MODAL LOGIN / PERFIL ---
-const modalLogin = document.getElementById("modal-login");
-const cerrarModal = document.getElementById("cerrar-modal");
-const tituloModal = document.getElementById("titulo-modal");
-const dniInput = document.getElementById("dni-input");
-const passInput = document.getElementById("pass-input");
-const nombreInput = document.getElementById("nombre-input");
-const whatsappInput = document.getElementById("whatsapp-input");
-const direccionInput = document.getElementById("direccion-input");
-const camposOpcionales = document.getElementById("campos-opcionales");
-const msgLogin = document.getElementById("msg-login");
-const btnIngresar = document.getElementById("btn-ingresar");
-const btnRegistrar = document.getElementById("btn-registrar");
-const btnGuardarPerfil = document.getElementById("btn-guardar-perfil");
-const btnCerrarSesion = document.getElementById("btn-cerrar-sesion");
+// --- INICIALIZACIÓN ---
+async function loadTienda() {
+  await cargarCategorias();
+  await mostrarProductos("TODO");
+}
 
-// --- VARIABLES GLOBALES ---
-let categorias = [];
-let productos = [];
-let carrito = JSON.parse(localStorage.getItem("carrito")) || [];
-let usuario = JSON.parse(localStorage.getItem("usuario")) || null;
-
-// --- CARGAR NOMBRE DE TIENDA ---
-async function loadNombreTienda() {
-  const snap = await window.get(window.ref("/config"));
-  if (snap.exists()) {
-    const val = snap.val();
-    nombreTienda.textContent = val.shopName || "Zona PC";
+// --- CATEGORÍAS ---
+async function cargarCategorias() {
+  listaCategorias.innerHTML = "";
+  const snap = await getDocs(collection(dbFS, "categorias"));
+  const categorias = [];
+  snap.forEach(doc => categorias.push(doc.id));
+  if (!categorias.includes("TODO")) {
+    await setDoc(doc(dbFS, "categorias", "TODO"), { nombre: "TODO", fechaCreacion: Date.now() });
+    categorias.push("TODO");
   }
-}
-
-// --- CARGAR CATEGORÍAS ---
-async function loadCategorias() {
-  const catSnap = await getDocs(collection(dbFS, "categorias"));
-  categorias = catSnap.docs.map(d => ({ id: d.id, ...d.data() }))
-    .sort((a,b) => a.nombre.localeCompare(b.nombre));
-  renderCategorias();
-}
-
-// --- MOSTRAR BOTONES DE CATEGORÍAS ---
-function renderCategorias() {
-  categoriasContainer.innerHTML = "";
-  categorias.forEach(cat => {
-    const btn = document.createElement("button");
-    btn.textContent = cat.nombre;
-    btn.addEventListener("click", () => loadProductos(cat.id));
-    categoriasContainer.appendChild(btn);
+  categorias.sort().forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    listaCategorias.appendChild(opt);
   });
 }
 
-// --- CARGAR PRODUCTOS POR CATEGORÍA ---
-async function loadProductos(catID) {
-  productosContainer.innerHTML = "";
-  const colRef = collection(dbFS, "categorias", catID, "productos");
-  const q = query(colRef, orderBy("nombre"));
-  const snap = await getDocs(q);
-  productos = snap.docs.map(d => ({ id: d.id, ...d.data(), catID }));
-  renderProductos();
-}
+btnNuevaCategoria.onclick = async () => {
+  const nombre = inputNuevaCategoria.value.trim().toUpperCase();
+  if (nombre.length < 4 || nombre.length > 15 || /[^A-Z0-9 ]/.test(nombre)) {
+    alert("Nombre inválido (solo letras, números y espacios, 4-15 caracteres)");
+    return;
+  }
+  await setDoc(doc(dbFS, "categorias", nombre), { nombre, fechaCreacion: Date.now() });
+  await cargarCategorias();
+  inputNuevaCategoria.value = "";
+  alert("✅ Categoría creada");
+};
 
-// --- RENDERIZAR PRODUCTOS ---
-function renderProductos() {
-  productosContainer.innerHTML = "";
-  let filtro = buscarInput.value.toLowerCase();
-  let lista = productos.filter(p => p.nombre.toLowerCase().includes(filtro));
-  
-  const orden = ordenarSelect.value;
-  if (orden === "az") lista.sort((a,b) => a.nombre.localeCompare(b.nombre));
-  if (orden === "za") lista.sort((a,b) => b.nombre.localeCompare(a.nombre));
-  if (orden === "precio-asc") lista.sort((a,b) => a.precio - b.precio);
-  if (orden === "precio-desc") lista.sort((a,b) => b.precio - a.precio);
+btnEditarCategoria.onclick = async () => {
+  const actual = listaCategorias.value;
+  if (actual === "TODO") return alert("❌ No puedes editar la categoría TODO");
+  const nuevo = prompt("Nuevo nombre para la categoría:", actual);
+  if (!nuevo) return;
+  const nuevoNombre = nuevo.trim().toUpperCase();
+  if (nuevoNombre.length < 4 || nuevoNombre.length > 15 || /[^A-Z0-9 ]/.test(nuevoNombre)) {
+    alert("Nombre inválido");
+    return;
+  }
+  const catRef = doc(dbFS, "categorias", actual);
+  const itemsSnap = await getDocs(collection(catRef, "items"));
+  const nuevaCatRef = doc(dbFS, "categorias", nuevoNombre);
+  await setDoc(nuevaCatRef, { nombre: nuevoNombre, fechaCreacion: Date.now() });
+  for (const item of itemsSnap.docs) {
+    await setDoc(doc(nuevaCatRef, "items", item.id), item.data());
+    await deleteDoc(doc(catRef, "items", item.id));
+  }
+  await deleteDoc(catRef);
+  await cargarCategorias();
+  alert("✅ Categoría editada");
+};
 
-  lista.forEach(p => {
-    const card = document.createElement("div");
-    card.className = "producto-card";
-    card.innerHTML = `
-      <img src="${p.fotoURL || 'img/default256.png'}" alt="${p.nombre}" loading="lazy">
-      <div class="producto-nombre">${p.nombre}</div>
-      <div class="producto-descripcion">${p.descripcion || ""}</div>
-      <div class="producto-precio">$${p.precio}</div>
+btnEliminarCategoria.onclick = async () => {
+  const cat = listaCategorias.value;
+  if (cat === "TODO") return alert("❌ No puedes eliminar la categoría TODO");
+  if (!confirm("⚠️ Si eliminas esta categoría se eliminarán también todas las fotos cargadas.\n¿Deseas continuar?")) return;
+  const catRef = doc(dbFS, "categorias", cat);
+  const itemsSnap = await getDocs(collection(catRef, "items"));
+  for (const item of itemsSnap.docs) {
+    const data = item.data();
+    if (data.imagenPath) {
+      try { await deleteObject(sRef(storage, data.imagenPath)); } catch {}
+    }
+    await deleteDoc(doc(catRef, "items", item.id));
+  }
+  await deleteDoc(catRef);
+  await cargarCategorias();
+  alert("✅ Categoría eliminada");
+};
+
+// --- PRODUCTOS ---
+async function mostrarProductos(categoria) {
+  tablaTienda.innerHTML = "";
+  const productos = [];
+
+  const stockSnap = await window.get(window.ref("/stock"));
+  const sueltosSnap = await window.get(window.ref("/sueltos"));
+
+  if (stockSnap.exists()) {
+    Object.entries(stockSnap.val()).forEach(([id, val]) => {
+      productos.push({ id, tipo: "STOCK", nombre: val.nombre || val.name, precio: val.precio || 0 });
+    });
+  }
+  if (sueltosSnap.exists()) {
+    Object.entries(sueltosSnap.val()).forEach(([id, val]) => {
+      productos.push({ id, tipo: "SUELTO", nombre: val.nombre || val.name, precio: val.precio || 0 });
+    });
+  }
+
+  productos.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  for (const p of productos) {
+    const fila = document.createElement("tr");
+    fila.innerHTML = `
+      <td>${p.tipo}</td>
+      <td>${p.nombre}</td>
+      <td>$${p.precio}</td>
+      <td contenteditable="true" class="descripcion-cell" data-id="${p.id}"></td>
+      <td><img src="./img/default.png" width="64" height="64" style="object-fit:cover;border-radius:5px;" id="img-${p.id}"></td>
+      <td>
+        <button class="editar-foto" data-id="${p.id}" data-tipo="${p.tipo}">🖼️ Editar Foto</button>
+        <button class="eliminar-foto" data-id="${p.id}" data-tipo="${p.tipo}">🗑️ Eliminar Foto</button>
+      </td>
     `;
-    card.querySelector("img").addEventListener("click", () => agregarAlCarrito(p));
-    productosContainer.appendChild(card);
-  });
-}
+    tablaTienda.appendChild(fila);
+  }
 
-// --- AGREGAR AL CARRITO ---
-function agregarAlCarrito(p) {
-  const item = carrito.find(i => i.id === p.id && i.catID === p.catID);
-  if (item) item.cantidad++;
-  else carrito.push({ ...p, cantidad: 1 });
-  guardarCarrito();
-  animarCarrito();
-  renderCarrito();
-}
-
-// --- GUARDAR CARRITO LOCAL ---
-function guardarCarrito() {
-  localStorage.setItem("carrito", JSON.stringify(carrito));
-}
-
-// --- RENDERIZAR CARRITO ---
-function renderCarrito() {
-  const items = document.getElementById("carrito-items");
-  items.innerHTML = "";
-  let total = 0;
-
-  carrito.forEach(p => {
-    total += p.precio * p.cantidad;
-    const div = document.createElement("div");
-    div.className = "carrito-item";
-    div.innerHTML = `
-      <span>${p.nombre} x${p.cantidad}</span>
-      <strong>$${p.precio * p.cantidad}</strong>
-    `;
-    items.appendChild(div);
+  tablaTienda.querySelectorAll(".descripcion-cell").forEach(cell=>{
+    cell.addEventListener("blur", async e=>{
+      const id = cell.dataset.id;
+      const texto = cell.textContent.trim().slice(0,50);
+      const catRef = doc(dbFS, "categorias", categoria);
+      await setDoc(doc(collection(catRef,"items"), id), { descripcion: texto }, { merge:true });
+    });
   });
 
-  contadorCarrito.textContent = carrito.length;
-  totalCarrito.textContent = `Total: $${total}`;
-}
+  tablaTienda.querySelectorAll(".editar-foto").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.id;
+      const tipo = btn.dataset.tipo;
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/png,image/jpeg";
+      input.onchange = async e=>{
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 3*1024*1024) return alert("Archivo demasiado grande (máx. 3MB)");
+        const usage = await calcularUsoStorage();
+        if (usage >= 995) return alert("Se alcanzó el límite de almacenamiento. Elimine imágenes o amplíe su plan.");
+        if (usage >= 990) alert("⚠️ Las fotos cargadas están llegando al límite de espacio 990/1000MB");
 
-// --- ANIMAR ICONO DE CARRITO ---
-function animarCarrito() {
-  contadorCarrito.style.transform = "scale(1.3)";
-  setTimeout(() => contadorCarrito.style.transform = "scale(1)", 200);
-}
-
-// --- FINALIZAR PEDIDO (WHATSAPP) ---
-finalizarPedido.addEventListener("click", () => {
-  if (carrito.length === 0) return alert("No hay productos en el carrito");
-  let total = carrito.reduce((acc,p) => acc + p.precio * p.cantidad, 0);
-  let texto = `*Pedido de ${usuario?.nombre || "Cliente"}*\n`;
-  texto += carrito.map(p => `${p.nombre} x${p.cantidad} - $${p.precio * p.cantidad}`).join("\n");
-  texto += `\nTotal: $${total}`;
-  if (usuario?.direccion) texto += `\nDirección: ${usuario.direccion}`;
-  if (usuario?.whatsapp) texto += `\nWhatsApp: ${usuario.whatsapp}`;
-  const link = `https://wa.me/${usuario?.whatsapp?.replace(/\D/g,'') || ''}?text=${encodeURIComponent(texto)}`;
-  window.open(link, "_blank");
-});
-
-// --- LOGIN / REGISTRO ---
-btnLogin.addEventListener("click", () => {
-  modalLogin.classList.add("visible");
-  overlay.classList.add("visible");
-  tituloModal.textContent = "Iniciar Sesión / Registrarse";
-  camposOpcionales.classList.add("oculto");
-  btnIngresar.style.display = "inline-block";
-  btnRegistrar.style.display = "inline-block";
-  btnGuardarPerfil.classList.add("oculto");
-  btnCerrarSesion.classList.add("oculto");
-  msgLogin.textContent = "";
-});
-
-cerrarModal.addEventListener("click", cerrarModalLogin);
-
-function cerrarModalLogin() {
-  modalLogin.classList.remove("visible");
-  overlay.classList.remove("visible");
-  dniInput.value = passInput.value = "";
-  msgLogin.textContent = "";
-}
-
-// --- INGRESAR ---
-btnIngresar.addEventListener("click", async () => {
-  const dni = dniInput.value.trim();
-  const pass = passInput.value.trim();
-  if (dni.length !== 8 || pass.length < 4) return msgLogin.textContent = "Datos inválidos";
-  const ref = doc(dbFS, "usuarios_clientes", dni);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return msgLogin.textContent = "Usuario no registrado";
-  const data = snap.data();
-  if (data.pass !== pass) return msgLogin.textContent = "Contraseña incorrecta";
-  usuario = { dni, ...data };
-  localStorage.setItem("usuario", JSON.stringify(usuario));
-  msgLogin.textContent = "✅ Sesión iniciada";
-  setTimeout(() => location.reload(), 700);
-});
-
-// --- REGISTRAR ---
-btnRegistrar.addEventListener("click", async () => {
-  const dni = dniInput.value.trim();
-  const pass = passInput.value.trim();
-  if (dni.length !== 8 || pass.length < 4) return msgLogin.textContent = "Datos inválidos";
-  const ref = doc(dbFS, "usuarios_clientes", dni);
-  const snap = await getDoc(ref);
-  if (snap.exists()) return msgLogin.textContent = "El usuario ya existe";
-  await setDoc(ref, { pass, nombre: "", whatsapp: "", direccion: "" });
-  msgLogin.textContent = "✅ Usuario creado";
-});
-
-// --- PERFIL ---
-if (usuario) {
-  btnLogin.textContent = "👤 Editar Perfil";
-  btnLogin.addEventListener("click", () => {
-    modalLogin.classList.add("visible");
-    overlay.classList.add("visible");
-    tituloModal.textContent = "Editar Perfil";
-    camposOpcionales.classList.remove("oculto");
-    btnIngresar.style.display = "none";
-    btnRegistrar.style.display = "none";
-    btnGuardarPerfil.classList.remove("oculto");
-    btnCerrarSesion.classList.remove("oculto");
-    dniInput.value = usuario.dni;
-    passInput.value = usuario.pass;
-    nombreInput.value = usuario.nombre || "";
-    whatsappInput.value = usuario.whatsapp || "";
-    direccionInput.value = usuario.direccion || "";
+        const catRef = doc(dbFS, "categorias", categoria);
+        const itemRef = doc(collection(catRef,"items"), id);
+        const imgPath = `productos/${categoria}/${id}.jpg`;
+        const storageRef = sRef(storage, imgPath);
+        try { await deleteObject(storageRef); } catch {}
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        await setDoc(itemRef, { imagenURL: url, imagenPath: imgPath, tipo, nombre: p.nombre, precio: p.precio }, { merge:true });
+        document.getElementById(`img-${id}`).src = url;
+        alert("✅ Foto actualizada");
+      };
+      input.click();
+    });
   });
-}
 
-btnGuardarPerfil.addEventListener("click", async () => {
-  const ref = doc(dbFS, "usuarios_clientes", usuario.dni);
-  const nuevosDatos = {
-    pass: passInput.value.trim() || usuario.pass,
-    nombre: nombreInput.value.trim(),
-    whatsapp: whatsappInput.value.trim(),
-    direccion: direccionInput.value.trim()
-  };
-  await updateDoc(ref, nuevosDatos);
-  usuario = { dni: usuario.dni, ...nuevosDatos };
-  localStorage.setItem("usuario", JSON.stringify(usuario));
-  msgLogin.textContent = "✅ Perfil actualizado";
-  setTimeout(() => location.reload(), 700);
-});
-
-btnCerrarSesion.addEventListener("click", () => {
-  localStorage.removeItem("usuario");
-  localStorage.removeItem("carrito");
-  location.reload();
-});
-
-// --- OVERLAY CERRAR ---
-overlay.addEventListener("click", cerrarModalLogin);
-
-// --- CARRITO SLIDE ---
-abrirCarrito.addEventListener("click", () => {
-  carritoPanel.classList.add("abierto");
-  overlay.classList.add("visible");
-});
-cerrarCarrito.addEventListener("click", () => {
-  carritoPanel.classList.remove("abierto");
-  overlay.classList.remove("visible");
-});
-
-// --- CONTROL DE ESPACIO STORAGE ---
-async function verificarEspacioStorage() {
-  try {
-    const list = await listAll(sRef(storage, "productos"));
-    let totalSize = 0;
-    for (const folder of list.prefixes) {
-      const sub = await listAll(folder);
-      for (const item of sub.items) {
-        const metadata = await item.getMetadata();
-        totalSize += metadata.size;
+  tablaTienda.querySelectorAll(".eliminar-foto").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.dataset.id;
+      const catRef = doc(dbFS, "categorias", categoria);
+      const itemRef = doc(collection(catRef,"items"), id);
+      const snap = await getDocs(collection(catRef,"items"));
+      const data = {};
+      snap.forEach(docSnap=>{
+        if (docSnap.id===id) Object.assign(data, docSnap.data());
+      });
+      if (data.imagenPath) {
+        try { await deleteObject(sRef(storage, data.imagenPath)); } catch {}
       }
-    }
-    const totalMB = totalSize / (1024 * 1024);
-    if (totalMB >= 990 && totalMB < 995) alert("⚠️ ALERTA: Las fotos cargadas están llegando al límite de espacio (990/1000MB)");
-    if (totalMB >= 995) {
-      alert("🚫 Se alcanzó el límite de almacenamiento. Elimine imágenes o amplíe su plan.");
-      document.querySelectorAll(".btn-subir-foto").forEach(b => b.disabled = true);
-    }
-  } catch (err) { console.log(err); }
+      await updateDoc(itemRef, { imagenURL: "./img/default.png", imagenPath: "" });
+      document.getElementById(`img-${id}`).src = "./img/default.png";
+      alert("✅ Foto restaurada");
+    });
+  });
 }
 
-// --- EVENTOS DE FILTRO ---
-buscarInput.addEventListener("input", renderProductos);
-ordenarSelect.addEventListener("change", renderProductos);
+// --- MONITOREAR CAMBIO DE CATEGORÍA ---
+listaCategorias.addEventListener("change", ()=>{
+  const cat = listaCategorias.value;
+  mostrarProductos(cat);
+});
 
-// --- INICIO ---
-await loadNombreTienda();
-await loadCategorias();
-renderCarrito();
-verificarEspacioStorage();
+// --- CALCULAR USO STORAGE (MB) ---
+async function calcularUsoStorage() {
+  let total = 0;
+  async function recorrer(ruta) {
+    const dirRef = sRef(storage, ruta);
+    const res = await listAll(dirRef);
+    for (const item of res.items) {
+      try {
+        const meta = await getMetadata(item);
+        total += meta.size / (1024*1024);
+      } catch {}
+    }
+    for (const folder of res.prefixes) {
+      await recorrer(folder.fullPath);
+    }
+  }
+  await recorrer("productos");
+  return Math.round(total);
+}
+
 
 // --- MODAL ADMIN (OCULTO, SOLO SE CREA CUANDO SE NECESITA) ---
 let adminActionModal = null;
