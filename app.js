@@ -788,9 +788,11 @@ btnAgregarGasto.addEventListener("click",async()=>{
   const monto=entero+cent/100;
   const fecha=new Date().toISOString();
   const idVisual=await generarNuevoIdGasto();
-  await window.set(window.ref(`/gastos/${idVisual}`),{id:idVisual,monto,fecha,descripcion:desc,eliminado:false});
-  gastoEntero.value="";gastoCentavos.value="00";gastoDescripcion.value="";
-  loadGastosDia(diaActual);
+  await window.set(window.ref(`/gastos/${idVisual}`), { id:idVisual, monto, fecha, descripcion:desc, eliminado:false });
+gastoEntero.value = "";
+gastoCentavos.value = "00";
+gastoDescripcion.value = "";
+setTimeout(() => loadGastosDia(diaActual), 300);
 });
 
 // === CARGAR GASTOS DÍA ===
