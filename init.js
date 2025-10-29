@@ -28,24 +28,8 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
         console.log("ℹ️ Base ya existente, no se sobrescribió");
       }
 
-      // --- Corrige automáticamente el bucket incorrecto ---
-      if (window.app?.options?.storageBucket?.includes("firebasestorage.app")) {
-        window.app.options.storageBucket = `${window.app.options.projectId}.appspot.com`;
-        console.log("⚙️ Bucket corregido automáticamente:", window.app.options.storageBucket);
-      }
-
-      // --- Autenticación anónima (previene errores de permisos) ---
-      const auth = getAuth(window.app);
-      try {
-        await signInAnonymously(auth);
-        console.log("✅ Sesión anónima iniciada para Firestore");
-      } catch (e) {
-        console.warn("⚠️ No se pudo autenticar anónimamente:", e.message);
-      }
-
       // --- Firestore: verificar categoría inicial "TODO" ---
       const dbFS = getFirestore(window.app);
-
       const docRef = doc(dbFS, "categorias", "TODO");
       const docSnap = await getDoc(docRef);
 
