@@ -265,12 +265,14 @@
 <!-- TIENDA -->
 <section id="tienda" class="hidden">
   <h2>Tienda</h2>
+
   <div id="tienda-login">
     <h3>🔑 Acceso de administrador</h3>
     <input id="tienda-pass" type="password" placeholder="Contraseña de admin">
     <button id="btn-tienda-login">Ingresar</button>
     <p id="tienda-msg" class="msg-error"></p>
   </div>
+
   <div id="tienda-contenido" class="hidden">
     <h3>Gestión de Categorías</h3>
     <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
@@ -280,22 +282,21 @@
       <button id="btn-editar-categoria">✏️ Editar categoría</button>
       <button id="btn-eliminar-categoria">🗑️ Eliminar categoría</button>
     </div>
-    <div style="display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap;">
-      <div style="flex:1;">
-        <h4>Stock</h4>
-        <table id="tabla-tienda-stock">
-          <thead><tr><th>Nombre</th><th>Precio</th><th>Descripción</th><th>Acción</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div style="flex:1;">
-        <h4>Sueltos</h4>
-        <table id="tabla-tienda-sueltos">
-          <thead><tr><th>Nombre</th><th>Precio</th><th>Descripción</th><th>Acción</th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+
+    <h3>Productos de la Categoría</h3>
+    <table id="tabla-tienda">
+      <thead>
+        <tr>
+          <th>TIPO</th>
+          <th>NOMBRE</th>
+          <th>PRECIO</th>
+          <th>DESCRIPCIÓN</th>
+          <th>FOTO</th>
+          <th>ACCIÓN</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 </section>
 
