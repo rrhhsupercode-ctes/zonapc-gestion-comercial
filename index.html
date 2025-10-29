@@ -54,6 +54,7 @@
       <button class="nav-btn" data-section="stock">Stock</button>
       <button class="nav-btn" data-section="sueltos">Sueltos</button>
       <button class="nav-btn" data-section="cajeros">Cajeros</button>
+      <button class="nav-btn" data-section="tienda">Tienda</button>
       <button class="nav-btn" data-section="config">Config</button>
     </nav>
   </header>
@@ -71,8 +72,6 @@
   </div>
 
   <div id="cobro-controles" class="hidden">
-
-    <!-- ELEMENTOS INVISIBLES PARA COMPATIBILIDAD -->
     <div style="display:none;">
       <select id="cobro-productos"></select>
       <select id="cobro-sueltos"></select>
@@ -86,13 +85,11 @@
       <button id="btn-decr-kg"></button>
     </div>
 
-    <!-- FILA PRINCIPAL DE ESCANEO -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
       <input id="cobro-codigo" placeholder="Escanee o ingrese código" style="flex:2;">
       <button id="btn-buscar-producto" style="flex:0;">🔍 Buscar</button>
     </div>
 
-    <!-- DESCUENTO / RECARGO -->
     <div style="display:flex; gap:15px; justify-content:center; margin-bottom:10px;">
       <div style="text-align:center;">
         <label for="input-descuento" style="display:block; font-size:13px;">Descuento (%)</label>
@@ -104,7 +101,6 @@
       </div>
     </div>
 
-    <!-- TABLA COBRO -->
     <table id="tabla-cobro">
       <thead>
         <tr>
@@ -118,9 +114,9 @@
       <tbody></tbody>
     </table>
  
-      <div id="total-div" style="margin-top:10px;">TOTAL: $0</div>
+    <div id="total-div" style="margin-top:10px;">TOTAL: $0</div>
     <button id="btn-cobrar" class="hidden">💸 Cobrar</button>
-  </div></div>
+  </div>
 </section>
 
 <!-- MODAL DE BÚSQUEDA UNIFICADO -->
@@ -147,10 +143,7 @@
 <!-- GASTOS (ACTUALIZADO) -->
 <section id="gastos" class="hidden">
   <h2>Gastos</h2>
-
-  <!-- CONTENIDO PRINCIPAL -->
   <div id="gastos-contenido" class="hidden">
-    <!-- NUEVO GASTO -->
     <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:4px;">
         <input id="gasto-entero" type="text" placeholder="0" style="width:100px; text-align:right;">
@@ -160,16 +153,12 @@
       <input id="gasto-descripcion" maxlength="150" placeholder="Descripción del gasto (máx. 150 caracteres)" style="flex:1;">
       <button id="btn-agregar-gasto">➕ Agregar Gasto ➕</button>
     </div>
-
-    <!-- BOTONES SUPERIORES -->
     <div style="display:flex; justify-content:center; gap:10px; margin-bottom:10px;">
       <button id="gastos-dia-prev" class="emoji">⬅️</button>
       <span id="gastos-dia-actual" style="text-align:center;">--/--/----</span>
       <button id="gastos-dia-next" class="emoji">➡️</button>
       <button id="btn-imprimir-gastos">🔍 Buscar</button>
     </div>
-
-    <!-- TABLA GASTOS -->
     <table id="tabla-gastos">
       <thead>
         <tr>
@@ -182,52 +171,10 @@
       </thead>
       <tbody></tbody>
     </table>
-
-    <!-- TOTAL DIARIO -->
     <div id="gastos-total-dia" style="margin-top:10px; text-align:center; font-weight:bold;">
       Gastos del día de hoy: $0
     </div>
   </div>
-
-<!-- MODAL IMPRESIÓN -->
-<div id="modal-imprimir-gastos" class="hidden"
-     style="position:fixed;top:0;left:0;width:100%;height:100%;
-     background:rgba(0,0,0,0.7);
-     display:none;justify-content:center;align-items:center;z-index:20000;">
-  <div id="modal-imprimir-gastos-contenido"
-       style="background:#fff;padding:20px;border-radius:10px;width:95%;max-width:900px;position:relative;">
-    <button id="cerrar-modal-gastos"
-            style="position:absolute;top:10px;right:10px;background:red;color:#fff;border:none;
-                   border-radius:5px;padding:4px 8px;">❌ Cerrar</button>
-    <h3 style="text-align:center;margin-bottom:10px;">Imprimir Gastos</h3>
-    <div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:10px;">
-      <div>
-        <label>Desde:</label>
-        <input type="date" id="rango-desde">
-      </div>
-      <div>
-        <label>Hasta:</label>
-        <input type="date" id="rango-hasta">
-      </div>
-      <button id="btn-mostrar-rango">Mostrar</button>
-    </div>
-    <div id="rango-leyenda" style="text-align:center;font-weight:bold;margin-bottom:10px;"></div>
-    <table id="tabla-gastos-rango" style="width:100%;border-collapse:collapse;">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Gasto</th>
-          <th>Fecha</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-    <div id="total-rango" style="margin-top:10px;text-align:center;font-weight:bold;"></div>
-    <div style="text-align:center;margin-top:10px;">
-      <button id="btn-imprimir-rango">🖨️ Imprimir</button>
-    </div>
-  </div>
-</div>
 </section>
 
 <!-- MOVIMIENTOS -->
@@ -242,21 +189,16 @@
   </table>
 </section>
 
-<!-- HISTORIAL (ACTUALIZADO) -->
-<section id="historial">
+<!-- HISTORIAL -->
+<section id="historial" class="hidden">
   <h2>Historial</h2>
-
-  <!-- CONTENIDO PRINCIPAL -->
   <div id="historial-contenido">
-    <!-- BOTONES SUPERIORES -->
     <div style="display:flex; justify-content:center; gap:10px; margin-bottom:10px;">
       <button id="historial-dia-prev" class="emoji">⬅️</button>
       <span id="historial-dia-actual" style="text-align:center;">--/--/----</span>
       <button id="historial-dia-next" class="emoji">➡️</button>
       <button id="btn-buscar-historial">🔍 Buscar</button>
     </div>
-
-    <!-- TABLA HISTORIAL -->
     <table id="tabla-historial">
       <thead>
         <tr>
@@ -270,51 +212,8 @@
       </thead>
       <tbody></tbody>
     </table>
-
-    <!-- LEYENDA Y TOTAL -->
     <div id="historial-total-dia" style="margin-top:10px; text-align:center; font-weight:bold;">
       Historial del día de hoy: $0
-    </div>
-  </div>
-
-  <!-- MODAL BUSCAR HISTORIAL -->
-  <div id="modal-buscar-historial" class="hidden"
-       style="position:fixed;top:0;left:0;width:100%;height:100%;
-              background:rgba(0,0,0,0.7);
-              display:none;justify-content:center;align-items:center;z-index:20000;">
-    <div id="modal-buscar-historial-contenido"
-         style="background:#fff;padding:20px;border-radius:10px;width:95%;max-width:900px;position:relative;">
-      <button id="cerrar-modal-historial"
-              style="position:absolute;top:10px;right:10px;background:red;color:#fff;border:none;
-                     border-radius:5px;padding:4px 8px;">❌ Cerrar</button>
-      <h3 style="text-align:center;margin-bottom:10px;">Buscar en Historial</h3>
-      <div style="display:flex;justify-content:center;align-items:center;gap:10px;margin-bottom:10px;">
-        <div>
-          <label>Desde:</label>
-          <input type="date" id="historial-desde">
-        </div>
-        <div>
-          <label>Hasta:</label>
-          <input type="date" id="historial-hasta">
-        </div>
-        <button id="btn-mostrar-historial-rango">Mostrar</button>
-      </div>
-      <div id="historial-rango-leyenda" style="text-align:center;font-weight:bold;margin-bottom:10px;"></div>
-      <table id="tabla-historial-rango" style="width:100%;border-collapse:collapse;">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Total</th>
-            <th>Cajero</th>
-            <th>Fecha</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <div id="historial-total-rango" style="margin-top:10px;text-align:center;font-weight:bold;"></div>
-      <div style="text-align:center;margin-top:10px;">
-        <button id="btn-imprimir-historial-rango">🖨️ Imprimir</button>
-      </div>
     </div>
   </div>
 </section>
@@ -361,6 +260,43 @@
     <thead><tr><th>Nro</th><th>Nombre</th><th>DNI</th><th>Acción</th></tr></thead>
     <tbody></tbody>
   </table>
+</section>
+
+<!-- TIENDA -->
+<section id="tienda" class="hidden">
+  <h2>Tienda</h2>
+  <div id="tienda-login">
+    <h3>🔑 Acceso de administrador</h3>
+    <input id="tienda-pass" type="password" placeholder="Contraseña de admin">
+    <button id="btn-tienda-login">Ingresar</button>
+    <p id="tienda-msg" class="msg-error"></p>
+  </div>
+  <div id="tienda-contenido" class="hidden">
+    <h3>Gestión de Categorías</h3>
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+      <input id="nueva-categoria" maxlength="15" placeholder="Nombre categoría (4-15 caracteres)" style="flex:1;">
+      <button id="btn-nueva-categoria">➕ Nueva categoría</button>
+      <select id="lista-categorias" style="flex:1;"></select>
+      <button id="btn-editar-categoria">✏️ Editar categoría</button>
+      <button id="btn-eliminar-categoria">🗑️ Eliminar categoría</button>
+    </div>
+    <div style="display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+      <div style="flex:1;">
+        <h4>Stock</h4>
+        <table id="tabla-tienda-stock">
+          <thead><tr><th>Nombre</th><th>Precio</th><th>Descripción</th><th>Acción</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div style="flex:1;">
+        <h4>Sueltos</h4>
+        <table id="tabla-tienda-sueltos">
+          <thead><tr><th>Nombre</th><th>Precio</th><th>Descripción</th><th>Acción</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </section>
 
 <!-- CONFIG -->
