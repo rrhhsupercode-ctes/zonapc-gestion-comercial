@@ -27,6 +27,12 @@ import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/fireb
         console.log("ℹ️ Base ya existente, no se sobrescribió");
       }
 
+      // Corrige automáticamente la propiedad del bucket si Firebase devuelve un dominio inválido
+if (window.app?.options?.storageBucket?.includes("firebasestorage.app")) {
+  window.app.options.storageBucket = `${window.app.options.projectId}.appspot.com`;
+  console.log("⚙️ Bucket corregido automáticamente:", window.app.options.storageBucket);
+}
+
       // --- Firestore: verificar categoría inicial "TODO" ---
       const dbFS = getFirestore();
 
