@@ -1161,11 +1161,11 @@ btnTirarZ.addEventListener("click", () => {
       totalGeneral += mov.total;
     }
 
-    // 🔹 Registro Z solo incluye los válidos (no anulados)
+    // 🔹 Registro Z con expiración de 12 horas exactas
     const registroZ = {
       tipo: "TIRAR Z",
       fecha: fechaZ.toISOString(),
-      fechaExpira: new Date(fechaZ.getFullYear(), fechaZ.getMonth(), fechaZ.getDate() + 1).toISOString(),
+      fechaExpira: new Date(fechaZ.getTime() + 12 * 60 * 60 * 1000).toISOString(), // ⏰ 12 horas después
       items: todosMov.map(([id, mov]) => ({ ...mov, ticketID: mov.ticketID })),
       totalPorTipoPago,
       totalGeneral,
