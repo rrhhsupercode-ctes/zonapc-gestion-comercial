@@ -1133,10 +1133,14 @@ btnTirarZ.addEventListener("click", () => {
     const snap = await window.get(window.ref("/movimientos"));
     if (!snap.exists()) return alert("No hay movimientos para tirar Z");
 
+    // 🔹 Filtra movimientos por cajero seleccionado y excluye anulados
     const todosMov = Object.entries(snap.val())
-      .filter(([, mov]) => filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value);
+      .filter(([, mov]) => 
+        (filtroCajero.value === "TODOS" || mov.cajero === filtroCajero.value) &&
+        !mov.eliminado // ❗️No incluir anulados
+      );
 
-    if (!todosMov.length) return alert("No hay movimientos para el cajero seleccionado");
+    if (!todosMov.length) return alert("No hay movimientos válidos para el cajero seleccionado");
 
     // --- NUEVO ID DE Z ---
     const snapZ = await window.get(window.ref("/ultimoZID"));
@@ -1149,6 +1153,7 @@ btnTirarZ.addEventListener("click", () => {
 
     const fechaZ = new Date();
 
+    // 🔹 Calcular totales solo con movimientos válidos (no anulados)
     const totalPorTipoPago = {};
     let totalGeneral = 0;
     for (const [, mov] of todosMov) {
@@ -1156,6 +1161,7 @@ btnTirarZ.addEventListener("click", () => {
       totalGeneral += mov.total;
     }
 
+    // 🔹 Registro Z solo incluye los válidos (no anulados)
     const registroZ = {
       tipo: "TIRAR Z",
       fecha: fechaZ.toISOString(),
@@ -1167,12 +1173,12 @@ btnTirarZ.addEventListener("click", () => {
       eliminado: false
     };
 
-    // Guarda en historial y respaldo
+    // Guarda en historial y respaldo completo (incluye anulados solo en respaldo)
     await window.set(window.ref(`/historial/${zID}`), registroZ);
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
-    // Elimina todos los movimientos (incluidos anulados)
-    for (const [id] of todosMov) {
+    // 🔹 Elimina todos los movimientos (incluso los anulados)
+    for (const [id] of Object.entries(snap.val())) {
       await window.remove(window.ref(`/movimientos/${id}`));
     }
 
