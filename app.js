@@ -1313,9 +1313,11 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
         botones = `
           <button class="reimprimir" data-id="${id}">🧾</button>
           <button class="eliminar-z">❌</button>`;
+      } else if (!expirada && mov.eliminado) {
+        botones = `<button class="reimprimir" data-id="${id}">🧾</button>`;
       }
     } else {
-      botones = `<button class="reimprimir" data-id="${id}" ${mov.eliminado ? "disabled" : ""}>🧾</button>`;
+      botones = `<button class="reimprimir" data-id="${id}">🧾</button>`;
       // --- SUMA CORREGIDA ---
       if (!mov.eliminado) {
         const totalMovSum = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
@@ -1342,7 +1344,7 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       <td>${botones}</td>
     `;
 
-    // --- REIMPRIMIR ---
+    // --- REIMPRIMIR (permitido incluso si está eliminado) ---
     const btnReimprimir = tr.querySelector(".reimprimir");
     if (btnReimprimir) {
       btnReimprimir.addEventListener("click", () => {
