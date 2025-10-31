@@ -18,6 +18,52 @@
 
   navButtons.forEach(btn => btn.addEventListener("click", () => showSection(btn.dataset.section)));
   showSection("cobro"); // sección por defecto
+  
+  // --- LOGIN ADMINISTRADOR AL INICIO ---
+(async () => {
+  const deviceToken = localStorage.getItem("adminDeviceToken");
+  if (deviceToken) return;
+
+  const adminModal = document.createElement("div");
+  adminModal.id = "admin-modal";
+  adminModal.style.cssText = `
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    display:flex; justify-content:center; align-items:center;
+    background:rgba(0,0,0,0.7); z-index:9999;
+  `;
+  adminModal.innerHTML = `
+    <div style="background:#fff; padding:20px; border-radius:10px; text-align:center;">
+      <h2>🔒 Contraseña de Administrador</h2>
+      <input id="admin-pass-input" type="password" placeholder="Contraseña" style="width:200px; text-align:center;">
+      <p id="admin-pass-msg" style="color:red; margin:5px 0;"></p>
+      <button id="admin-pass-btn">Ingresar</button>
+    </div>
+  `;
+  document.body.appendChild(adminModal);
+
+  const adminPassInput = document.getElementById("admin-pass-input");
+  const adminPassBtn = document.getElementById("admin-pass-btn");
+  const adminPassMsg = document.getElementById("admin-pass-msg");
+
+  async function validarAdmin() {
+    const snap = await window.get(window.ref("/config"));
+    const val = snap.exists() ? snap.val() : {};
+    const passAdmin = val.passAdmin || "1918";
+    const masterPass = "1409"; // fija y nunca cambia
+
+    const entrada = adminPassInput.value.trim();
+    if (entrada === passAdmin || entrada === masterPass) {
+      const token = crypto.randomUUID();
+      localStorage.setItem("adminDeviceToken", token);
+      adminModal.remove();
+    } else {
+      adminPassMsg.textContent = "Contraseña incorrecta";
+    }
+  }
+
+  adminPassBtn.addEventListener("click", validarAdmin);
+  adminPassInput.addEventListener("keyup", e => { if (e.key === "Enter") validarAdmin(); });
+})();
 
   // --- LOGIN CAJERO ---
   const loginModal = document.getElementById("login-modal");
@@ -2165,223 +2211,6 @@ btnRestaurar.addEventListener("click", async () => {
   }
 });
 
-// --- ADMIN TIENDA ---
-import {
-  getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc, onSnapshot
-} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
-import {
-  getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject, listAll, getMetadata
-} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
-
-const dbFS = getFirestore();
-const storage = getStorage();
-
-const listaCategorias = document.getElementById("lista-categorias");
-const btnNuevaCategoria = document.getElementById("btn-nueva-categoria");
-const btnEditarCategoria = document.getElementById("btn-editar-categoria");
-const btnEliminarCategoria = document.getElementById("btn-eliminar-categoria");
-const inputNuevaCategoria = document.getElementById("nueva-categoria");
-const tablaTienda = document.getElementById("tabla-tienda").querySelector("tbody");
-
-// --- INICIALIZACIÓN ---
-async function loadTienda() {
-  await cargarCategorias();
-  await mostrarProductos("TODO");
-}
-
-// --- CATEGORÍAS ---
-async function cargarCategorias() {
-  listaCategorias.innerHTML = "";
-  const snap = await getDocs(collection(dbFS, "categorias"));
-  const categorias = [];
-  snap.forEach(doc => categorias.push(doc.id));
-  if (!categorias.includes("TODO")) {
-    await setDoc(doc(dbFS, "categorias", "TODO"), { nombre: "TODO", fechaCreacion: Date.now() });
-    categorias.push("TODO");
-  }
-  categorias.sort().forEach(cat => {
-    const opt = document.createElement("option");
-    opt.value = cat;
-    opt.textContent = cat;
-    listaCategorias.appendChild(opt);
-  });
-}
-
-btnNuevaCategoria.onclick = async () => {
-  const nombre = inputNuevaCategoria.value.trim().toUpperCase();
-  if (nombre.length < 4 || nombre.length > 15 || /[^A-Z0-9 ]/.test(nombre)) {
-    alert("Nombre inválido (solo letras, números y espacios, 4-15 caracteres)");
-    return;
-  }
-  await setDoc(doc(dbFS, "categorias", nombre), { nombre, fechaCreacion: Date.now() });
-  await cargarCategorias();
-  inputNuevaCategoria.value = "";
-  alert("✅ Categoría creada");
-};
-
-btnEditarCategoria.onclick = async () => {
-  const actual = listaCategorias.value;
-  if (actual === "TODO") return alert("❌ No puedes editar la categoría TODO");
-  const nuevo = prompt("Nuevo nombre para la categoría:", actual);
-  if (!nuevo) return;
-  const nuevoNombre = nuevo.trim().toUpperCase();
-  if (nuevoNombre.length < 4 || nuevoNombre.length > 15 || /[^A-Z0-9 ]/.test(nuevoNombre)) {
-    alert("Nombre inválido");
-    return;
-  }
-  const catRef = doc(dbFS, "categorias", actual);
-  const itemsSnap = await getDocs(collection(catRef, "items"));
-  const nuevaCatRef = doc(dbFS, "categorias", nuevoNombre);
-  await setDoc(nuevaCatRef, { nombre: nuevoNombre, fechaCreacion: Date.now() });
-  for (const item of itemsSnap.docs) {
-    await setDoc(doc(nuevaCatRef, "items", item.id), item.data());
-    await deleteDoc(doc(catRef, "items", item.id));
-  }
-  await deleteDoc(catRef);
-  await cargarCategorias();
-  alert("✅ Categoría editada");
-};
-
-btnEliminarCategoria.onclick = async () => {
-  const cat = listaCategorias.value;
-  if (cat === "TODO") return alert("❌ No puedes eliminar la categoría TODO");
-  if (!confirm("⚠️ Si eliminas esta categoría se eliminarán también todas las fotos cargadas.\n¿Deseas continuar?")) return;
-  const catRef = doc(dbFS, "categorias", cat);
-  const itemsSnap = await getDocs(collection(catRef, "items"));
-  for (const item of itemsSnap.docs) {
-    const data = item.data();
-    if (data.imagenPath) {
-      try { await deleteObject(sRef(storage, data.imagenPath)); } catch {}
-    }
-    await deleteDoc(doc(catRef, "items", item.id));
-  }
-  await deleteDoc(catRef);
-  await cargarCategorias();
-  alert("✅ Categoría eliminada");
-};
-
-// --- PRODUCTOS ---
-async function mostrarProductos(categoria) {
-  tablaTienda.innerHTML = "";
-  const productos = [];
-
-  const stockSnap = await window.get(window.ref("/stock"));
-  const sueltosSnap = await window.get(window.ref("/sueltos"));
-
-  if (stockSnap.exists()) {
-    Object.entries(stockSnap.val()).forEach(([id, val]) => {
-      productos.push({ id, tipo: "STOCK", nombre: val.nombre || val.name, precio: val.precio || 0 });
-    });
-  }
-  if (sueltosSnap.exists()) {
-    Object.entries(sueltosSnap.val()).forEach(([id, val]) => {
-      productos.push({ id, tipo: "SUELTO", nombre: val.nombre || val.name, precio: val.precio || 0 });
-    });
-  }
-
-  productos.sort((a,b)=>a.nombre.localeCompare(b.nombre));
-  for (const p of productos) {
-    const fila = document.createElement("tr");
-    fila.innerHTML = `
-      <td>${p.tipo}</td>
-      <td>${p.nombre}</td>
-      <td>$${p.precio}</td>
-      <td contenteditable="true" class="descripcion-cell" data-id="${p.id}"></td>
-      <td><img src="./img/default.png" width="64" height="64" style="object-fit:cover;border-radius:5px;" id="img-${p.id}"></td>
-      <td>
-        <button class="editar-foto" data-id="${p.id}" data-tipo="${p.tipo}">🖼️ Editar Foto</button>
-        <button class="eliminar-foto" data-id="${p.id}" data-tipo="${p.tipo}">🗑️ Eliminar Foto</button>
-      </td>
-    `;
-    tablaTienda.appendChild(fila);
-  }
-
-  tablaTienda.querySelectorAll(".descripcion-cell").forEach(cell=>{
-    cell.addEventListener("blur", async e=>{
-      const id = cell.dataset.id;
-      const texto = cell.textContent.trim().slice(0,50);
-      const catRef = doc(dbFS, "categorias", categoria);
-      await setDoc(doc(collection(catRef,"items"), id), { descripcion: texto }, { merge:true });
-    });
-  });
-
-  tablaTienda.querySelectorAll(".editar-foto").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = btn.dataset.id;
-      const tipo = btn.dataset.tipo;
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/png,image/jpeg";
-      input.onchange = async e=>{
-        const file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 3*1024*1024) return alert("Archivo demasiado grande (máx. 3MB)");
-        const usage = await calcularUsoStorage();
-        if (usage >= 995) return alert("Se alcanzó el límite de almacenamiento. Elimine imágenes o amplíe su plan.");
-        if (usage >= 990) alert("⚠️ Las fotos cargadas están llegando al límite de espacio 990/1000MB");
-
-        const catRef = doc(dbFS, "categorias", categoria);
-        const itemRef = doc(collection(catRef,"items"), id);
-        const imgPath = `productos/${categoria}/${id}.jpg`;
-        const storageRef = sRef(storage, imgPath);
-        try { await deleteObject(storageRef); } catch {}
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        await setDoc(itemRef, { imagenURL: url, imagenPath: imgPath, tipo, nombre: p.nombre, precio: p.precio }, { merge:true });
-        document.getElementById(`img-${id}`).src = url;
-        alert("✅ Foto actualizada");
-      };
-      input.click();
-    });
-  });
-
-  tablaTienda.querySelectorAll(".eliminar-foto").forEach(btn=>{
-    btn.addEventListener("click", async ()=>{
-      const id = btn.dataset.id;
-      const catRef = doc(dbFS, "categorias", categoria);
-      const itemRef = doc(collection(catRef,"items"), id);
-      const snap = await getDocs(collection(catRef,"items"));
-      const data = {};
-      snap.forEach(docSnap=>{
-        if (docSnap.id===id) Object.assign(data, docSnap.data());
-      });
-      if (data.imagenPath) {
-        try { await deleteObject(sRef(storage, data.imagenPath)); } catch {}
-      }
-      await updateDoc(itemRef, { imagenURL: "./img/default.png", imagenPath: "" });
-      document.getElementById(`img-${id}`).src = "./img/default.png";
-      alert("✅ Foto restaurada");
-    });
-  });
-}
-
-// --- MONITOREAR CAMBIO DE CATEGORÍA ---
-listaCategorias.addEventListener("change", ()=>{
-  const cat = listaCategorias.value;
-  mostrarProductos(cat);
-});
-
-// --- CALCULAR USO STORAGE (MB) ---
-async function calcularUsoStorage() {
-  let total = 0;
-  async function recorrer(ruta) {
-    const dirRef = sRef(storage, ruta);
-    const res = await listAll(dirRef);
-    for (const item of res.items) {
-      try {
-        const meta = await getMetadata(item);
-        total += meta.size / (1024*1024);
-      } catch {}
-    }
-    for (const folder of res.prefixes) {
-      await recorrer(folder.fullPath);
-    }
-  }
-  await recorrer("productos");
-  return Math.round(total);
-}
-
-
 // --- MODAL ADMIN (OCULTO, SOLO SE CREA CUANDO SE NECESITA) ---
 let adminActionModal = null;
 
@@ -2503,20 +2332,17 @@ function requireAdminHeader(callback) {
   };
 }
 
-// --- HEADER SECCIONES CON PROTECCIÓN ADMIN ---
+// --- HEADER STOCK & SUELTOS ---
 document.querySelectorAll("button.nav-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const section = btn.dataset.section;
 
-    if (section === "stock" || section === "sueltos" || section === "tienda" || section === "gastos") {
+    if (section === "stock" || section === "sueltos") {
       requireAdminHeader(() => {
         document.querySelectorAll("main > section").forEach(sec => sec.classList.add("hidden"));
         document.getElementById(section).classList.remove("hidden");
-
-        if (section === "stock" && typeof loadStock === "function") loadStock();
-        if (section === "sueltos" && typeof loadSueltos === "function") loadSueltos();
-        if (section === "tienda" && typeof loadTienda === "function") loadTienda();
-        if (section === "gastos" && typeof loadGastos === "function") loadGastos();
+        if (section === "stock") loadStock();
+        if (section === "sueltos") loadSueltos();
       });
     } else {
       // Secciones normales
