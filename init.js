@@ -1,11 +1,8 @@
 /*****************************************************
  * init.js
- * Inicialización de la base en Realtime Database y Firestore
+ * Inicialización de la base en Realtime Database
  * Compatible Firebase 11.8.1 modular
  *****************************************************/
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
-
 (() => {
   const ramasIniciales = {
     config: { shopName: "ZONAPC", passAdmin: "1918", masterPass: "1409" },
@@ -18,45 +15,32 @@ import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/1
 
   (async () => {
     try {
-      // --- Realtime Database ---
-      const rootRef = window.ref("/");
+      const rootRef = window.ref("/"); // wrapper global definido en index.html
       const rootSnap = await window.get(rootRef);
+      
       if (!rootSnap.exists() || rootSnap.val() === null) {
         await window.set(rootRef, ramasIniciales);
-        console.log("✅ Base inicializada en Realtime Database");
+        console.log("✅ Base inicializada en Firebase");
       } else {
         console.log("ℹ️ Base ya existente, no se sobrescribió");
       }
-
-      // --- Firestore: verificar categoría inicial "TODO" ---
-      const dbFS = getFirestore(window.app);
-      const docRef = doc(dbFS, "categorias", "TODO");
-      const docSnap = await getDoc(docRef);
-
-      if (!docSnap.exists()) {
-        await setDoc(docRef, { nombre: "TODO", fechaCreacion: Date.now() });
-        console.log("✅ Categoría inicial TODO creada en Firestore");
-      } else {
-        console.log("ℹ️ Categoría TODO ya existente en Firestore");
-      }
-
     } catch (err) {
-      console.error("❌ Error al inicializar bases:", err);
+      console.error("❌ Error al inicializar la base:", err);
     }
   })();
 })();
 
-// --- Inicialización global del sistema ---
+// --- Inicialización global del sistema (restaurada) ---
 window.addEventListener("DOMContentLoaded", async () => {
   try {
+    // Ejecuta los loaders globales si existen
     if (typeof loadStock === "function")      loadStock();
     if (typeof loadSueltos === "function")    loadSueltos();
     if (typeof loadCajeros === "function")    loadCajeros();
     if (typeof loadMovimientos === "function")loadMovimientos();
     if (typeof loadHistorial === "function")  loadHistorial();
-    if (typeof loadTienda === "function")     loadTienda();
-    if (typeof loadGastos === "function")     loadGastos();
   } catch (err) {
     console.error("Error en inicialización global:", err);
   }
 });
+
