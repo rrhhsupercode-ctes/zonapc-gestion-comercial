@@ -1265,7 +1265,7 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
 
   // --- Preparar entradas ordenadas ---
   const entries = Object.entries(snap.val())
-    .filter(([, mov]) => mov && mov.fecha && new Date(mov.fecha) >= limite && !mov.eliminado)
+    .filter(([, mov]) => mov && mov.fecha && new Date(mov.fecha) >= limite)
     .sort(([, a], [, b]) => new Date(b.fecha) - new Date(a.fecha));
 
   const diaSel = new Date(fechaSeleccionada);
@@ -1288,8 +1288,6 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
   let totalDia = 0;
   for (const [id, mov] of diaFiltrado) {
     const expirada = mov.fechaExpira && new Date(mov.fechaExpira) < hoy;
-    if (mov.eliminado) continue;
-
     const tr = document.createElement("tr");
     tr.style.backgroundColor = expirada ? "#eee" : "";
 
@@ -1302,9 +1300,11 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
       }
     } else {
       botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
-      // Solo sumar movimientos normales (no Z)
-      const totalMovSum = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
-      totalDia += totalMovSum;
+      // --- SUMA CORREGIDA ---
+      if (!mov.eliminado) {
+        const totalMovSum = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
+        totalDia += totalMovSum;
+      }
     }
 
     const totalMov = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
@@ -1334,9 +1334,7 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
           const fechaZ = new Date(mov.fecha);
           const fechaFormateada = `${fechaZ.getDate().toString().padStart(2, "0")}/${(
             fechaZ.getMonth() + 1
-          )
-            .toString()
-            .padStart(2, "0")}/${fechaZ.getFullYear()} (${fechaZ
+          ).toString().padStart(2, "0")}/${fechaZ.getFullYear()} (${fechaZ
             .getHours()
             .toString()
             .padStart(2, "0")}:${fechaZ.getMinutes().toString().padStart(2, "0")})`;
