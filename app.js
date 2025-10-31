@@ -1073,7 +1073,6 @@ async function loadMovimientos() {
     tr.querySelector(".reimprimir").addEventListener("click", () => {
       const fechaStr = `${fechaObj.getDate().toString().padStart(2,'0')}/${(fechaObj.getMonth()+1).toString().padStart(2,'0')}/${fechaObj.getFullYear()}`;
       const fechaFormateada = `${fechaStr} (${horaStr})`;
-
       imprimirTicket(
         mov.ticketID || "N/A",
         fechaFormateada,
@@ -1087,18 +1086,33 @@ async function loadMovimientos() {
     // --- ELIMINAR MOVIMIENTO ---
     tr.querySelector(".eliminar").addEventListener("click", () => {
       showAdminActionModal(async () => {
+        // 1️⃣ Devolver stock/sueltos
         for (const item of mov.items) {
           const snapItem = await window.get(window.ref(`/${item.tipo}/${item.id}`));
           if (!snapItem.exists()) continue;
           const data = snapItem.val();
           if (item.tipo === "stock") {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { cant: (data.cant || 0) + item.cant });
+            await window.update(window.ref(`/${item.tipo}/${item.id}`), {
+              cant: (data.cant || 0) + item.cant
+            });
           } else {
-            await window.update(window.ref(`/${item.tipo}/${item.id}`), { kg: (data.kg || 0) + item.cant });
+            await window.update(window.ref(`/${item.tipo}/${item.id}`), {
+              kg: (data.kg || 0) + item.cant
+            });
           }
         }
+
+        // 2️⃣ Marcar eliminado en MOVIMIENTOS
         await window.update(window.ref(`/movimientos/${mov.ticketID}`), { eliminado: true });
+
+        // 3️⃣ Marcar eliminado también en HISTORIAL (si existe)
+        const histSnap = await window.get(window.ref(`/historial/${mov.ticketID}`));
+        if (histSnap.exists()) {
+          await window.update(window.ref(`/historial/${mov.ticketID}`), { eliminado: true });
+        }
+
         loadMovimientos();
+        if (typeof loadHistorial === "function") loadHistorial();
       });
     });
 
@@ -1157,8 +1171,10 @@ btnTirarZ.addEventListener("click", () => {
     await window.set(window.ref(`/historial/${zID}`), registroZ);
     await window.set(window.ref(`/respaldoZ/${zID}`), snap.val());
 
-    // Elimina movimientos
-    for (const [id] of todosMov) await window.remove(window.ref(`/movimientos/${id}`));
+    // Elimina todos los movimientos (incluidos anulados)
+    for (const [id] of todosMov) {
+      await window.remove(window.ref(`/movimientos/${id}`));
+    }
 
     loadMovimientos();
     if (typeof loadHistorial === "function") loadHistorial();
@@ -1289,17 +1305,17 @@ async function loadHistorial(fechaSeleccionada = fechaHistorialActual) {
   for (const [id, mov] of diaFiltrado) {
     const expirada = mov.fechaExpira && new Date(mov.fechaExpira) < hoy;
     const tr = document.createElement("tr");
-    tr.style.backgroundColor = expirada ? "#eee" : "";
+    tr.style.backgroundColor = expirada ? "#eee" : mov.eliminado ? "#ccc" : "";
 
     let botones = "";
     if (mov.tipo === "TIRAR Z") {
-      if (!expirada) {
+      if (!expirada && !mov.eliminado) {
         botones = `
-          <button class="reimprimir" data-id="${id}">🧾​</button>
+          <button class="reimprimir" data-id="${id}">🧾</button>
           <button class="eliminar-z">❌</button>`;
       }
     } else {
-      botones = `<button class="reimprimir" data-id="${id}">🧾​</button>`;
+      botones = `<button class="reimprimir" data-id="${id}" ${mov.eliminado ? "disabled" : ""}>🧾</button>`;
       // --- SUMA CORREGIDA ---
       if (!mov.eliminado) {
         const totalMovSum = mov.totalGeneral ? mov.totalGeneral : mov.total || 0;
@@ -1442,24 +1458,20 @@ document.getElementById("historial-dia-prev")?.addEventListener("click", () => {
 document.getElementById("historial-dia-next")?.addEventListener("click", () => {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
-
-  // Evitar avanzar más allá del día actual
   const siguiente = new Date(fechaHistorialActual);
   siguiente.setDate(siguiente.getDate() + 1);
   siguiente.setHours(0, 0, 0, 0);
-
-  if (siguiente > hoy) return; // no avanzar al futuro
-
+  if (siguiente > hoy) return;
   fechaHistorialActual = siguiente;
   loadHistorial();
 });
 
-// Helper para parsear <input type="date"> en hora local (sin corrimiento)
+// Helper para parsear <input type="date"> en hora local
 function parseDateInputLocal(inputId) {
   const v = document.getElementById(inputId).value;
   if (!v) return null;
   const [y, m, d] = v.split("-").map(Number);
-  return new Date(y, m - 1, d); // Local midnight
+  return new Date(y, m - 1, d);
 }
 
 // --- BUSCAR HISTORIAL ---
@@ -1475,8 +1487,6 @@ document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click"
   const desde = parseDateInputLocal("historial-desde");
   const hasta = parseDateInputLocal("historial-hasta");
   if (!desde || !hasta) return;
-
-  // Asegurar rango local completo
   desde.setHours(0, 0, 0, 0);
   hasta.setHours(23, 59, 59, 999);
 
@@ -1508,12 +1518,10 @@ document.getElementById("btn-mostrar-historial-rango")?.addEventListener("click"
     tbody.appendChild(tr);
   }
 
-  document.getElementById(
-    "historial-rango-leyenda"
-  ).textContent = `Del ${desde.toLocaleDateString()} al ${hasta.toLocaleDateString()}`;
-  document.getElementById(
-    "historial-total-rango"
-  ).textContent = `Total en rango: $${totalRango.toFixed(2)}`;
+  document.getElementById("historial-rango-leyenda").textContent =
+    `Del ${desde.toLocaleDateString()} al ${hasta.toLocaleDateString()}`;
+  document.getElementById("historial-total-rango").textContent =
+    `Total en rango: $${totalRango.toFixed(2)}`;
 });
 
 // --- IMPRIMIR RANGO ---
