@@ -591,6 +591,7 @@ btnCobrar.addEventListener("click", async () => {
   if (!currentUser || carrito.length === 0) return;
   const sueltoCero = carrito.find(it => it.tipo === "sueltos" && Number(it.cant) === 0);
   if (sueltoCero) return alert("No se puede vender un suelto con 0.000 KG");
+
   const modal = document.createElement("div");
   modal.style.cssText = `
     position:fixed;top:0;left:0;width:100%;height:100%;
@@ -609,58 +610,79 @@ btnCobrar.addEventListener("click", async () => {
       <button id="cancelar-pago" style="background:red;color:#fff;padding:5px 15px;">Cancelar</button>
     </div>`;
   document.body.appendChild(modal);
+
   const allButtons = modal.querySelectorAll("button");
   const disableButtons = () => allButtons.forEach(b => b.disabled = true);
-  document.getElementById("cancelar-pago").addEventListener("click", () => { disableButtons(); modal.remove(); });
+  document.getElementById("cancelar-pago").addEventListener("click", () => {
+    disableButtons();
+    modal.remove();
+  });
+
   modal.querySelectorAll("button[data-pay]").forEach(btn => {
     btn.addEventListener("click", async () => {
       disableButtons();
       const tipoPago = btn.dataset.pay;
-      const fechaHoy = new Date().toISOString().split("T")[0];
+
+      // --- NUEVA LÓGICA DE ID ---
       const confSnap = await window.get(window.ref("/config"));
       const confVal = confSnap.exists() ? confSnap.val() : {};
       let ultimoID = confVal.ultimoTicketID || 0;
-      let ultimoFecha = confVal.ultimoTicketFecha || "";
-      if (ultimoFecha !== fechaHoy) ultimoID = 0;
       ultimoID++;
-      if (ultimoID > 999999) ultimoID = 1; // ROLLOVER: ID_999999 => ID_000001
+      if (ultimoID > 999999) ultimoID = 1; // rollover al alcanzar ID_999999
       const ticketID = "ID_" + String(ultimoID).padStart(6, "0");
+      // ----------------------------
+
       const fecha = new Date();
       const fechaStr = `${fecha.getDate().toString().padStart(2,'0')}/${(fecha.getMonth()+1).toString().padStart(2,'0')}/${fecha.getFullYear()} (${fecha.getHours().toString().padStart(2,'0')}:${fecha.getMinutes().toString().padStart(2,'0')})`;
       const totalOriginal = carrito.reduce((a,b)=>a+b.cant*b.precio,0);
       const totalFinal = totalOriginal*(1+(porcentajeFinal||0)/100);
-      await window.set(window.ref(`/movimientos/${ticketID}`),{ticketID,cajero:currentUser.id,items:carrito,total:totalFinal,fecha:fecha.toISOString(),tipo:tipoPago,eliminado:false,porcentajeAplicado:porcentajeFinal||0});
-      await window.set(window.ref(`/historial/${ticketID}`),{ticketID,cajero:currentUser.id,items:carrito,total:totalFinal,fecha:fecha.toISOString(),tipo:tipoPago,porcentajeAplicado:porcentajeFinal||0});
-      await window.update(window.ref("/config"),{ultimoTicketID:ultimoID,ultimoTicketFecha:fechaHoy});
-      for(const it of carrito){
-        const path=`/${it.tipo}/${it.id}`;
-        const snapItem=await window.get(window.ref(path));
-        if(snapItem.exists()){
-          const data=snapItem.val();
-          if(it.tipo==="stock"){
-            const nuevo=(data.cant||0)-it.cant;
-            await window.update(window.ref(path),{cant:nuevo});
-            if(!stockData[it.id])stockData[it.id]=data;
-            stockData[it.id].cant=nuevo;
-          }else{
-            const nuevo=(data.kg||0)-it.cant;
-            await window.update(window.ref(path),{kg:nuevo});
-            if(!sueltosData[it.id])sueltosData[it.id]=data;
-            sueltosData[it.id].kg=nuevo;
+
+      await window.set(window.ref(`/movimientos/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(),
+        tipo: tipoPago, eliminado: false,
+        porcentajeAplicado: porcentajeFinal||0
+      });
+
+      await window.set(window.ref(`/historial/${ticketID}`), {
+        ticketID, cajero: currentUser.id, items: carrito,
+        total: totalFinal, fecha: fecha.toISOString(),
+        tipo: tipoPago, porcentajeAplicado: porcentajeFinal||0
+      });
+
+      await window.update(window.ref("/config"), { ultimoTicketID: ultimoID });
+
+      for (const it of carrito) {
+        const path = `/${it.tipo}/${it.id}`;
+        const snapItem = await window.get(window.ref(path));
+        if (snapItem.exists()) {
+          const data = snapItem.val();
+          if (it.tipo === "stock") {
+            const nuevo = (data.cant || 0) - it.cant;
+            await window.update(window.ref(path), { cant: nuevo });
+            if (!stockData[it.id]) stockData[it.id] = data;
+            stockData[it.id].cant = nuevo;
+          } else {
+            const nuevo = (data.kg || 0) - it.cant;
+            await window.update(window.ref(path), { kg: nuevo });
+            if (!sueltosData[it.id]) sueltosData[it.id] = data;
+            sueltosData[it.id].kg = nuevo;
           }
         }
       }
-      imprimirTicket(ticketID,fechaStr,currentUser.id,carrito,totalFinal,tipoPago);
-      setTimeout(()=>{
+
+      imprimirTicket(ticketID, fechaStr, currentUser.id, carrito, totalFinal, tipoPago);
+
+      setTimeout(() => {
         alert("VENTA FINALIZADA");
-        carrito=[];
+        carrito = [];
         actualizarTabla();
-        loadStock&&loadStock();
-        loadSueltos&&loadSueltos();
-        loadMovimientos&&loadMovimientos();
-        loadHistorial&&loadHistorial();
+        loadStock && loadStock();
+        loadSueltos && loadSueltos();
+        loadMovimientos && loadMovimientos();
+        loadHistorial && loadHistorial();
         modal.remove();
-      },500);
+      }, 500);
     });
   });
 });
