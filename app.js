@@ -2836,7 +2836,7 @@ document.getElementById("btn-crear-cupon").onclick = async () => {
 
   const data = {
     codigo,
-    categoria,
+    categoria: categoria || "Cualquier categoría",
     descuento,
     fechaInicio,
     fechaFin,
@@ -2844,6 +2844,7 @@ document.getElementById("btn-crear-cupon").onclick = async () => {
   };
 
   await window.set(window.ref(`${RUTA_CUPONES}/${nuevoID}`), data);
+
   document.getElementById("cupon-nombre").value = "";
   document.getElementById("cupon-descuento").value = "";
   document.getElementById("cupon-fecha-inicio").value = "";
@@ -2867,12 +2868,36 @@ async function editarCupon(cupon) {
   cargarCupones();
 }
 
+// --- CARGAR Y ACTUALIZAR CATEGORÍAS GLOBALES ---
+async function cargarCategoriasGlobales() {
+  const refCat = window.ref("/categorias");
+  const snap = await window.get(refCat);
+  let lista = [];
+
+  // Si no existe, crear base
+  if (!snap.exists()) {
+    lista = ["Sin categoría", "Promos"];
+    await window.set(refCat, lista);
+  } else {
+    lista = snap.val();
+    // Asegurar las dos básicas
+    if (!lista.includes("Sin categoría")) lista.unshift("Sin categoría");
+    if (!lista.includes("Promos")) lista.push("Promos");
+    await window.set(refCat, [...new Set(lista)]);
+  }
+
+  return lista;
+}
+
 // --- ACTUALIZAR SELECT DE CATEGORÍAS EN CUPONES ---
-function actualizarSelectCuponCategorias() {
+async function actualizarSelectCuponCategorias() {
   const select = document.getElementById("cupon-categoria");
   if (!select) return;
+
+  const lista = await cargarCategoriasGlobales();
   select.innerHTML = `<option value="">Cualquier categoría</option>`;
-  categorias.forEach(cat => {
+
+  lista.forEach(cat => {
     const opt = document.createElement("option");
     opt.value = cat;
     opt.textContent = cat;
@@ -2894,7 +2919,7 @@ setInterval(async () => {
 }, 86400000); // 24 horas
 
 // --- SINCRONIZACIÓN ---
-document.querySelector('button[data-section="tienda"]').addEventListener("click", () => {
-  actualizarSelectCuponCategorias();
-  cargarCupones();
+document.querySelector('button[data-section="tienda"]').addEventListener("click", async () => {
+  await actualizarSelectCuponCategorias();
+  await cargarCupones();
 });
