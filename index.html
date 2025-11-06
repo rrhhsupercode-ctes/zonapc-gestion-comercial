@@ -380,18 +380,66 @@
 <!-- TIENDA -->
 <section id="tienda" class="hidden">
   <h2>TIENDA</h2>
-<table id="tabla-tienda">
-  <thead>
-    <tr>
-      <th>Código</th>
-      <th>Nombre</th>
-      <th>Tipo</th>
-      <th>Foto</th>
-      <th>Acción</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
+
+  <!-- BUSCADOR PRINCIPAL -->
+  <div style="display:flex; gap:5px; align-items:center; margin-bottom:10px;">
+    <input id="tienda-busqueda" type="text" placeholder="Buscar por código o nombre..." style="flex:1;">
+    <button id="tienda-btn-buscar">🔍 Buscar</button>
+  </div>
+
+  <!-- BUSCADOR ALFABÉTICO -->
+  <div id="tienda-letras" style="text-align:center; margin-bottom:10px;">
+    <button class="tienda-letra">A</button>
+    <button class="tienda-letra">B</button>
+    <button class="tienda-letra">C</button>
+    <button class="tienda-letra">D</button>
+    <button class="tienda-letra">E</button>
+    <button class="tienda-letra">F</button>
+    <button class="tienda-letra">G</button>
+    <button class="tienda-letra">H</button>
+    <button class="tienda-letra">I</button>
+    <button class="tienda-letra">J</button>
+    <button class="tienda-letra">K</button>
+    <button class="tienda-letra">L</button>
+    <button class="tienda-letra">M</button>
+    <button class="tienda-letra">N</button>
+    <button class="tienda-letra">Ñ</button>
+    <button class="tienda-letra">O</button>
+    <button class="tienda-letra">P</button>
+    <button class="tienda-letra">Q</button>
+    <button class="tienda-letra">R</button>
+    <button class="tienda-letra">S</button>
+    <button class="tienda-letra">T</button>
+    <button class="tienda-letra">U</button>
+    <button class="tienda-letra">V</button>
+    <button class="tienda-letra">W</button>
+    <button class="tienda-letra">X</button>
+    <button class="tienda-letra">Y</button>
+    <button class="tienda-letra">Z</button>
+  </div>
+
+  <!-- TABLA DE PRODUCTOS -->
+  <div style="max-height:500px; overflow-y:auto; border:1px solid #ccc; border-radius:6px;">
+    <table id="tabla-tienda" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th>Foto</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- PAGINACIÓN -->
+  <div id="tienda-paginacion" style="text-align:center; margin-top:10px;">
+    <button id="tienda-prev">⬅️ Anterior</button>
+    <span id="tienda-pagina-actual" style="margin:0 10px;">1</span>
+    <button id="tienda-next">➡️ Siguiente</button>
+  </div>
 </section>
 
 <!-- CONFIG -->
