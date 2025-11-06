@@ -2603,30 +2603,5 @@ document.getElementById("tienda-next").addEventListener("click", () => {
   }
 });
 
-// --- ESTILO ---
-const style = document.createElement("style");
-style.textContent = `
-#tabla-tienda img.foto-tienda {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 8px;
-  border: 1px solid #ccc;
-}
-#tienda-letras button {
-  margin: 2px;
-  padding: 5px 7px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  background: #f9f9f9;
-  cursor: pointer;
-}
-#tienda-letras button:hover {
-  background: #eaeaea;
-}
-`;
-document.head.appendChild(style);
-
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
