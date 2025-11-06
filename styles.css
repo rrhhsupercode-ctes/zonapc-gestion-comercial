@@ -42,15 +42,39 @@ nav {
   background: #00b894;
   transform: scale(1.05);
 }
-/* === TIENDA EN APP.JS (SECTION) === */
-#tabla-tienda img.foto-tienda {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+
+/* === TIENDA BUSCADOR, LETRAS Y PAGINACIÓN === */
+#tienda-letras {
+  text-align: center;
+  margin-bottom: 10px;
 }
+#tienda-letras button {
+  margin: 2px;
+  padding: 5px 7px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #f9f9f9;
+  cursor: pointer;
+}
+#tienda-letras button:hover {
+  background: #eaeaea;
+}
+#tienda-paginacion {
+  text-align: center;
+  margin-top: 10px;
+}
+#tienda-paginacion button {
+  margin: 3px;
+  padding: 5px 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background: #f4f4f4;
+  cursor: pointer;
+}
+#tienda-paginacion button:hover {
+  background: #e0e0e0;
+}
+
 /* === MAIN === */
 main {
   padding: 20px;
