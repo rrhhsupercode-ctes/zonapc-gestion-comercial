@@ -2400,11 +2400,14 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   })();
 })();
 
-// --- TIENDA (FINAL CORREGIDO Y COMPATIBLE) ---
-const storage = window.storage;
+// --- TIENDA (FINAL + UPLOAD + OPTIMIZADO) ---
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
+
+const storage = getStorage(app, "gs://cliente-001-b0d88.firebasestorage.app");
 const rutaFotos = "productos/";
 const imgDefecto = "img/item.png";
 
+// --- FUNCIÓN PRINCIPAL ---
 async function cargarTienda() {
   const tabla = document.querySelector("#tabla-tienda tbody");
   if (!tabla) return;
@@ -2412,38 +2415,36 @@ async function cargarTienda() {
 
   try {
     const [snapStock, snapSueltos] = await Promise.all([
-      window.get(window.ref("/stock")),
-      window.get(window.ref("/sueltos"))
+      get(ref(db, "stock")),
+      get(ref(db, "sueltos"))
     ]);
 
     const lista = [];
-
-    // --- STOCK ---
     if (snapStock.exists()) {
       Object.entries(snapStock.val()).forEach(([codigo, d]) => {
-        lista.push({
-          codigo,
-          nombre: d.nombre || "Sin nombre",
-          tipo: "STOCK"
-        });
+        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
       });
     }
-
-    // --- SUELTOS ---
     if (snapSueltos.exists()) {
       Object.entries(snapSueltos.val()).forEach(([codigo, d]) => {
-        lista.push({
-          codigo,
-          nombre: d.nombre || "Sin nombre",
-          tipo: "SUELTO"
-        });
+        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
       });
     }
 
-    // 🔠 Orden alfabético por nombre
     lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
-    // --- Render ---
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(async (entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const codigo = img.dataset.codigo;
+          const url = await cargarFotoProducto(codigo);
+          img.src = url;
+          observer.unobserve(img);
+        }
+      });
+    }, { rootMargin: "200px" });
+
     for (const p of lista) {
       const tr = document.createElement("tr");
 
@@ -2456,28 +2457,21 @@ async function cargarTienda() {
       const tdTipo = document.createElement("td");
       tdTipo.textContent = p.tipo;
 
-      // --- FOTO ---
       const tdFoto = document.createElement("td");
       const img = document.createElement("img");
       img.src = imgDefecto;
       img.alt = p.nombre;
       img.className = "foto-tienda";
+      img.dataset.codigo = p.codigo;
       img.loading = "lazy";
       tdFoto.appendChild(img);
+      observer.observe(img);
 
-      try {
-        const url = await window.getDownloadURL(window.storageRef(`${rutaFotos}${p.codigo}.jpg`));
-        img.src = url;
-      } catch (_) {
-        // No existe, se mantiene imgDefecto
-      }
-
-      // --- ACCIÓN ---
       const tdAccion = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "📷";
       btn.title = "Subir Foto";
-      btn.onclick = () => alert(`Subir foto para ${p.nombre} (${p.codigo})`);
+      btn.onclick = () => subirFotoProducto(p.codigo, p.nombre, img);
       tdAccion.appendChild(btn);
 
       tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
@@ -2488,8 +2482,74 @@ async function cargarTienda() {
   }
 }
 
-// --- Evento al abrir la sección ---
-document
-  .querySelector('button[data-section="tienda"]')
-  .addEventListener("click", cargarTienda);
+// --- CARGAR FOTO DESDE STORAGE ---
+async function cargarFotoProducto(codigo) {
+  try {
+    const url = await getDownloadURL(sRef(storage, `${rutaFotos}${codigo}.webp`));
+    return url;
+  } catch {
+    try {
+      const url = await getDownloadURL(sRef(storage, `${rutaFotos}${codigo}.jpg`));
+      return url;
+    } catch {
+      return imgDefecto;
+    }
+  }
+}
 
+// --- SUBIR FOTO ---
+function subirFotoProducto(codigo, nombre, imgElemento) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/jpeg,image/png";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const img = await procesarImagen(file);
+    const blob = await new Promise((resolve) => img.toBlob(resolve, "image/webp", 0.85));
+    const storagePath = sRef(storage, `${rutaFotos}${codigo}.webp`);
+
+    await uploadBytes(storagePath, blob);
+    const url = await getDownloadURL(storagePath);
+    imgElemento.src = url;
+
+    alert(`✅ Foto de ${nombre} actualizada correctamente.`);
+  };
+  input.click();
+}
+
+// --- PROCESAR IMAGEN (recortar al centro 500x500 y convertir a webp) ---
+async function procesarImagen(file) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  const size = 500;
+  canvas.width = size;
+  canvas.height = size;
+
+  const scale = Math.max(size / bitmap.width, size / bitmap.height);
+  const x = (size / 2) - (bitmap.width / 2) * scale;
+  const y = (size / 2) - (bitmap.height / 2) * scale;
+
+  ctx.drawImage(bitmap, x, y, bitmap.width * scale, bitmap.height * scale);
+  return canvas;
+}
+
+// --- ESTILOS ---
+const style = document.createElement("style");
+style.textContent = `
+#tabla-tienda img.foto-tienda {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+`;
+document.head.appendChild(style);
+
+// --- EVENTO ---
+document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
