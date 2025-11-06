@@ -7,44 +7,52 @@
   <link rel="stylesheet" href="styles.css">
 
   <!-- Firebase SDK Modular 11.8.1 -->
-  <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
-  import { getDatabase, ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
-  import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
-  import { getStorage, ref as storageRef, getDownloadURL, uploadBytes } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
+   <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getDatabase, ref, get, set, update, push, remove, onValue } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+    import { getStorage, ref as storageRef, getDownloadURL, uploadBytes } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
 
-  const firebaseConfig = { ... };
+    const firebaseConfig = {
+      apiKey: "AIzaSyAL_STIsIDz6siydm10x1WtJ0hkgEgVaQM",
+      authDomain: "zonapc-actualizado.firebaseapp.com",
+      databaseURL: "https://zonapc-actualizado-default-rtdb.firebaseio.com",
+      projectId: "zonapc-actualizado",
+      storageBucket: "zonapc-actualizado.firebasestorage.app",
+      messagingSenderId: "837716085875",
+      appId: "1:837716085875:web:198ad1963c42c1105eae06"
+    };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-  const auth = getAuth(app);
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
 
-  // 🔗 Storage central (bucket compartido)
-  const storage = getStorage(app, "gs://cliente-001-b0d88.firebasestorage.app");
+    // 🔗 Storage central (bucket compartido)
+    const storage = getStorage(app, "gs://cliente-001-b0d88.firebasestorage.app");
 
-  // Exponer helpers globales
-  window.app = app;
-  window.db = db;
-  window.auth = auth;
+    // Exponer helpers globales (compatibilidad con app.js)
+    window.app = app;
+    window.db = db;
+    window.auth = auth;
 
-  window.ref = (path) => ref(db, path);
-  window.get = async r => get(r);
-  window.set = async (r, val) => set(r, val);
-  window.update = async (r, val) => update(r, val);
-  window.push = r => push(r);
-  window.remove = r => remove(r);
-  window.onValue = (r, cb) => onValue(r, cb);
+    window.ref = (path) => ref(db, path);
+    window.get = async r => get(r);
+    window.set = async (r, val) => set(r, val);
+    window.update = async (r, val) => update(r, val);
+    window.push = r => push(r);
+    window.remove = r => remove(r);
+    window.onValue = (r, cb) => onValue(r, cb);
 
-  window.onAuthStateChanged = (cb) => onAuthStateChanged(auth, cb);
-  window.signInWithEmailAndPassword = (email, pass) => signInWithEmailAndPassword(auth, email, pass);
-  window.signOut = () => signOut(auth);
+    window.onAuthStateChanged = (cb) => onAuthStateChanged(auth, cb);
+    window.signInWithEmailAndPassword = (email, pass) => signInWithEmailAndPassword(auth, email, pass);
+    window.signOut = () => signOut(auth);
 
-  // Helpers de Storage para uso directo desde app.js
-  window.storage = storage;
-  window.storageRef = (path) => storageRef(storage, path);
-  window.getDownloadURL = (r) => getDownloadURL(r);
-  window.uploadBytes = (r, f) => uploadBytes(r, f); // ✅ aquí, no arriba
-</script>
+    // Helpers de Storage para uso directo desde app.js
+    window.storage = storage;
+    window.storageRef = (path) => storageRef(storage, path);
+    window.getDownloadURL = (r) => getDownloadURL(r);
+    window.uploadBytes = (r, f) => uploadBytes(r, f);
+  </script>
 </head>
 
 <body>
