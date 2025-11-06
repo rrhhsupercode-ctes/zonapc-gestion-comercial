@@ -2720,23 +2720,6 @@ document.getElementById("btn-eliminar-categoria").onclick = async () => {
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
 
-  // eliminar vencidos automáticamente
-  const hoy = new Date().toISOString().split("T")[0];
-  for (const c of cupones) {
-    if (c.fechaFin && c.fechaFin < hoy) {
-      await window.remove(window.ref(`${RUTA_CUPONES}/${c.id}`));
-    }
-  }
-
-  // recargar después de limpiar vencidos
-  const snap2 = await window.get(window.ref(RUTA_CUPONES));
-  cupones = snap2.exists()
-    ? Object.entries(snap2.val()).map(([id, d]) => ({ id, ...d }))
-    : [];
-
-  renderCupones(cupones);
-}
-
 // --- RENDER TABLA DE CUPONES ---
 function renderCupones(lista) {
   const tabla = document.querySelector("#tabla-cupones tbody");
