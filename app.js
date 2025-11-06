@@ -2720,20 +2720,6 @@ document.getElementById("btn-eliminar-categoria").onclick = async () => {
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
 
-// --- CARGAR CUPONES AL ENTRAR EN TIENDA ---
-async function cargarCupones() {
-  const snap = await window.get(window.ref(RUTA_CUPONES));
-  const tabla = document.querySelector("#tabla-cupones tbody");
-  tabla.innerHTML = "";
-  let cupones = [];
-
-  if (snap.exists()) {
-    cupones = Object.entries(snap.val()).map(([id, d]) => ({
-      id,
-      ...d
-    }));
-  }
-
   // eliminar vencidos automáticamente
   const hoy = new Date().toISOString().split("T")[0];
   for (const c of cupones) {
