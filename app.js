@@ -2247,6 +2247,100 @@ btnRestaurar.addEventListener("click", async () => {
   }
 });
 
+// --- TIENDA ---
+import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-storage.js";
+
+const storage = getStorage(app, "gs://cliente-001-b0d88.firebasestorage.app");
+
+const tablaTienda = document.querySelector("#tabla-tienda tbody") || document.createElement("tbody");
+
+// Ruta base donde estarán las fotos en el storage
+const rutaFotos = "productos/";
+
+// Imagen por defecto (en hosting local)
+const imgDefecto = "img/item.png";
+
+// Función principal
+async function cargarTienda() {
+  try {
+    const [stockSnap, sueltosSnap] = await Promise.all([
+      get(ref(db, "stock")),
+      get(ref(db, "sueltos"))
+    ]);
+
+    const productos = [];
+
+    if (stockSnap.exists()) {
+      Object.entries(stockSnap.val()).forEach(([codigo, datos]) => {
+        productos.push({ codigo, nombre: datos.nombre || "Sin nombre", tipo: "STOCK" });
+      });
+    }
+
+    if (sueltosSnap.exists()) {
+      Object.entries(sueltosSnap.val()).forEach(([codigo, datos]) => {
+        productos.push({ codigo, nombre: datos.nombre || "Sin nombre", tipo: "SUELTO" });
+      });
+    }
+
+    // Orden alfabético por nombre
+    productos.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    // Limpiar tabla
+    tablaTienda.innerHTML = "";
+
+    // Crear filas
+    for (const p of productos) {
+      const tr = document.createElement("tr");
+
+      const tdCodigo = document.createElement("td");
+      tdCodigo.textContent = p.codigo;
+
+      const tdNombre = document.createElement("td");
+      tdNombre.textContent = p.nombre;
+
+      const tdTipo = document.createElement("td");
+      tdTipo.textContent = p.tipo;
+
+      const tdFoto = document.createElement("td");
+      const img = document.createElement("img");
+      img.className = "foto-tienda";
+      img.src = imgDefecto;
+      img.alt = p.nombre;
+      img.loading = "lazy";
+
+      // Intentar obtener foto del storage
+      try {
+        const url = await getDownloadURL(sRef(storage, `${rutaFotos}${p.codigo}.jpg`));
+        img.src = url;
+      } catch (err) {
+        // no existe, deja imgDefecto
+      }
+
+      tdFoto.appendChild(img);
+
+      const tdAccion = document.createElement("td");
+      const btnFoto = document.createElement("button");
+      btnFoto.innerHTML = "📷";
+      btnFoto.title = "Subir Foto";
+      btnFoto.onclick = () => subirFotoProducto(p.codigo, p.nombre);
+      tdAccion.appendChild(btnFoto);
+
+      tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
+      tablaTienda.appendChild(tr);
+    }
+  } catch (err) {
+    console.error("Error al cargar tienda:", err);
+  }
+}
+
+// Placeholder para la futura subida
+function subirFotoProducto(codigo, nombre) {
+  alert(`Subir foto para: ${nombre} (${codigo})\n📦 Esta función se activará pronto.`);
+}
+
+// Ejecutar cuando se entra en la sección
+document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
+  
 // --- MODAL ADMIN (OCULTO, SOLO SE CREA CUANDO SE NECESITA) ---
 let adminActionModal = null;
 
