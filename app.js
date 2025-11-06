@@ -2719,3 +2719,182 @@ document.getElementById("btn-eliminar-categoria").onclick = async () => {
 
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
+
+// --- CUPONES (CREAR / EDITAR / ELIMINAR / AUTOEXPIRACIÓN) ---
+const RUTA_CUPONES = "/cupones";
+const MAX_CUPONES = 10;
+
+// --- CARGAR CUPONES AL ENTRAR EN TIENDA ---
+async function cargarCupones() {
+  const snap = await window.get(window.ref(RUTA_CUPONES));
+  const tabla = document.querySelector("#tabla-cupones tbody");
+  tabla.innerHTML = "";
+  let cupones = [];
+
+  if (snap.exists()) {
+    cupones = Object.entries(snap.val()).map(([id, d]) => ({
+      id,
+      ...d
+    }));
+  }
+
+  // eliminar vencidos automáticamente
+  const hoy = new Date().toISOString().split("T")[0];
+  for (const c of cupones) {
+    if (c.fechaFin && c.fechaFin < hoy) {
+      await window.remove(window.ref(`${RUTA_CUPONES}/${c.id}`));
+    }
+  }
+
+  // recargar después de limpiar vencidos
+  const snap2 = await window.get(window.ref(RUTA_CUPONES));
+  cupones = snap2.exists()
+    ? Object.entries(snap2.val()).map(([id, d]) => ({ id, ...d }))
+    : [];
+
+  renderCupones(cupones);
+}
+
+// --- RENDER TABLA DE CUPONES ---
+function renderCupones(lista) {
+  const tabla = document.querySelector("#tabla-cupones tbody");
+  tabla.innerHTML = "";
+  lista.sort((a, b) => a.id.localeCompare(b.id));
+
+  for (const c of lista) {
+    const tr = document.createElement("tr");
+
+    const tdID = document.createElement("td");
+    tdID.textContent = c.id;
+
+    const tdCodigo = document.createElement("td");
+    tdCodigo.textContent = c.codigo;
+
+    const tdCat = document.createElement("td");
+    tdCat.textContent = c.categoria || "Cualquiera";
+
+    const tdDesc = document.createElement("td");
+    tdDesc.textContent = `${c.descuento}%`;
+
+    const tdIni = document.createElement("td");
+    tdIni.textContent = c.fechaInicio || "-";
+
+    const tdFin = document.createElement("td");
+    tdFin.textContent = c.fechaFin || "-";
+
+    const tdAccion = document.createElement("td");
+    const btnEditar = document.createElement("button");
+    btnEditar.textContent = "✏️";
+    btnEditar.title = "Editar Cupón";
+    btnEditar.onclick = () => editarCupon(c);
+    const btnEliminar = document.createElement("button");
+    btnEliminar.textContent = "🗑️";
+    btnEliminar.title = "Eliminar Cupón";
+    btnEliminar.onclick = async () => {
+      if (confirm(`¿Eliminar cupón ${c.codigo}?`)) {
+        await window.remove(window.ref(`${RUTA_CUPONES}/${c.id}`));
+        cargarCupones();
+      }
+    };
+    tdAccion.append(btnEditar, btnEliminar);
+
+    tr.append(tdID, tdCodigo, tdCat, tdDesc, tdIni, tdFin, tdAccion);
+    tabla.appendChild(tr);
+  }
+}
+
+// --- CREAR CUPÓN ---
+document.getElementById("btn-crear-cupon").onclick = async () => {
+  const codigo = document.getElementById("cupon-nombre").value.trim();
+  const categoria = document.getElementById("cupon-categoria").value;
+  const descuento = parseInt(document.getElementById("cupon-descuento").value);
+  const fechaInicio = document.getElementById("cupon-fecha-inicio").value;
+  const fechaFin = document.getElementById("cupon-fecha-fin").value;
+
+  if (!codigo) return alert("⚠️ Ingrese un código de cupón.");
+  if (isNaN(descuento) || descuento < 1 || descuento > 100)
+    return alert("⚠️ Descuento inválido (1–100).");
+  if (!fechaInicio || !fechaFin)
+    return alert("⚠️ Debe indicar las fechas de vigencia.");
+  if (fechaFin < fechaInicio)
+    return alert("⚠️ La fecha de vencimiento no puede ser anterior a la de inicio.");
+
+  const snap = await window.get(window.ref(RUTA_CUPONES));
+  const existentes = snap.exists() ? Object.keys(snap.val()).length : 0;
+
+  if (existentes >= MAX_CUPONES)
+    return alert(`⚠️ Límite alcanzado: solo se permiten ${MAX_CUPONES} cupones activos.`);
+
+  // generar ID incremental CP_000001
+  let nuevoID = "CP_000001";
+  if (snap.exists()) {
+    const ids = Object.keys(snap.val());
+    const ult = ids.sort().pop();
+    const num = parseInt(ult.replace("CP_", ""), 10) + 1;
+    nuevoID = "CP_" + String(num).padStart(6, "0");
+  }
+
+  const data = {
+    codigo,
+    categoria,
+    descuento,
+    fechaInicio,
+    fechaFin,
+    creado: new Date().toISOString().split("T")[0]
+  };
+
+  await window.set(window.ref(`${RUTA_CUPONES}/${nuevoID}`), data);
+  document.getElementById("cupon-nombre").value = "";
+  document.getElementById("cupon-descuento").value = "";
+  document.getElementById("cupon-fecha-inicio").value = "";
+  document.getElementById("cupon-fecha-fin").value = "";
+
+  alert(`✅ Cupón ${codigo} creado correctamente.`);
+  cargarCupones();
+};
+
+// --- EDITAR CUPÓN ---
+async function editarCupon(cupon) {
+  const nuevoDesc = prompt("Nuevo descuento (%)", cupon.descuento);
+  if (!nuevoDesc) return;
+  const num = parseInt(nuevoDesc);
+  if (isNaN(num) || num < 1 || num > 100) return alert("Descuento inválido (1–100).");
+
+  await window.update(window.ref(`${RUTA_CUPONES}/${cupon.id}`), {
+    descuento: num
+  });
+  alert(`✅ Cupón ${cupon.codigo} actualizado.`);
+  cargarCupones();
+}
+
+// --- ACTUALIZAR SELECT DE CATEGORÍAS EN CUPONES ---
+function actualizarSelectCuponCategorias() {
+  const select = document.getElementById("cupon-categoria");
+  if (!select) return;
+  select.innerHTML = `<option value="">Cualquier categoría</option>`;
+  categorias.forEach(cat => {
+    const opt = document.createElement("option");
+    opt.value = cat;
+    opt.textContent = cat;
+    select.appendChild(opt);
+  });
+}
+
+// --- AUTO LIMPIEZA DE CUPONES VENCIDOS CADA 24H ---
+setInterval(async () => {
+  const hoy = new Date().toISOString().split("T")[0];
+  const snap = await window.get(window.ref(RUTA_CUPONES));
+  if (!snap.exists()) return;
+  const cupones = snap.val();
+  for (const [id, d] of Object.entries(cupones)) {
+    if (d.fechaFin && d.fechaFin < hoy) {
+      await window.remove(window.ref(`${RUTA_CUPONES}/${id}`));
+    }
+  }
+}, 86400000); // 24 horas
+
+// --- SINCRONIZACIÓN ---
+document.querySelector('button[data-section="tienda"]').addEventListener("click", () => {
+  actualizarSelectCuponCategorias();
+  cargarCupones();
+});
