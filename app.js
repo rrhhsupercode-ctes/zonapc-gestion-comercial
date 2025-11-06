@@ -2400,15 +2400,21 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   })();
 })();
 
-// --- TIENDA (FUNCIONAL + LAZY LOAD + UPLOAD + WEBP) ---
+// --- TIENDA (BUSCADOR + LETRAS + PÁGINAS + LAZY LOAD + UPLOAD + WEBP) ---
 const storage = window.storage;
 const rutaFotos = "productos/";
 const imgDefecto = "img/item.png";
+let listaProductos = [];
+let paginaActual = 1;
+const itemsPorPagina = 15;
+let filtroTexto = "";
+let filtroLetra = "";
 
+// --- CARGAR TIENDA PRINCIPAL ---
 async function cargarTienda() {
   const tabla = document.querySelector("#tabla-tienda tbody");
   if (!tabla) return;
-  tabla.innerHTML = "";
+  tabla.innerHTML = "Cargando...";
 
   try {
     const [snapStock, snapSueltos] = await Promise.all([
@@ -2416,88 +2422,110 @@ async function cargarTienda() {
       window.get(window.ref("/sueltos"))
     ]);
 
-    const lista = [];
+    listaProductos = [];
 
     if (snapStock.exists()) {
       Object.entries(snapStock.val()).forEach(([codigo, d]) => {
-        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
+        listaProductos.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
       });
     }
 
     if (snapSueltos.exists()) {
       Object.entries(snapSueltos.val()).forEach(([codigo, d]) => {
-        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
+        listaProductos.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
       });
     }
 
-    lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+    listaProductos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
-    const urlCache = new Map();
-
-    // --- Lazy load con IntersectionObserver ---
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(async (entry) => {
-        if (entry.isIntersecting) {
-          const img = entry.target;
-          const pathWebp = `${rutaFotos}${img.dataset.codigo}.webp`;
-          const pathJpg = `${rutaFotos}${img.dataset.codigo}.jpg`;
-
-          if (urlCache.has(pathWebp)) {
-            img.src = urlCache.get(pathWebp);
-          } else {
-            try {
-              const url = await window.getDownloadURL(window.storageRef(pathWebp));
-              urlCache.set(pathWebp, url);
-              img.src = url;
-            } catch {
-              try {
-                const url = await window.getDownloadURL(window.storageRef(pathJpg));
-                urlCache.set(pathWebp, url);
-                img.src = url;
-              } catch {}
-            }
-          }
-
-          observer.unobserve(img);
-        }
-      });
-    }, { rootMargin: "300px" });
-
-    for (const p of lista) {
-      const tr = document.createElement("tr");
-
-      const tdCodigo = document.createElement("td");
-      tdCodigo.textContent = p.codigo;
-
-      const tdNombre = document.createElement("td");
-      tdNombre.textContent = p.nombre;
-
-      const tdTipo = document.createElement("td");
-      tdTipo.textContent = p.tipo;
-
-      const tdFoto = document.createElement("td");
-      const img = document.createElement("img");
-      img.src = imgDefecto;
-      img.alt = p.nombre;
-      img.className = "foto-tienda";
-      img.loading = "lazy";
-      img.dataset.codigo = p.codigo;
-      tdFoto.appendChild(img);
-      observer.observe(img);
-
-      const tdAccion = document.createElement("td");
-      const btn = document.createElement("button");
-      btn.textContent = "📷";
-      btn.title = "Subir Foto";
-      btn.onclick = () => subirFotoProducto(p.codigo, p.nombre, img);
-      tdAccion.appendChild(btn);
-
-      tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
-      tabla.appendChild(tr);
-    }
+    paginaActual = 1;
+    renderTienda();
   } catch (e) {
     console.error("Error en TIENDA:", e);
   }
+}
+
+// --- RENDER PAGINADO CON FILTRO Y LAZY LOAD ---
+function renderTienda() {
+  const tabla = document.querySelector("#tabla-tienda tbody");
+  if (!tabla) return;
+  tabla.innerHTML = "";
+
+  let filtrados = listaProductos.filter(p => {
+    const coincideTexto = !filtroTexto || p.nombre.toLowerCase().includes(filtroTexto) || p.codigo.toLowerCase().includes(filtroTexto);
+    const coincideLetra = !filtroLetra || p.nombre.toUpperCase().startsWith(filtroLetra);
+    return coincideTexto && coincideLetra;
+  });
+
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / itemsPorPagina));
+  paginaActual = Math.min(paginaActual, totalPaginas);
+
+  const inicio = (paginaActual - 1) * itemsPorPagina;
+  const pagina = filtrados.slice(inicio, inicio + itemsPorPagina);
+
+  const urlCache = new Map();
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(async (entry) => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        const pathWebp = `${rutaFotos}${img.dataset.codigo}.webp`;
+        const pathJpg = `${rutaFotos}${img.dataset.codigo}.jpg`;
+
+        if (urlCache.has(pathWebp)) {
+          img.src = urlCache.get(pathWebp);
+        } else {
+          try {
+            const url = await window.getDownloadURL(window.storageRef(pathWebp));
+            urlCache.set(pathWebp, url);
+            img.src = url;
+          } catch {
+            try {
+              const url = await window.getDownloadURL(window.storageRef(pathJpg));
+              urlCache.set(pathWebp, url);
+              img.src = url;
+            } catch {}
+          }
+        }
+        observer.unobserve(img);
+      }
+    });
+  }, { rootMargin: "300px" });
+
+  for (const p of pagina) {
+    const tr = document.createElement("tr");
+
+    const tdCodigo = document.createElement("td");
+    tdCodigo.textContent = p.codigo;
+
+    const tdNombre = document.createElement("td");
+    tdNombre.textContent = p.nombre;
+
+    const tdTipo = document.createElement("td");
+    tdTipo.textContent = p.tipo;
+
+    const tdFoto = document.createElement("td");
+    const img = document.createElement("img");
+    img.src = imgDefecto;
+    img.alt = p.nombre;
+    img.className = "foto-tienda";
+    img.loading = "lazy";
+    img.dataset.codigo = p.codigo;
+    tdFoto.appendChild(img);
+    observer.observe(img);
+
+    const tdAccion = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.textContent = "📷";
+    btn.title = "Subir Foto";
+    btn.onclick = () => subirFotoProducto(p.codigo, p.nombre, img);
+    tdAccion.appendChild(btn);
+
+    tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
+    tabla.appendChild(tr);
+  }
+
+  document.getElementById("tienda-pagina-actual").textContent = `${paginaActual}/${totalPaginas}`;
 }
 
 // --- SUBIR FOTO (.jpg / .png → 500x500 centrado → .webp) ---
@@ -2537,7 +2565,45 @@ function subirFotoProducto(codigo, nombre, imgElemento) {
   input.click();
 }
 
-// --- Estilo foto ---
+// --- EVENTOS BUSCADOR Y PAGINACIÓN ---
+document.getElementById("tienda-btn-buscar").addEventListener("click", () => {
+  filtroTexto = document.getElementById("tienda-busqueda").value.trim().toLowerCase();
+  paginaActual = 1;
+  renderTienda();
+});
+
+document.getElementById("tienda-busqueda").addEventListener("keyup", (e) => {
+  if (e.key === "Enter") {
+    filtroTexto = e.target.value.trim().toLowerCase();
+    paginaActual = 1;
+    renderTienda();
+  }
+});
+
+document.querySelectorAll(".tienda-letra").forEach(btn => {
+  btn.addEventListener("click", () => {
+    filtroLetra = btn.textContent === filtroLetra ? "" : btn.textContent;
+    paginaActual = 1;
+    renderTienda();
+  });
+});
+
+document.getElementById("tienda-prev").addEventListener("click", () => {
+  if (paginaActual > 1) {
+    paginaActual--;
+    renderTienda();
+  }
+});
+
+document.getElementById("tienda-next").addEventListener("click", () => {
+  const totalPaginas = Math.ceil(listaProductos.length / itemsPorPagina);
+  if (paginaActual < totalPaginas) {
+    paginaActual++;
+    renderTienda();
+  }
+});
+
+// --- ESTILO ---
 const style = document.createElement("style");
 style.textContent = `
 #tabla-tienda img.foto-tienda {
@@ -2548,8 +2614,19 @@ style.textContent = `
   border-radius: 8px;
   border: 1px solid #ccc;
 }
+#tienda-letras button {
+  margin: 2px;
+  padding: 5px 7px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #f9f9f9;
+  cursor: pointer;
+}
+#tienda-letras button:hover {
+  background: #eaeaea;
+}
 `;
 document.head.appendChild(style);
 
-// --- Evento ---
+// --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
