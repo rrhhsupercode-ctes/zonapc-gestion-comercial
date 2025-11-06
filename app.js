@@ -2400,15 +2400,18 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   })();
 })();
 
-// --- TIENDA (BUSCADOR + LETRAS + PÁGINAS + LAZY LOAD + UPLOAD + WEBP) ---
+// --- TIENDA (CATEGORÍAS + FILTROS + UPLOAD + LAZY + WEBP) ---
 const storage = window.storage;
 const rutaFotos = "productos/";
 const imgDefecto = "img/item.png";
 let listaProductos = [];
+let categorias = [];
 let paginaActual = 1;
 const itemsPorPagina = 15;
 let filtroTexto = "";
 let filtroLetra = "";
+let filtroTipo = "";
+let filtroCategoria = "";
 
 // --- CARGAR TIENDA PRINCIPAL ---
 async function cargarTienda() {
@@ -2417,6 +2420,10 @@ async function cargarTienda() {
   tabla.innerHTML = "Cargando...";
 
   try {
+    // cargar categorías
+    await cargarCategorias();
+
+    // cargar productos
     const [snapStock, snapSueltos] = await Promise.all([
       window.get(window.ref("/stock")),
       window.get(window.ref("/sueltos"))
@@ -2426,18 +2433,27 @@ async function cargarTienda() {
 
     if (snapStock.exists()) {
       Object.entries(snapStock.val()).forEach(([codigo, d]) => {
-        listaProductos.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
+        listaProductos.push({
+          codigo,
+          nombre: d.nombre || "Sin nombre",
+          tipo: "STOCK",
+          categoria: d.categoria || "Sin categoría"
+        });
       });
     }
 
     if (snapSueltos.exists()) {
       Object.entries(snapSueltos.val()).forEach(([codigo, d]) => {
-        listaProductos.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
+        listaProductos.push({
+          codigo,
+          nombre: d.nombre || "Sin nombre",
+          tipo: "SUELTO",
+          categoria: d.categoria || "Sin categoría"
+        });
       });
     }
 
     listaProductos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
-
     paginaActual = 1;
     renderTienda();
   } catch (e) {
@@ -2445,7 +2461,50 @@ async function cargarTienda() {
   }
 }
 
-// --- RENDER PAGINADO CON FILTRO Y LAZY LOAD ---
+// --- CARGAR / CREAR CATEGORÍAS ---
+async function cargarCategorias() {
+  const refCat = window.ref("/categorias");
+  const snap = await window.get(refCat);
+  let catBase = ["Sin categoría", "Promos"];
+
+  if (!snap.exists()) {
+    await window.set(refCat, catBase);
+    categorias = catBase;
+  } else {
+    categorias = snap.val();
+    catBase.forEach(def => {
+      if (!categorias.includes(def)) categorias.unshift(def);
+    });
+    await window.set(refCat, categorias);
+  }
+
+  actualizarSelectCategorias();
+}
+
+// --- ACTUALIZAR SELECTORES DE CATEGORÍAS ---
+function actualizarSelectCategorias() {
+  const selectCat = document.getElementById("select-categorias");
+  const filtroCat = document.getElementById("filtro-categoria");
+
+  [selectCat, filtroCat].forEach(sel => {
+    if (!sel) return;
+    sel.innerHTML = "";
+    categorias.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    if (sel === filtroCat) {
+      const optTodos = document.createElement("option");
+      optTodos.value = "";
+      optTodos.textContent = "Todas las categorías";
+      sel.insertBefore(optTodos, sel.firstChild);
+    }
+  });
+}
+
+// --- RENDER PAGINADO + FILTROS + LAZY ---
 function renderTienda() {
   const tabla = document.querySelector("#tabla-tienda tbody");
   if (!tabla) return;
@@ -2454,7 +2513,9 @@ function renderTienda() {
   let filtrados = listaProductos.filter(p => {
     const coincideTexto = !filtroTexto || p.nombre.toLowerCase().includes(filtroTexto) || p.codigo.toLowerCase().includes(filtroTexto);
     const coincideLetra = !filtroLetra || p.nombre.toUpperCase().startsWith(filtroLetra);
-    return coincideTexto && coincideLetra;
+    const coincideTipo = !filtroTipo || p.tipo === filtroTipo;
+    const coincideCat = !filtroCategoria || p.categoria === filtroCategoria;
+    return coincideTexto && coincideLetra && coincideTipo && coincideCat;
   });
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / itemsPorPagina));
@@ -2464,14 +2525,12 @@ function renderTienda() {
   const pagina = filtrados.slice(inicio, inicio + itemsPorPagina);
 
   const urlCache = new Map();
-
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(async (entry) => {
       if (entry.isIntersecting) {
         const img = entry.target;
         const pathWebp = `${rutaFotos}${img.dataset.codigo}.webp`;
         const pathJpg = `${rutaFotos}${img.dataset.codigo}.jpg`;
-
         if (urlCache.has(pathWebp)) {
           img.src = urlCache.get(pathWebp);
         } else {
@@ -2504,6 +2563,25 @@ function renderTienda() {
     const tdTipo = document.createElement("td");
     tdTipo.textContent = p.tipo;
 
+    // --- CATEGORÍA SELECT ---
+    const tdCategoria = document.createElement("td");
+    const selCat = document.createElement("select");
+    categorias.forEach(cat => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      if (p.categoria === cat) opt.selected = true;
+      selCat.appendChild(opt);
+    });
+    selCat.onchange = async () => {
+      const nueva = selCat.value;
+      p.categoria = nueva;
+      const refPath = window.ref(`/${p.tipo === "STOCK" ? "stock" : "sueltos"}/${p.codigo}/categoria`);
+      await window.set(refPath, nueva);
+    };
+    tdCategoria.appendChild(selCat);
+
+    // --- FOTO ---
     const tdFoto = document.createElement("td");
     const img = document.createElement("img");
     img.src = imgDefecto;
@@ -2514,6 +2592,7 @@ function renderTienda() {
     tdFoto.appendChild(img);
     observer.observe(img);
 
+    // --- ACCIÓN FOTO ---
     const tdAccion = document.createElement("td");
     const btn = document.createElement("button");
     btn.textContent = "📷";
@@ -2521,14 +2600,14 @@ function renderTienda() {
     btn.onclick = () => subirFotoProducto(p.codigo, p.nombre, img);
     tdAccion.appendChild(btn);
 
-    tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
+    tr.append(tdCodigo, tdNombre, tdTipo, tdCategoria, tdFoto, tdAccion);
     tabla.appendChild(tr);
   }
 
   document.getElementById("tienda-pagina-actual").textContent = `${paginaActual}/${totalPaginas}`;
 }
 
-// --- SUBIR FOTO (.jpg / .png → 500x500 centrado → .webp) ---
+// --- SUBIR FOTO (.jpg/.png → 500×500 centrado → .webp) ---
 function subirFotoProducto(codigo, nombre, imgElemento) {
   const input = document.createElement("input");
   input.type = "file";
@@ -2536,26 +2615,24 @@ function subirFotoProducto(codigo, nombre, imgElemento) {
   input.onchange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     try {
-      const bitmap = await createImageBitmap(file);
+      const img = await createImageBitmap(file);
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
       const size = 500;
       canvas.width = size;
       canvas.height = size;
 
-      const scale = Math.max(size / bitmap.width, size / bitmap.height);
-      const x = (size / 2) - (bitmap.width / 2) * scale;
-      const y = (size / 2) - (bitmap.height / 2) * scale;
-      ctx.drawImage(bitmap, x, y, bitmap.width * scale, bitmap.height * scale);
+      const scale = Math.max(size / img.width, size / img.height);
+      const x = (size - img.width * scale) / 2;
+      const y = (size - img.height * scale) / 2;
+      ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
 
-      const blob = await new Promise(res => canvas.toBlob(res, "image/webp", 0.85));
+      const blob = await new Promise(r => canvas.toBlob(r, "image/webp", 0.85));
       const refPath = window.storageRef(`${rutaFotos}${codigo}.webp`);
       await window.uploadBytes(refPath, blob);
       const url = await window.getDownloadURL(refPath);
       imgElemento.src = url;
-
       alert(`✅ Foto de ${nombre} actualizada correctamente.`);
     } catch (err) {
       console.error("Error al subir foto:", err);
@@ -2565,43 +2642,80 @@ function subirFotoProducto(codigo, nombre, imgElemento) {
   input.click();
 }
 
-// --- EVENTOS BUSCADOR Y PAGINACIÓN ---
-document.getElementById("tienda-btn-buscar").addEventListener("click", () => {
+// --- EVENTOS ---
+document.getElementById("tienda-btn-buscar").onclick = () => {
   filtroTexto = document.getElementById("tienda-busqueda").value.trim().toLowerCase();
   paginaActual = 1;
   renderTienda();
+};
+document.getElementById("tienda-busqueda").addEventListener("keyup", e => {
+  if (e.key === "Enter") document.getElementById("tienda-btn-buscar").click();
 });
-
-document.getElementById("tienda-busqueda").addEventListener("keyup", (e) => {
-  if (e.key === "Enter") {
-    filtroTexto = e.target.value.trim().toLowerCase();
-    paginaActual = 1;
-    renderTienda();
-  }
-});
-
 document.querySelectorAll(".tienda-letra").forEach(btn => {
-  btn.addEventListener("click", () => {
+  btn.onclick = () => {
     filtroLetra = btn.textContent === filtroLetra ? "" : btn.textContent;
     paginaActual = 1;
     renderTienda();
-  });
+  };
 });
-
-document.getElementById("tienda-prev").addEventListener("click", () => {
-  if (paginaActual > 1) {
-    paginaActual--;
-    renderTienda();
-  }
-});
-
-document.getElementById("tienda-next").addEventListener("click", () => {
+document.getElementById("filtro-tipo").onchange = e => {
+  filtroTipo = e.target.value;
+  paginaActual = 1;
+  renderTienda();
+};
+document.getElementById("filtro-categoria").onchange = e => {
+  filtroCategoria = e.target.value;
+  paginaActual = 1;
+  renderTienda();
+};
+document.getElementById("tienda-prev").onclick = () => {
+  if (paginaActual > 1) { paginaActual--; renderTienda(); }
+};
+document.getElementById("tienda-next").onclick = () => {
   const totalPaginas = Math.ceil(listaProductos.length / itemsPorPagina);
-  if (paginaActual < totalPaginas) {
-    paginaActual++;
-    renderTienda();
-  }
-});
+  if (paginaActual < totalPaginas) { paginaActual++; renderTienda(); }
+};
+
+// --- CATEGORÍAS: AGREGAR / EDITAR / ELIMINAR ---
+document.getElementById("btn-agregar-categoria").onclick = async () => {
+  const nombre = document.getElementById("nueva-categoria").value.trim();
+  if (!nombre) return alert("Ingrese un nombre de categoría.");
+  if (categorias.includes(nombre)) return alert("Ya existe esa categoría.");
+  categorias.push(nombre);
+  await window.set(window.ref("/categorias"), categorias);
+  document.getElementById("nueva-categoria").value = "";
+  actualizarSelectCategorias();
+  renderTienda();
+};
+
+document.getElementById("btn-editar-categoria").onclick = async () => {
+  const actual = document.getElementById("select-categorias").value;
+  if (["Sin categoría", "Promos"].includes(actual)) return alert("No se puede editar esta categoría.");
+  const nuevo = prompt("Nuevo nombre para la categoría:", actual);
+  if (!nuevo || nuevo === actual) return;
+  if (categorias.includes(nuevo)) return alert("Ya existe esa categoría.");
+  const idx = categorias.indexOf(actual);
+  if (idx > -1) categorias[idx] = nuevo;
+  await window.set(window.ref("/categorias"), categorias);
+  listaProductos.forEach(p => {
+    if (p.categoria === actual) p.categoria = nuevo;
+  });
+  actualizarSelectCategorias();
+  renderTienda();
+};
+
+document.getElementById("btn-eliminar-categoria").onclick = async () => {
+  const sel = document.getElementById("select-categorias").value;
+  if (["Sin categoría", "Promos"].includes(sel)) return alert("No se puede eliminar esta categoría.");
+  if (!confirm(`¿Eliminar categoría "${sel}"?`)) return;
+  categorias = categorias.filter(c => c !== sel);
+  await window.set(window.ref("/categorias"), categorias);
+  listaProductos.forEach(p => {
+    if (p.categoria === sel) p.categoria = "Sin categoría";
+  });
+  actualizarSelectCategorias();
+  renderTienda();
+};
 
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
