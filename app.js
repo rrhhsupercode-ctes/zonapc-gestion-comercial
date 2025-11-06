@@ -2400,7 +2400,7 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   })();
 })();
 
-// --- TIENDA (OPTIMIZADA) ---
+// --- TIENDA (FUNCIONAL + LAZY LOAD + UPLOAD + WEBP) ---
 const storage = window.storage;
 const rutaFotos = "productos/";
 const imgDefecto = "img/item.png";
@@ -2432,7 +2432,36 @@ async function cargarTienda() {
 
     lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
-    const urlCache = new Map(); // cache de fotos ya existentes
+    const urlCache = new Map();
+
+    // --- Lazy load con IntersectionObserver ---
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(async (entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const pathWebp = `${rutaFotos}${img.dataset.codigo}.webp`;
+          const pathJpg = `${rutaFotos}${img.dataset.codigo}.jpg`;
+
+          if (urlCache.has(pathWebp)) {
+            img.src = urlCache.get(pathWebp);
+          } else {
+            try {
+              const url = await window.getDownloadURL(window.storageRef(pathWebp));
+              urlCache.set(pathWebp, url);
+              img.src = url;
+            } catch {
+              try {
+                const url = await window.getDownloadURL(window.storageRef(pathJpg));
+                urlCache.set(pathWebp, url);
+                img.src = url;
+              } catch {}
+            }
+          }
+
+          observer.unobserve(img);
+        }
+      });
+    }, { rootMargin: "300px" });
 
     for (const p of lista) {
       const tr = document.createElement("tr");
@@ -2452,26 +2481,15 @@ async function cargarTienda() {
       img.alt = p.nombre;
       img.className = "foto-tienda";
       img.loading = "lazy";
+      img.dataset.codigo = p.codigo;
       tdFoto.appendChild(img);
-
-      // Intentar cargar solo si existe en cache (sin bloquear todo)
-      const path = `${rutaFotos}${p.codigo}.jpg`;
-      if (urlCache.has(path)) {
-        img.src = urlCache.get(path);
-      } else {
-        window.getDownloadURL(window.storageRef(path))
-          .then(url => {
-            urlCache.set(path, url);
-            img.src = url;
-          })
-          .catch(() => {}); // no existe, mantiene item.png
-      }
+      observer.observe(img);
 
       const tdAccion = document.createElement("td");
       const btn = document.createElement("button");
       btn.textContent = "📷";
       btn.title = "Subir Foto";
-      btn.onclick = () => alert(`Subir foto para ${p.nombre} (${p.codigo})`);
+      btn.onclick = () => subirFotoProducto(p.codigo, p.nombre, img);
       tdAccion.appendChild(btn);
 
       tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
@@ -2482,6 +2500,56 @@ async function cargarTienda() {
   }
 }
 
-document
-  .querySelector('button[data-section="tienda"]')
-  .addEventListener("click", cargarTienda);
+// --- SUBIR FOTO (.jpg / .png → 500x500 centrado → .webp) ---
+function subirFotoProducto(codigo, nombre, imgElemento) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/jpeg,image/png";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const size = 500;
+      canvas.width = size;
+      canvas.height = size;
+
+      const scale = Math.max(size / bitmap.width, size / bitmap.height);
+      const x = (size / 2) - (bitmap.width / 2) * scale;
+      const y = (size / 2) - (bitmap.height / 2) * scale;
+      ctx.drawImage(bitmap, x, y, bitmap.width * scale, bitmap.height * scale);
+
+      const blob = await new Promise(res => canvas.toBlob(res, "image/webp", 0.85));
+      const refPath = window.storageRef(`${rutaFotos}${codigo}.webp`);
+      await window.uploadBytes(refPath, blob);
+      const url = await window.getDownloadURL(refPath);
+      imgElemento.src = url;
+
+      alert(`✅ Foto de ${nombre} actualizada correctamente.`);
+    } catch (err) {
+      console.error("Error al subir foto:", err);
+      alert("❌ Error al procesar o subir la foto");
+    }
+  };
+  input.click();
+}
+
+// --- Estilo foto ---
+const style = document.createElement("style");
+style.textContent = `
+#tabla-tienda img.foto-tienda {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+`;
+document.head.appendChild(style);
+
+// --- Evento ---
+document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
