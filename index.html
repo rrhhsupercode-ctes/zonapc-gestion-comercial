@@ -427,17 +427,54 @@
       <select id="select-categorias" style="width:200px;"></select>
       <button id="btn-editar-categoria">✏️ Editar</button>
       <button id="btn-eliminar-categoria">🗑️ Eliminar</button>
+    </div>
   </div>
 
   <!-- FILTROS DE CATEGORÍA Y TIPO -->
-  <div style="display:flex; justify-content:center; gap:10px; margin-bottom:10px;">
-    <h3>Filtros</h3>
+  <div style="display:flex; justify-content:center; gap:10px; margin-bottom:20px; align-items:center;">
+    <h3 style="margin:0;">Filtros</h3>
     <select id="filtro-categoria" style="width:200px;"></select>
     <select id="filtro-tipo" style="width:150px;">
       <option value="">Todos los tipos</option>
       <option value="STOCK">STOCK</option>
       <option value="SUELTO">SUELTO</option>
     </select>
+  </div>
+
+  <!-- CUPONES -->
+  <div id="tienda-cupones" style="text-align:center; margin-bottom:20px;">
+    <h3>🎟️ Crear Cupón</h3>
+    <div style="display:flex; flex-wrap:wrap; justify-content:center; gap:5px; margin-bottom:10px;">
+      <input id="cupon-nombre" type="text" maxlength="30" placeholder="Código del cupón..." style="width:180px;">
+      <select id="cupon-categoria" style="width:180px;">
+        <option value="">Cualquier categoría</option>
+      </select>
+      <input id="cupon-descuento" type="number" min="1" max="100" placeholder="% Descuento" style="width:120px; text-align:center;">
+      <div style="display:flex; align-items:center; gap:5px;">
+        <label for="cupon-fecha-inicio">Desde:</label>
+        <input id="cupon-fecha-inicio" type="date">
+      </div>
+      <div style="display:flex; align-items:center; gap:5px;">
+        <label for="cupon-fecha-fin">Hasta:</label>
+        <input id="cupon-fecha-fin" type="date">
+      </div>
+      <button id="btn-crear-cupon">➕ Crear Cupón</button>
+    </div>
+
+    <table id="tabla-cupones" style="width:100%; border-collapse:collapse; margin-top:10px;">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Código</th>
+          <th>Categoría</th>
+          <th>Descuento</th>
+          <th>Desde</th>
+          <th>Hasta</th>
+          <th>Acción</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 
   <!-- TABLA DE PRODUCTOS -->
