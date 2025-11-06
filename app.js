@@ -2803,6 +2803,10 @@ function renderCupones(lista) {
   }
 }
 
+// --- CONFIGURACIÓN ---
+const RUTA_CUPONES = "/cupones";
+const MAX_CUPONES = 10;
+
 // --- CREAR CUPÓN ---
 document.getElementById("btn-crear-cupon").onclick = async () => {
   const codigo = document.getElementById("cupon-nombre").value.trim();
@@ -2854,33 +2858,17 @@ document.getElementById("btn-crear-cupon").onclick = async () => {
   cargarCupones();
 };
 
-// --- EDITAR CUPÓN ---
-async function editarCupon(cupon) {
-  const nuevoDesc = prompt("Nuevo descuento (%)", cupon.descuento);
-  if (!nuevoDesc) return;
-  const num = parseInt(nuevoDesc);
-  if (isNaN(num) || num < 1 || num > 100) return alert("Descuento inválido (1–100).");
-
-  await window.update(window.ref(`${RUTA_CUPONES}/${cupon.id}`), {
-    descuento: num
-  });
-  alert(`✅ Cupón ${cupon.codigo} actualizado.`);
-  cargarCupones();
-}
-
 // --- CARGAR Y ACTUALIZAR CATEGORÍAS GLOBALES ---
 async function cargarCategoriasGlobales() {
   const refCat = window.ref("/categorias");
   const snap = await window.get(refCat);
   let lista = [];
 
-  // Si no existe, crear base
   if (!snap.exists()) {
     lista = ["Sin categoría", "Promos"];
     await window.set(refCat, lista);
   } else {
     lista = snap.val();
-    // Asegurar las dos básicas
     if (!lista.includes("Sin categoría")) lista.unshift("Sin categoría");
     if (!lista.includes("Promos")) lista.push("Promos");
     await window.set(refCat, [...new Set(lista)]);
@@ -2905,6 +2893,107 @@ async function actualizarSelectCuponCategorias() {
   });
 }
 
+// --- CARGAR CUPONES Y MOSTRAR EN TABLA EDITABLE ---
+async function cargarCupones() {
+  const tabla = document.getElementById("tabla-cupones").querySelector("tbody");
+  tabla.innerHTML = "";
+
+  const snap = await window.get(window.ref(RUTA_CUPONES));
+  if (!snap.exists()) {
+    tabla.innerHTML = `<tr><td colspan="6" style="text-align:center;">No hay cupones aún</td></tr>`;
+    return;
+  }
+
+  const cupones = snap.val();
+  const categorias = await cargarCategoriasGlobales();
+
+  Object.entries(cupones).forEach(([id, d]) => {
+    const tr = document.createElement("tr");
+
+    // Código (no editable)
+    const tdCodigo = document.createElement("td");
+    tdCodigo.textContent = d.codigo;
+
+    // Categoría (editable)
+    const tdCat = document.createElement("td");
+    const selCat = document.createElement("select");
+    categorias.forEach(c => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      if (d.categoria === c) opt.selected = true;
+      selCat.appendChild(opt);
+    });
+    selCat.onchange = async () => {
+      await window.update(window.ref(`${RUTA_CUPONES}/${id}`), { categoria: selCat.value });
+      marcarGuardado(tdCat);
+    };
+    tdCat.appendChild(selCat);
+
+    // Descuento (editable)
+    const tdDesc = document.createElement("td");
+    const inpDesc = document.createElement("input");
+    inpDesc.type = "number";
+    inpDesc.min = 1;
+    inpDesc.max = 100;
+    inpDesc.value = d.descuento;
+    inpDesc.onchange = async () => {
+      const val = parseInt(inpDesc.value);
+      if (isNaN(val) || val < 1 || val > 100) return alert("Descuento inválido (1–100)");
+      await window.update(window.ref(`${RUTA_CUPONES}/${id}`), { descuento: val });
+      marcarGuardado(tdDesc);
+    };
+    tdDesc.appendChild(inpDesc);
+
+    // Fecha inicio (editable)
+    const tdInicio = document.createElement("td");
+    const inpInicio = document.createElement("input");
+    inpInicio.type = "date";
+    inpInicio.value = d.fechaInicio;
+    inpInicio.onchange = async () => {
+      await window.update(window.ref(`${RUTA_CUPONES}/${id}`), { fechaInicio: inpInicio.value });
+      marcarGuardado(tdInicio);
+    };
+    tdInicio.appendChild(inpInicio);
+
+    // Fecha fin (editable)
+    const tdFin = document.createElement("td");
+    const inpFin = document.createElement("input");
+    inpFin.type = "date";
+    inpFin.value = d.fechaFin;
+    inpFin.onchange = async () => {
+      await window.update(window.ref(`${RUTA_CUPONES}/${id}`), { fechaFin: inpFin.value });
+      marcarGuardado(tdFin);
+    };
+    tdFin.appendChild(inpFin);
+
+    // Acción (eliminar)
+    const tdAcc = document.createElement("td");
+    const btnDel = document.createElement("button");
+    btnDel.textContent = "🗑️";
+    btnDel.title = "Eliminar cupón";
+    btnDel.onclick = async () => {
+      if (confirm(`¿Eliminar cupón ${d.codigo}?`)) {
+        await window.remove(window.ref(`${RUTA_CUPONES}/${id}`));
+        tr.remove();
+      }
+    };
+    tdAcc.appendChild(btnDel);
+
+    tr.append(tdCodigo, tdCat, tdDesc, tdInicio, tdFin, tdAcc);
+    tabla.appendChild(tr);
+  });
+}
+
+// ✅ Marcar visualmente el cambio guardado
+function marcarGuardado(td) {
+  const mark = document.createElement("span");
+  mark.textContent = " ✅";
+  mark.style.color = "green";
+  td.appendChild(mark);
+  setTimeout(() => mark.remove(), 1000);
+}
+
 // --- AUTO LIMPIEZA DE CUPONES VENCIDOS CADA 24H ---
 setInterval(async () => {
   const hoy = new Date().toISOString().split("T")[0];
@@ -2917,6 +3006,16 @@ setInterval(async () => {
     }
   }
 }, 86400000); // 24 horas
+
+// --- PLEGADO / DESPLEGADO DE CUPONES ---
+const contCupones = document.getElementById("cupones-container");
+const btnToggleCupones = document.getElementById("btn-toggle-cupones");
+btnToggleCupones.addEventListener("click", () => {
+  contCupones.classList.toggle("hidden");
+  btnToggleCupones.textContent = contCupones.classList.contains("hidden")
+    ? "🎟️ Mostrar Cupones"
+    : "🎟️ Ocultar Cupones";
+});
 
 // --- SINCRONIZACIÓN ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", async () => {
