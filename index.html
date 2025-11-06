@@ -418,6 +418,30 @@
     <button class="tienda-letra">Z</button>
   </div>
 
+  <!-- GESTIÓN DE CATEGORÍAS -->
+  <div id="tienda-categorias" style="margin-bottom:15px; text-align:center;">
+    <h3>Categorías</h3>
+    <div style="display:flex; justify-content:center; gap:5px; margin-bottom:8px;">
+      <input id="nueva-categoria" type="text" placeholder="Nueva categoría..." style="width:200px;">
+      <button id="btn-agregar-categoria">➕ Agregar Categoría</button>
+    </div>
+    <div style="display:flex; justify-content:center; gap:5px; align-items:center;">
+      <select id="select-categorias" style="width:200px;"></select>
+      <button id="btn-editar-categoria">✏️ Editar</button>
+      <button id="btn-eliminar-categoria">🗑️ Eliminar</button>
+    </div>
+  </div>
+
+  <!-- FILTROS DE CATEGORÍA Y TIPO -->
+  <div style="display:flex; justify-content:center; gap:10px; margin-bottom:10px;">
+    <select id="filtro-categoria" style="width:200px;"></select>
+    <select id="filtro-tipo" style="width:150px;">
+      <option value="">Todos los tipos</option>
+      <option value="STOCK">STOCK</option>
+      <option value="SUELTO">SUELTO</option>
+    </select>
+  </div>
+
   <!-- TABLA DE PRODUCTOS -->
   <div style="max-height:500px; overflow-y:auto; border:1px solid #ccc; border-radius:6px;">
     <table id="tabla-tienda" style="width:100%; border-collapse:collapse;">
@@ -426,6 +450,7 @@
           <th>Código</th>
           <th>Nombre</th>
           <th>Tipo</th>
+          <th>Categoría</th>
           <th>Foto</th>
           <th>Acción</th>
         </tr>
