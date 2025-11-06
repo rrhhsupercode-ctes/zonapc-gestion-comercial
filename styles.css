@@ -43,6 +43,16 @@ nav {
   transform: scale(1.05);
 }
 
+/* === TIENDA EN APP.JS (SECTION) === */
+#tabla-tienda img.foto-tienda {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+}
+
 /* === TIENDA BUSCADOR, LETRAS Y PAGINACIÓN === */
 #tienda-letras {
   text-align: center;
