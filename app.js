@@ -2247,80 +2247,6 @@ btnRestaurar.addEventListener("click", async () => {
   }
 });
 
-// --- TIENDA (CORREGIDO) ---
-const storage = getStorage(app, "gs://cliente-001-b0d88.firebasestorage.app");
-const rutaFotos = "productos/";
-const imgDefecto = "img/item.png";
-
-async function cargarTienda() {
-  const tabla = document.querySelector("#tabla-tienda tbody");
-  if (!tabla) return;
-  tabla.innerHTML = "";
-
-  try {
-    const [snapStock, snapSueltos] = await Promise.all([
-      get(ref(db, "stock")),
-      get(ref(db, "sueltos"))
-    ]);
-
-    const lista = [];
-    if (snapStock.exists()) {
-      Object.entries(snapStock.val()).forEach(([codigo, d]) => {
-        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
-      });
-    }
-    if (snapSueltos.exists()) {
-      Object.entries(snapSueltos.val()).forEach(([codigo, d]) => {
-        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
-      });
-    }
-
-    lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
-
-    for (const p of lista) {
-      const tr = document.createElement("tr");
-
-      const tdCodigo = document.createElement("td");
-      tdCodigo.textContent = p.codigo;
-
-      const tdNombre = document.createElement("td");
-      tdNombre.textContent = p.nombre;
-
-      const tdTipo = document.createElement("td");
-      tdTipo.textContent = p.tipo;
-
-      const tdFoto = document.createElement("td");
-      const img = document.createElement("img");
-      img.src = imgDefecto;
-      img.alt = p.nombre;
-      img.className = "foto-tienda";
-      img.loading = "lazy";
-      tdFoto.appendChild(img);
-
-      try {
-        const url = await getDownloadURL(ref(storage, `${rutaFotos}${p.codigo}.jpg`));
-        img.src = url;
-      } catch (_) {}
-
-      const tdAccion = document.createElement("td");
-      const btn = document.createElement("button");
-      btn.textContent = "📷";
-      btn.title = "Subir Foto";
-      btn.onclick = () => alert(`Subir foto para ${p.nombre} (${p.codigo})`);
-      tdAccion.appendChild(btn);
-
-      tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
-      tabla.appendChild(tr);
-    }
-  } catch (e) {
-    console.error("Error en TIENDA:", e);
-  }
-}
-
-document
-  .querySelector('button[data-section="tienda"]')
-  .addEventListener("click", cargarTienda);
-  
 // --- MODAL ADMIN (OCULTO, SOLO SE CREA CUANDO SE NECESITA) ---
 let adminActionModal = null;
 
@@ -2473,3 +2399,80 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
     await loadConfig();
   })();
 })();
+
+// --- TIENDA (FINAL) ---
+const storage = window.storage; // ✅ usa el storage global
+const rutaFotos = "productos/";
+const imgDefecto = "img/item.png";
+
+async function cargarTienda() {
+  const tabla = document.querySelector("#tabla-tienda tbody");
+  if (!tabla) return;
+  tabla.innerHTML = "";
+
+  try {
+    const [snapStock, snapSueltos] = await Promise.all([
+      window.get(window.ref("stock")),
+      window.get(window.ref("sueltos"))
+    ]);
+
+    const lista = [];
+    if (snapStock.exists()) {
+      Object.entries(snapStock.val()).forEach(([codigo, d]) => {
+        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "STOCK" });
+      });
+    }
+    if (snapSueltos.exists()) {
+      Object.entries(sueltosSnap.val()).forEach(([codigo, d]) => {
+        lista.push({ codigo, nombre: d.nombre || "Sin nombre", tipo: "SUELTO" });
+      });
+    }
+
+    lista.sort((a, b) => a.nombre.localeCompare(b.nombre));
+
+    for (const p of lista) {
+      const tr = document.createElement("tr");
+
+      const tdCodigo = document.createElement("td");
+      tdCodigo.textContent = p.codigo;
+
+      const tdNombre = document.createElement("td");
+      tdNombre.textContent = p.nombre;
+
+      const tdTipo = document.createElement("td");
+      tdTipo.textContent = p.tipo;
+
+      const tdFoto = document.createElement("td");
+      const img = document.createElement("img");
+      img.src = imgDefecto;
+      img.alt = p.nombre;
+      img.className = "foto-tienda";
+      img.loading = "lazy";
+      tdFoto.appendChild(img);
+
+      // ✅ Usa las funciones globales del HTML para obtener URL
+      try {
+        const url = await window.getDownloadURL(window.storageRef(`${rutaFotos}${p.codigo}.jpg`));
+        img.src = url;
+      } catch (_) {
+        // No hay foto, se mantiene la por defecto
+      }
+
+      const tdAccion = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "📷";
+      btn.title = "Subir Foto";
+      btn.onclick = () => alert(`Subir foto para ${p.nombre} (${p.codigo})`);
+      tdAccion.appendChild(btn);
+
+      tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
+      tabla.appendChild(tr);
+    }
+  } catch (e) {
+    console.error("Error en TIENDA:", e);
+  }
+}
+
+document
+  .querySelector('button[data-section="tienda"]')
+  .addEventListener("click", cargarTienda);
