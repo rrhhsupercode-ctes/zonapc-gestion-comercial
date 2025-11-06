@@ -2400,11 +2400,96 @@ document.querySelectorAll("button.nav-btn").forEach(btn => {
   })();
 })();
 
-#tabla-tienda img.foto-tienda {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  object-position: center;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+// --- TIENDA (FINAL CORREGIDO Y COMPATIBLE) ---
+const storage = window.storage;
+const rutaFotos = "productos/";
+const imgDefecto = "img/item.png";
+
+async function cargarTienda() {
+  const tabla = document.querySelector("#tabla-tienda tbody");
+  if (!tabla) return;
+  tabla.innerHTML = "";
+
+  try {
+    const [snapStock, snapSueltos] = await Promise.all([
+      window.get(window.ref("/stock")),
+      window.get(window.ref("/sueltos"))
+    ]);
+
+    const lista = [];
+
+    // --- STOCK ---
+    if (snapStock.exists()) {
+      Object.entries(snapStock.val()).forEach(([codigo, d]) => {
+        lista.push({
+          codigo,
+          nombre: d.nombre || "Sin nombre",
+          tipo: "STOCK"
+        });
+      });
+    }
+
+    // --- SUELTOS ---
+    if (snapSueltos.exists()) {
+      Object.entries(snapSueltos.val()).forEach(([codigo, d]) => {
+        lista.push({
+          codigo,
+          nombre: d.nombre || "Sin nombre",
+          tipo: "SUELTO"
+        });
+      });
+    }
+
+    // 🔠 Orden alfabético por nombre
+    lista.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+
+    // --- Render ---
+    for (const p of lista) {
+      const tr = document.createElement("tr");
+
+      const tdCodigo = document.createElement("td");
+      tdCodigo.textContent = p.codigo;
+
+      const tdNombre = document.createElement("td");
+      tdNombre.textContent = p.nombre;
+
+      const tdTipo = document.createElement("td");
+      tdTipo.textContent = p.tipo;
+
+      // --- FOTO ---
+      const tdFoto = document.createElement("td");
+      const img = document.createElement("img");
+      img.src = imgDefecto;
+      img.alt = p.nombre;
+      img.className = "foto-tienda";
+      img.loading = "lazy";
+      tdFoto.appendChild(img);
+
+      try {
+        const url = await window.getDownloadURL(window.storageRef(`${rutaFotos}${p.codigo}.jpg`));
+        img.src = url;
+      } catch (_) {
+        // No existe, se mantiene imgDefecto
+      }
+
+      // --- ACCIÓN ---
+      const tdAccion = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "📷";
+      btn.title = "Subir Foto";
+      btn.onclick = () => alert(`Subir foto para ${p.nombre} (${p.codigo})`);
+      tdAccion.appendChild(btn);
+
+      tr.append(tdCodigo, tdNombre, tdTipo, tdFoto, tdAccion);
+      tabla.appendChild(tr);
+    }
+  } catch (e) {
+    console.error("Error en TIENDA:", e);
+  }
 }
+
+// --- Evento al abrir la sección ---
+document
+  .querySelector('button[data-section="tienda"]')
+  .addEventListener("click", cargarTienda);
+
