@@ -2720,10 +2720,6 @@ document.getElementById("btn-eliminar-categoria").onclick = async () => {
 // --- EVENTO PRINCIPAL ---
 document.querySelector('button[data-section="tienda"]').addEventListener("click", cargarTienda);
 
-// --- CUPONES (CREAR / EDITAR / ELIMINAR / AUTOEXPIRACIÓN) ---
-const RUTA_CUPONES = "/cupones";
-const MAX_CUPONES = 10;
-
 // --- CARGAR CUPONES AL ENTRAR EN TIENDA ---
 async function cargarCupones() {
   const snap = await window.get(window.ref(RUTA_CUPONES));
