@@ -26,10 +26,11 @@ let categorias = [];
 let carrito = JSON.parse(localStorage.getItem("carritoZonaPC") || "[]");
 let cupones = [];
 let cuponAplicado = null;
-const numeroWhatsApp = "+543794576062";
+let numeroWhatsApp = "+540123456789"; // valor por defecto
 
 // --- CARGAR TODO ---
 document.addEventListener("DOMContentLoaded", async () => {
+  await cargarNumeroWhatsApp(); // <-- nuevo
   await cargarCategorias();
   await cargarCupones();
   await cargarProductos();
@@ -43,6 +44,24 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("aplicar-cupon").addEventListener("click", aplicarCupon);
   document.getElementById("finalizar-compra").addEventListener("click", finalizarCompra);
 });
+
+// --- CARGAR NÚMERO DE WHATSAPP ---
+async function cargarNumeroWhatsApp() {
+  try {
+    const snap = await get(ref(db, "/config"));
+    if (snap.exists()) {
+      const val = snap.val();
+      const numero = val.whatsapp ? val.whatsapp.toString().trim() : "0123456789";
+      // aseguramos formato con +54
+      numeroWhatsApp = `+54${numero}`;
+    } else {
+      numeroWhatsApp = "+540123456789";
+    }
+  } catch (err) {
+    console.warn("No se pudo cargar el número de WhatsApp:", err);
+    numeroWhatsApp = "+540123456789";
+  }
+}
 
 // --- CARGAR CATEGORÍAS ---
 async function cargarCategorias() {
@@ -65,7 +84,7 @@ async function cargarCupones() {
   cupones = Object.values(snap.val());
 }
 
-// --- CARGAR PRODUCTOS (corregido) ---
+// --- CARGAR PRODUCTOS ---
 async function cargarProductos() {
   const cont = document.getElementById("lista-productos");
   cont.innerHTML = "<p>Cargando productos...</p>";
@@ -95,7 +114,6 @@ async function cargarProductos() {
     agregar(snapStock, "STOCK");
     agregar(snapSueltos, "SUELTO");
 
-    // Ordenar alfabéticamente
     productos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
     if (!productos.length) {
@@ -110,7 +128,7 @@ async function cargarProductos() {
   }
 }
 
-// --- RENDER PRODUCTOS (corregido) ---
+// --- RENDER PRODUCTOS ---
 async function renderProductos() {
   const cont = document.getElementById("lista-productos");
   cont.innerHTML = "";
