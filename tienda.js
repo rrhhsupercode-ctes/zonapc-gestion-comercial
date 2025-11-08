@@ -45,24 +45,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("finalizar-compra").addEventListener("click", finalizarCompra);
 });
 
-// --- CARGAR NÚMERO DE WHATSAPP ---
-async function cargarNumeroWhatsApp() {
-  try {
-    const snap = await get(ref(db, "/config"));
-    if (snap.exists()) {
-      const val = snap.val();
-      const numero = val.whatsapp ? val.whatsapp.toString().trim() : "0123456789";
-      // aseguramos formato con +54
-      numeroWhatsApp = `+54${numero}`;
-    } else {
-      numeroWhatsApp = "+540123456789";
-    }
-  } catch (err) {
-    console.warn("No se pudo cargar el número de WhatsApp:", err);
-    numeroWhatsApp = "+540123456789";
-  }
-}
-
 // --- CARGAR CATEGORÍAS ---
 async function cargarCategorias() {
   const snap = await get(ref(db, "/categorias"));
