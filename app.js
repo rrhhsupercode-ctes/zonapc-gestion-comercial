@@ -2200,23 +2200,41 @@ const configMsg = document.getElementById("config-msg");
 const masterPassInput = document.getElementById("master-pass");
 const btnRestaurar = document.getElementById("btn-restaurar");
 
+// --- Spans para mostrar valores actuales ---
+const mostrarNombre = document.getElementById("mostrar-nombre");
+const mostrarUbicacion = document.getElementById("mostrar-ubicacion");
+const mostrarCuit = document.getElementById("mostrar-cuit");
+const mostrarWhatsapp = document.getElementById("mostrar-whatsapp");
+
 // --- Cargar configuración ---
 async function loadConfig() {
   const snap = await window.get(window.ref("/config"));
   if (snap.exists()) {
     const val = snap.val();
+
+    // Cargar valores en inputs
     configNombre.value = val.shopName || "";
     configUbicacion.value = val.shopLocation || "Sucursal Nueva";
     configCuit.value = val.shopCuit || "00000000000";
-    configWhatsapp.value = val.whatsapp || ""; // nuevo campo
+    configWhatsapp.value = val.whatsapp || "";
+
+    // Mostrar valores actuales o por defecto
+    mostrarNombre.textContent = val.shopName || "TIENDA SUCURSAL NUEVA";
+    mostrarUbicacion.textContent = val.shopLocation || "AV NOSÉ CUANTO 1234";
+    mostrarCuit.textContent = val.shopCuit || "12345678901";
+    mostrarWhatsapp.textContent = val.whatsapp || "3794576062";
+  } else {
+    // Si no hay /config, mostrar valores por defecto
+    mostrarNombre.textContent = "TIENDA SUCURSAL NUEVA";
+    mostrarUbicacion.textContent = "AV NOSÉ CUANTO 1234";
+    mostrarCuit.textContent = "12345678901";
+    mostrarWhatsapp.textContent = "3794576062";
   }
 }
 
 // --- Validar solo números en WhatsApp ---
 configWhatsapp.addEventListener("input", () => {
-  // eliminar todo lo que no sea número
   configWhatsapp.value = configWhatsapp.value.replace(/\D/g, "");
-  // limitar a 10 dígitos
   if (configWhatsapp.value.length > 10) {
     configWhatsapp.value = configWhatsapp.value.slice(0, 10);
   }
@@ -2237,19 +2255,27 @@ guardarConfig.addEventListener("click", async () => {
     return;
   }
 
-  let cuitValue = configCuit.value.replace(/\D/g, "").padStart(11, "0").slice(0, 11);
-  let whatsappValue = configWhatsapp.value.replace(/\D/g, "").slice(0, 10);
+  // Normalizar valores
+  const cuitValue = configCuit.value.replace(/\D/g, "").padStart(11, "0").slice(0, 11);
+  const whatsappValue = configWhatsapp.value.replace(/\D/g, "").slice(0, 10);
 
   await window.update(window.ref("/config"), {
     shopName: configNombre.value,
     shopLocation: configUbicacion.value || "Sucursal Nueva",
     shopCuit: cuitValue,
-    whatsapp: whatsappValue, // nuevo campo
+    whatsapp: whatsappValue,
     passAdmin: configPassNueva.value || passAdmin
   });
 
+  // Actualizar mensajes visuales
   configMsg.textContent = "✅ Configuración guardada";
   configPassActual.value = configPassNueva.value = "";
+
+  // Refrescar textos visibles sin recargar la página
+  mostrarNombre.textContent = configNombre.value || "TIENDA SUCURSAL NUEVA";
+  mostrarUbicacion.textContent = configUbicacion.value || "AV NOSÉ CUANTO 1234";
+  mostrarCuit.textContent = cuitValue || "12345678901";
+  mostrarWhatsapp.textContent = whatsappValue || "3794576062";
 });
 
 // --- Restaurar contraseña ---
