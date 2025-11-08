@@ -162,16 +162,15 @@ body {
   position: fixed;
   bottom: 20px;
   left: 20px;
+  width: 60px;
+  height: 60px;
   background-color: #25d366;
-  color: white;
-  font-size: 28px;
-  line-height: 55px;
-  text-align: center;
-  width: 55px;
-  height: 55px;
   border-radius: 50%;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
   z-index: 999;
   transition: transform 0.2s ease;
 }
@@ -179,4 +178,7 @@ body {
   transform: scale(1.1);
   background-color: #20ba5a;
 }
-
+.whatsapp-float img {
+  width: 40px; /* 40px dentro de un círculo de 60px queda perfecto */
+  height: 40px;
+}
