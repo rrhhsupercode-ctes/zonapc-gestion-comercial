@@ -49,6 +49,7 @@ async function cargarCategorias() {
   const snap = await get(ref(db, "/categorias"));
   categorias = snap.exists() ? snap.val() : ["Sin categoría", "Promos"];
   const sel = document.getElementById("filtro-categoria");
+  sel.innerHTML = `<option value="">Todas las categorías</option>`;
   categorias.forEach(c => {
     const opt = document.createElement("option");
     opt.value = c;
@@ -64,33 +65,52 @@ async function cargarCupones() {
   cupones = Object.values(snap.val());
 }
 
-// --- CARGAR PRODUCTOS ---
+// --- CARGAR PRODUCTOS (corregido) ---
 async function cargarProductos() {
-  const [snapStock, snapSueltos] = await Promise.all([
-    get(ref(db, "/stock")),
-    get(ref(db, "/sueltos"))
-  ]);
+  const cont = document.getElementById("lista-productos");
+  cont.innerHTML = "<p>Cargando productos...</p>";
 
-  productos = [];
-  const agregar = (snap, tipo) => {
-    if (!snap.exists()) return;
-    Object.entries(snap.val()).forEach(([codigo, d]) => {
-      productos.push({
-        codigo,
-        nombre: d.nombre || "Sin nombre",
-        precio: d.precio || 0,
-        categoria: d.categoria || "Sin categoría",
-        tipo
+  try {
+    const [snapStock, snapSueltos] = await Promise.all([
+      get(ref(db, "/stock")),
+      get(ref(db, "/sueltos"))
+    ]);
+
+    productos = [];
+
+    const agregar = (snap, tipo) => {
+      if (!snap.exists()) return;
+      Object.entries(snap.val()).forEach(([codigo, d]) => {
+        const precioNum = parseFloat(d.precio);
+        productos.push({
+          codigo,
+          nombre: d.nombre || "Sin nombre",
+          precio: isNaN(precioNum) ? 0 : precioNum,
+          categoria: d.categoria || "Sin categoría",
+          tipo
+        });
       });
-    });
-  };
+    };
 
-  agregar(snapStock, "STOCK");
-  agregar(snapSueltos, "SUELTO");
-  renderProductos();
+    agregar(snapStock, "STOCK");
+    agregar(snapSueltos, "SUELTO");
+
+    // Ordenar alfabéticamente
+    productos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+
+    if (!productos.length) {
+      cont.innerHTML = "<p>No hay productos disponibles.</p>";
+      return;
+    }
+
+    await renderProductos();
+  } catch (err) {
+    console.error("Error al cargar productos:", err);
+    document.getElementById("lista-productos").innerHTML = "<p>Error al cargar productos.</p>";
+  }
 }
 
-// --- RENDER PRODUCTOS ---
+// --- RENDER PRODUCTOS (corregido) ---
 async function renderProductos() {
   const cont = document.getElementById("lista-productos");
   cont.innerHTML = "";
@@ -103,7 +123,7 @@ async function renderProductos() {
   });
 
   if (!filtrados.length) {
-    cont.innerHTML = "<p>No hay productos para mostrar.</p>";
+    cont.innerHTML = "<p>No hay productos que coincidan con el filtro.</p>";
     return;
   }
 
@@ -122,7 +142,9 @@ async function renderProductos() {
       try {
         const url2 = await getDownloadURL(storageRef(storage, `${rutaFotos}${p.codigo}.jpg`));
         img.src = url2;
-      } catch {}
+      } catch {
+        img.src = imgDefecto;
+      }
     }
 
     const nombre = document.createElement("h3");
