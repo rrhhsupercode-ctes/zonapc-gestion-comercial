@@ -2188,10 +2188,11 @@ btnAgregarCajero.addEventListener("click", () => {
 
 loadCajeroSelectOptions();
 
-  // --- CONFIG ---
+// --- CONFIG ---
 const configNombre = document.getElementById("config-nombre");
 const configUbicacion = document.getElementById("config-ubicacion");
 const configCuit = document.getElementById("config-cuit");
+const configWhatsapp = document.getElementById("config-whatsapp");
 const configPassActual = document.getElementById("config-pass-actual");
 const configPassNueva = document.getElementById("config-pass-nueva");
 const guardarConfig = document.getElementById("guardar-config");
@@ -2199,6 +2200,7 @@ const configMsg = document.getElementById("config-msg");
 const masterPassInput = document.getElementById("master-pass");
 const btnRestaurar = document.getElementById("btn-restaurar");
 
+// --- Cargar configuración ---
 async function loadConfig() {
   const snap = await window.get(window.ref("/config"));
   if (snap.exists()) {
@@ -2206,9 +2208,21 @@ async function loadConfig() {
     configNombre.value = val.shopName || "";
     configUbicacion.value = val.shopLocation || "Sucursal Nueva";
     configCuit.value = val.shopCuit || "00000000000";
+    configWhatsapp.value = val.whatsapp || ""; // nuevo campo
   }
 }
 
+// --- Validar solo números en WhatsApp ---
+configWhatsapp.addEventListener("input", () => {
+  // eliminar todo lo que no sea número
+  configWhatsapp.value = configWhatsapp.value.replace(/\D/g, "");
+  // limitar a 10 dígitos
+  if (configWhatsapp.value.length > 10) {
+    configWhatsapp.value = configWhatsapp.value.slice(0, 10);
+  }
+});
+
+// --- Guardar configuración ---
 guardarConfig.addEventListener("click", async () => {
   const snap = await window.get(window.ref("/config"));
   if (!snap.exists()) return;
@@ -2223,12 +2237,14 @@ guardarConfig.addEventListener("click", async () => {
     return;
   }
 
-  let cuitValue = configCuit.value.replace(/\D/g, '').padStart(11, '0').slice(0,11);
+  let cuitValue = configCuit.value.replace(/\D/g, "").padStart(11, "0").slice(0, 11);
+  let whatsappValue = configWhatsapp.value.replace(/\D/g, "").slice(0, 10);
 
   await window.update(window.ref("/config"), {
     shopName: configNombre.value,
     shopLocation: configUbicacion.value || "Sucursal Nueva",
     shopCuit: cuitValue,
+    whatsapp: whatsappValue, // nuevo campo
     passAdmin: configPassNueva.value || passAdmin
   });
 
@@ -2236,6 +2252,7 @@ guardarConfig.addEventListener("click", async () => {
   configPassActual.value = configPassNueva.value = "";
 });
 
+// --- Restaurar contraseña ---
 btnRestaurar.addEventListener("click", async () => {
   const masterPass = "1409"; // fija
   if (masterPassInput.value === masterPass) {
