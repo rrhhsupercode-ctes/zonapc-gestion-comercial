@@ -3036,3 +3036,10 @@ document.querySelector('button[data-section="tienda"]').addEventListener("click"
   await actualizarSelectCuponCategorias();
   await cargarCupones();
 });
+
+// --- VISITAR TIENDA (ENLACE DINÁMICO) ---
+document.getElementById("btn-visitar-tienda").addEventListener("click", () => {
+  const baseURL = window.location.origin; // obtiene dominio actual (ej: https://cliente-001.web.app)
+  const urlTienda = `${baseURL}/tienda`;
+  window.open(urlTienda, "_blank"); // abre en nueva pestaña
+});
