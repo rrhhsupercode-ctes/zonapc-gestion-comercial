@@ -30,7 +30,7 @@ let numeroWhatsApp = "+540123456789"; // valor por defecto
 
 // --- INICIALIZAR ---
 document.addEventListener("DOMContentLoaded", async () => {
-  await cargarNumeroWhatsApp(); 
+  await cargarConfigTienda(); // nombre + ubicación + whatsapp
   await cargarCategorias();
   await cargarCupones();
   await cargarProductos();
@@ -45,7 +45,43 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("finalizar-compra").addEventListener("click", finalizarCompra);
 });
 
-// --- CATEGORÍAS ---
+// --- CARGAR CONFIG (NOMBRE, UBICACIÓN, WHATSAPP) ---
+async function cargarConfigTienda() {
+  try {
+    const snap = await get(ref(db, "/config"));
+    const header = document.getElementById("nombre-tienda");
+
+    if (snap.exists()) {
+      const val = snap.val();
+      const nombre = val.shopName || "Tienda";
+      const ubicacion = val.shopLocation || "Sucursal Nueva";
+      const numero = val.whatsapp ? val.whatsapp.toString().trim() : "0123456789";
+
+      numeroWhatsApp = `+54${numero}`;
+      header.textContent = `${nombre} (${ubicacion}) — ${numero}`;
+    } else {
+      numeroWhatsApp = "+540123456789";
+      header.textContent = "Tienda (Sucursal Nueva) — 0123456789";
+    }
+
+    // Acción del botón flotante
+    const btnWA = document.getElementById("whatsapp-float");
+    if (btnWA) {
+      btnWA.onclick = () => {
+        const mensaje = "Hola, quiero hacer un pedido, vengo de la tienda";
+        const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, "_blank");
+      };
+    }
+
+  } catch (err) {
+    console.warn("No se pudo cargar configuración:", err);
+    numeroWhatsApp = "+540123456789";
+    document.getElementById("nombre-tienda").textContent = "Tienda (Sucursal Nueva) — 0123456789";
+  }
+}
+
+// --- CARGAR CATEGORÍAS ---
 async function cargarCategorias() {
   const snap = await get(ref(db, "/categorias"));
   categorias = snap.exists() ? snap.val() : ["Sin categoría", "Promos"];
@@ -59,14 +95,14 @@ async function cargarCategorias() {
   });
 }
 
-// --- CUPONES ---
+// --- CARGAR CUPONES ---
 async function cargarCupones() {
   const snap = await get(ref(db, "/cupones"));
   if (!snap.exists()) return;
   cupones = Object.values(snap.val());
 }
 
-// --- PRODUCTOS ---
+// --- CARGAR PRODUCTOS ---
 async function cargarProductos() {
   const cont = document.getElementById("lista-productos");
   cont.innerHTML = "<p>Cargando productos...</p>";
@@ -293,30 +329,4 @@ function finalizarCompra() {
 
   const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
   window.open(url, "_blank");
-}
-
-// --- CARGAR NÚMERO DE WHATSAPP ---
-async function cargarNumeroWhatsApp() {
-  try {
-    const snap = await get(ref(db, "/config"));
-    if (snap.exists()) {
-      const val = snap.val();
-      const numero = val.whatsapp ? val.whatsapp.toString().trim() : "0123456789";
-      numeroWhatsApp = `+54${numero}`;
-    } else {
-      numeroWhatsApp = "+540123456789";
-    }
-
-    const btnWA = document.getElementById("whatsapp-float");
-    if (btnWA) {
-      btnWA.onclick = () => {
-        const mensaje = "Hola, quiero hacer un pedido, vengo de la tienda";
-        const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
-        window.open(url, "_blank");
-      };
-    }
-  } catch (err) {
-    console.warn("No se pudo cargar el número de WhatsApp:", err);
-    numeroWhatsApp = "+540123456789";
-  }
 }
