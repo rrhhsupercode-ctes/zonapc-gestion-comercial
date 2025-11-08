@@ -314,3 +314,31 @@ function finalizarCompra() {
   const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
   window.open(url, "_blank");
 }
+
+// --- CARGAR NÚMERO DE WHATSAPP ---
+async function cargarNumeroWhatsApp() {
+  try {
+    const snap = await get(ref(db, "/config"));
+    if (snap.exists()) {
+      const val = snap.val();
+      const numero = val.whatsapp ? val.whatsapp.toString().trim() : "0123456789";
+      numeroWhatsApp = `+54${numero}`;
+    } else {
+      numeroWhatsApp = "+540123456789";
+    }
+
+    // Asignar acción al botón flotante
+    const btnWA = document.getElementById("whatsapp-float");
+    if (btnWA) {
+      btnWA.onclick = () => {
+        const mensaje = "Hola, quiero hacer un pedido, vengo de la tienda";
+        const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
+        window.open(url, "_blank");
+      };
+    }
+
+  } catch (err) {
+    console.warn("No se pudo cargar el número de WhatsApp:", err);
+    numeroWhatsApp = "+540123456789";
+  }
+}
