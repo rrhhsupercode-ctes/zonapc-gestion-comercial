@@ -495,3 +495,12 @@ blockquote {
   border-bottom: 1px solid #ccc;
   font-size: 14px;
 }
+
+/* TEXTO EN CONFIG */
+.valor-config {
+  color: #555;
+  margin-left: 6px;
+  font-weight: 500;
+  font-size: 0.95em;
+}
+
