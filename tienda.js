@@ -28,9 +28,9 @@ let cupones = [];
 let cuponAplicado = null;
 let numeroWhatsApp = "+540123456789"; // valor por defecto
 
-// --- CARGAR TODO ---
+// --- INICIALIZAR ---
 document.addEventListener("DOMContentLoaded", async () => {
-  await cargarNumeroWhatsApp(); // <-- nuevo
+  await cargarNumeroWhatsApp(); 
   await cargarCategorias();
   await cargarCupones();
   await cargarProductos();
@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("finalizar-compra").addEventListener("click", finalizarCompra);
 });
 
-// --- CARGAR CATEGORÍAS ---
+// --- CATEGORÍAS ---
 async function cargarCategorias() {
   const snap = await get(ref(db, "/categorias"));
   categorias = snap.exists() ? snap.val() : ["Sin categoría", "Promos"];
@@ -59,14 +59,14 @@ async function cargarCategorias() {
   });
 }
 
-// --- CARGAR CUPONES ---
+// --- CUPONES ---
 async function cargarCupones() {
   const snap = await get(ref(db, "/cupones"));
   if (!snap.exists()) return;
   cupones = Object.values(snap.val());
 }
 
-// --- CARGAR PRODUCTOS ---
+// --- PRODUCTOS ---
 async function cargarProductos() {
   const cont = document.getElementById("lista-productos");
   cont.innerHTML = "<p>Cargando productos...</p>";
@@ -78,7 +78,6 @@ async function cargarProductos() {
     ]);
 
     productos = [];
-
     const agregar = (snap, tipo) => {
       if (!snap.exists()) return;
       Object.entries(snap.val()).forEach(([codigo, d]) => {
@@ -95,7 +94,6 @@ async function cargarProductos() {
 
     agregar(snapStock, "STOCK");
     agregar(snapSueltos, "SUELTO");
-
     productos.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
     if (!productos.length) {
@@ -106,7 +104,7 @@ async function cargarProductos() {
     await renderProductos();
   } catch (err) {
     console.error("Error al cargar productos:", err);
-    document.getElementById("lista-productos").innerHTML = "<p>Error al cargar productos.</p>";
+    cont.innerHTML = "<p>Error al cargar productos.</p>";
   }
 }
 
@@ -309,7 +307,6 @@ async function cargarNumeroWhatsApp() {
       numeroWhatsApp = "+540123456789";
     }
 
-    // Asignar acción al botón flotante
     const btnWA = document.getElementById("whatsapp-float");
     if (btnWA) {
       btnWA.onclick = () => {
@@ -318,7 +315,6 @@ async function cargarNumeroWhatsApp() {
         window.open(url, "_blank");
       };
     }
-
   } catch (err) {
     console.warn("No se pudo cargar el número de WhatsApp:", err);
     numeroWhatsApp = "+540123456789";
