@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tienda - Zona PC</title>
+  <title>¡Armá tu pedido!</title>
   <link rel="stylesheet" href="tienda.css">
 </head>
 <body>
   <header class="header">
-    <h1 id="nombre-tienda">Zona PC</h1>
+    <h1 id="nombre-tienda">¡Armá tu pedido!</h1>
     <div class="carrito-btn" id="abrir-carrito">🛒<span id="carrito-cantidad">0</span></div>
   </header>
 
@@ -32,11 +32,23 @@
       <input type="text" id="cupon-codigo" placeholder="Código de cupón">
       <button id="aplicar-cupon">Aplicar</button>
     </div>
+
     <div class="carrito-total">
       <p>Subtotal: <span id="subtotal">$0</span></p>
       <p>Descuento: <span id="descuento">0%</span></p>
       <h3>Total: <span id="total">$0</span></h3>
     </div>
+
+    <div class="pago-metodo">
+      <label for="metodo-pago">Método de pago:</label>
+      <select id="metodo-pago">
+        <option value="Efectivo">Efectivo</option>
+        <option value="Tarjeta">Tarjeta</option>
+        <option value="Transferencia">Transferencia</option>
+      </select>
+    </div>
+
+    <button id="finalizar-compra">Finalizar compra</button>
     <button id="vaciar-carrito">Vaciar</button>
     <button id="cerrar-carrito">Cerrar</button>
   </aside>
