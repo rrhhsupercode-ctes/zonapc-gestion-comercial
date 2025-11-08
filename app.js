@@ -2220,16 +2220,16 @@ async function loadConfig() {
       configWhatsapp.value = val.whatsapp || "";
 
       // Mostrar valores (visibles a la derecha)
-      if (mostrarNombre) mostrarNombre.textContent = val.shopName || "TIENDA SUCURSAL NUEVA";
-      if (mostrarUbicacion) mostrarUbicacion.textContent = val.shopLocation || "AV NOSÉ CUANTO 1234";
-      if (mostrarCuit) mostrarCuit.textContent = val.shopCuit || "12345678901";
-      if (mostrarWhatsapp) mostrarWhatsapp.textContent = val.whatsapp || "3794576062";
+      if (mostrarNombre) mostrarNombre.textContent = val.shopName || "Sucursal Nueva";
+      if (mostrarUbicacion) mostrarUbicacion.textContent = val.shopLocation || "AV Nueva 1234";
+      if (mostrarCuit) mostrarCuit.textContent = val.shopCuit || "00000000000";
+      if (mostrarWhatsapp) mostrarWhatsapp.textContent = val.whatsapp || "0123456789";
     } else {
       // Si no existe /config
-      if (mostrarNombre) mostrarNombre.textContent = "TIENDA SUCURSAL NUEVA";
-      if (mostrarUbicacion) mostrarUbicacion.textContent = "AV NOSÉ CUANTO 1234";
-      if (mostrarCuit) mostrarCuit.textContent = "12345678901";
-      if (mostrarWhatsapp) mostrarWhatsapp.textContent = "3794576062";
+      if (mostrarNombre) mostrarNombre.textContent = "Sucursal Nueva";
+      if (mostrarUbicacion) mostrarUbicacion.textContent = "AV Nueva 1234";
+      if (mostrarCuit) mostrarCuit.textContent = "00000000000";
+      if (mostrarWhatsapp) mostrarWhatsapp.textContent = "0123456789";
     }
   } catch (err) {
     console.warn("Error al cargar configuración:", err);
