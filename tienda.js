@@ -26,6 +26,7 @@ let categorias = [];
 let carrito = JSON.parse(localStorage.getItem("carritoZonaPC") || "[]");
 let cupones = [];
 let cuponAplicado = null;
+const numeroWhatsApp = "+543794576062";
 
 // --- CARGAR TODO ---
 document.addEventListener("DOMContentLoaded", async () => {
@@ -40,6 +41,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("cerrar-carrito").addEventListener("click", toggleCarrito);
   document.getElementById("vaciar-carrito").addEventListener("click", vaciarCarrito);
   document.getElementById("aplicar-cupon").addEventListener("click", aplicarCupon);
+  document.getElementById("finalizar-compra").addEventListener("click", finalizarCompra);
 });
 
 // --- CARGAR CATEGORÍAS ---
@@ -59,8 +61,7 @@ async function cargarCategorias() {
 async function cargarCupones() {
   const snap = await get(ref(db, "/cupones"));
   if (!snap.exists()) return;
-  const data = snap.val();
-  cupones = Object.values(data);
+  cupones = Object.values(snap.val());
 }
 
 // --- CARGAR PRODUCTOS ---
@@ -113,15 +114,13 @@ async function renderProductos() {
     const img = document.createElement("img");
     img.src = imgDefecto;
     img.alt = p.nombre;
-    const pathWebp = `${rutaFotos}${p.codigo}.webp`;
-    const pathJpg = `${rutaFotos}${p.codigo}.jpg`;
 
     try {
-      const url = await getDownloadURL(storageRef(storage, pathWebp));
+      const url = await getDownloadURL(storageRef(storage, `${rutaFotos}${p.codigo}.webp`));
       img.src = url;
     } catch {
       try {
-        const url2 = await getDownloadURL(storageRef(storage, pathJpg));
+        const url2 = await getDownloadURL(storageRef(storage, `${rutaFotos}${p.codigo}.jpg`));
         img.src = url2;
       } catch {}
     }
@@ -245,4 +244,33 @@ function actualizarTotales() {
   document.getElementById("subtotal").textContent = `$${subtotal.toFixed(2)}`;
   document.getElementById("descuento").textContent = `${descuento}%`;
   document.getElementById("total").textContent = `$${total.toFixed(2)}`;
+}
+
+// --- FINALIZAR COMPRA ---
+function finalizarCompra() {
+  if (!carrito.length) return alert("Tu carrito está vacío.");
+
+  const metodo = document.getElementById("metodo-pago").value;
+  const subtotal = carrito.reduce((a, b) => a + b.precio * b.cantidad, 0);
+  const desc = document.getElementById("descuento").textContent;
+  const total = document.getElementById("total").textContent;
+  const cup = cuponAplicado ? cuponAplicado.codigo : "Ninguno";
+
+  let mensaje = `🛍️ *Nuevo Pedido desde la Tienda*\n\n`;
+  mensaje += `*Método de pago:* ${metodo}\n`;
+  mensaje += `*Cupón:* ${cup}\n\n`;
+  mensaje += `*Productos:*\n`;
+
+  carrito.forEach(item => {
+    const subtotalItem = item.precio * item.cantidad;
+    mensaje += `• ${item.nombre} (${item.codigo})\n  Cantidad: ${item.cantidad} — $${subtotalItem.toFixed(2)}\n`;
+  });
+
+  mensaje += `\n*Subtotal:* ${document.getElementById("subtotal").textContent}`;
+  mensaje += `\n*Descuento:* ${desc}`;
+  mensaje += `\n*Total final:* ${total}`;
+  mensaje += `\n\n✅ *Pedido listo para procesar.*`;
+
+  const url = `https://wa.me/${numeroWhatsApp.replace(/\D/g, "")}?text=${encodeURIComponent(mensaje)}`;
+  window.open(url, "_blank");
 }
